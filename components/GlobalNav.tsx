@@ -56,7 +56,7 @@ export function GlobalNav() {
 
   // Don't render nav on public pages or pages with their own embedded nav
   const EXCLUDED_PATHS = ["/dashboard", "/admin", "/scanner"]
-  const isExcluded = EXCLUDED_PATHS.some((p) => pathname?.startsWith(p))
+  const isExcluded = pathname === "/" || EXCLUDED_PATHS.some((p) => pathname?.startsWith(p))
   if (!user || isExcluded) return null
 
   const role = user.role

@@ -19,24 +19,24 @@ export default function LandingPage() {
     <div className="min-h-screen bg-passi-creme dark:bg-passi-bleu text-passi-bleu dark:text-passi-creme transition-colors duration-300 font-sans overflow-x-hidden">
       {/* Header */}
       <header className="fixed w-full top-0 z-50 bg-passi-creme/80 dark:bg-passi-bleu/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 transition-colors">
-        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 md:px-6 h-16 md:h-20 flex items-center justify-between">
           <div className="flex items-center">
-            <Link href="/" className="hover:opacity-80 transition-opacity">
-              <Logo className="w-[140px] h-[45px]" />
+            <Link href="/" className="hover:opacity-80 transition-opacity flex-shrink-0">
+              <Logo className="w-[100px] h-[32px] md:w-[140px] md:h-[45px]" />
             </Link>
           </div>
           
-          <div className="flex items-center space-x-6">
+          <div className="flex items-center space-x-3 md:space-x-6">
             {mounted && (
               <button 
                 onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
                 className="p-2 rounded-full bg-gray-200 dark:bg-gray-800 text-passi-bleu dark:text-passi-creme hover:scale-110 transition-transform"
                 aria-label="Toggle Dark Mode"
               >
-                {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+                {theme === 'dark' ? <Sun size={18} className="md:w-5 md:h-5" /> : <Moon size={18} className="md:w-5 md:h-5" />}
               </button>
             )}
-            <Link href="/login" className="font-bold text-passi-bleu dark:text-passi-creme hover:text-passi-corail dark:hover:text-passi-corail transition-colors">
+            <Link href="/login" className="text-sm md:text-base font-bold text-passi-bleu dark:text-passi-creme hover:text-passi-corail dark:hover:text-passi-corail transition-colors">
               Connexion
             </Link>
             <Link href="/login" className="bg-passi-corail text-white px-6 py-2.5 rounded-full font-bold hover:bg-passi-corail/90 shadow-lg shadow-passi-corail/30 transition-all hover:scale-105 hidden sm:block">
