@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react'
 import { Logo } from '@/components/Logo'
 
 export default function LandingPage() {
-  const { theme, setTheme } = useTheme()
+  const { theme, setTheme, resolvedTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
 
   // Avoid hydration mismatch
@@ -29,11 +29,11 @@ export default function LandingPage() {
           <div className="flex items-center space-x-3 md:space-x-6">
             {mounted && (
               <button 
-                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
                 className="p-2 rounded-full bg-gray-200 dark:bg-gray-800 text-passi-bleu dark:text-passi-creme hover:scale-110 transition-transform"
                 aria-label="Toggle Dark Mode"
               >
-                {theme === 'dark' ? <Sun size={18} className="md:w-5 md:h-5" /> : <Moon size={18} className="md:w-5 md:h-5" />}
+                {resolvedTheme === 'dark' ? <Sun size={18} className="md:w-5 md:h-5" /> : <Moon size={18} className="md:w-5 md:h-5" />}
               </button>
             )}
             <Link href="/login" className="text-sm md:text-base font-bold text-passi-bleu dark:text-passi-creme hover:text-passi-corail dark:hover:text-passi-corail transition-colors">
