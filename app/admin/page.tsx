@@ -149,10 +149,10 @@ export default function AdminDashboard() {
   ];
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: 'var(--bg)' }}>
+    <div className="flex flex-col md:flex-row h-screen overflow-hidden" style={{ backgroundColor: 'var(--bg)' }}>
 
-      {/* ─── SIDEBAR ─── */}
-      <aside className="w-64 flex-shrink-0 flex flex-col justify-between border-r" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border)' }}>
+      {/* ─── SIDEBAR (DESKTOP) ─── */}
+      <aside className="hidden md:flex w-64 flex-shrink-0 flex-col justify-between border-r" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border)' }}>
         <div>
           <div className="h-18 flex items-center px-7 pt-7 pb-5 border-b" style={{ borderColor: 'var(--border)' }}>
             <Logo variant="auto" className="w-[120px] h-[36px]" />
@@ -197,9 +197,36 @@ export default function AdminDashboard() {
         </div>
       </aside>
 
+      {/* ─── MOBILE TOP BAR ─── */}
+      <div className="md:hidden flex items-center justify-between px-6 py-4 border-b flex-shrink-0" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border)' }}>
+        <Logo variant="auto" className="w-[100px] h-[30px]" />
+        <div className="flex items-center gap-4">
+          {mounted && (
+            <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="text-gray-500">
+              {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+            </button>
+          )}
+          <button onClick={contextLogout} className="text-red-500"><LogOut size={20} /></button>
+        </div>
+      </div>
+
+      {/* ─── MOBILE BOTTOM NAV ─── */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 flex justify-around p-3 border-t z-50 pb-safe" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border)' }}>
+        {navItems.map(({ id, label, icon }) => (
+          <button
+            key={id}
+            onClick={() => setActiveTab(id)}
+            className={`flex flex-col items-center gap-1 ${activeTab === id ? 'text-passi-corail' : 'text-gray-400'}`}
+          >
+            {icon}
+            <span className="text-[10px] font-bold">{label}</span>
+          </button>
+        ))}
+      </nav>
+
       {/* ─── MAIN ─── */}
-      <main className="flex-1 overflow-y-auto hide-scrollbar">
-        <div className="max-w-5xl mx-auto p-10 space-y-8 animate-fade-in-up">
+      <main className="flex-1 overflow-y-auto hide-scrollbar pb-24 md:pb-0">
+        <div className="max-w-5xl mx-auto p-6 md:p-10 space-y-8 animate-fade-in-up">
 
           {/* Header */}
           <div className="flex justify-between items-start">
