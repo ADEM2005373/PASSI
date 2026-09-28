@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { QRCodeSVG } from 'qrcode.react'
-import { Search, Calendar, MapPin, Heart, Ticket, User, Home, Compass, Bell, LogOut, FileText, ChevronRight, Settings } from 'lucide-react'
+import { Search, Calendar, MapPin, Heart, Ticket, User, Home, Compass, Bell, LogOut, FileText, ChevronRight, Settings, Moon, ChevronLeft, MoreHorizontal } from 'lucide-react'
 import { api } from '@/lib/services/api'
 import { Logo } from '@/components/Logo'
 import { createClient } from '@/lib/supabase/client'
@@ -381,76 +381,154 @@ export default function UserDashboard() {
           )}
 
           {activeTab === 'profile' && (
-            <div className="animate-in fade-in slide-in-from-right-4 duration-500 max-w-2xl mx-auto">
-              <h1 className="text-4xl font-extrabold text-passi-bleu mb-10">Mon Profil</h1>
-              <div className="bg-white rounded-[3rem] shadow-xl shadow-gray-100/50 border border-gray-100 p-10 md:p-14">
-                <div className="flex flex-col items-center mb-10">
-                  <div className="w-32 h-32 bg-gradient-to-br from-passi-turquoise to-passi-bleu rounded-[2.5rem] flex items-center justify-center mb-6 shadow-xl shadow-passi-turquoise/30 rotate-3">
-                    <User size={56} className="text-white -rotate-3" />
+            <div className="animate-in fade-in slide-in-from-right-4 duration-500 w-full max-w-md mx-auto min-h-[calc(100vh-80px)] relative overflow-hidden bg-white rounded-3xl pb-24 shadow-xl border border-gray-100">
+              {/* Top Banner */}
+              <div className="h-40 bg-gradient-to-br from-passi-turquoise/20 to-passi-bleu/10 w-full absolute top-0 left-0 z-0 rounded-t-3xl"></div>
+              
+              <div className="relative z-10 pt-20 px-6 flex flex-col items-center">
+                {/* Profile Picture */}
+                <div className="w-28 h-28 rounded-full border-4 border-white overflow-hidden bg-white mb-4 shadow-xl flex-shrink-0">
+                  <div className="w-full h-full bg-gradient-to-br from-passi-turquoise to-passi-bleu flex items-center justify-center">
+                    <User size={48} className="text-white" />
                   </div>
-                  <h2 className="text-3xl font-extrabold text-passi-bleu">Vos Informations</h2>
                 </div>
                 
-                <div className="space-y-6">
-                  <div 
-                    onClick={() => setActiveTab('reservations')}
-                    className="bg-passi-creme p-6 rounded-2xl flex items-center justify-between border border-orange-100 cursor-pointer hover:bg-orange-50 transition-colors"
-                  >
+                {/* Name */}
+                <h1 className="text-2xl font-extrabold text-passi-bleu mb-6">{authUser?.email?.split('@')[0] || 'Rita Smith'}</h1>
+                
+                {/* Contact Info */}
+                <div className="w-full space-y-4 mb-8 px-4">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-passi-text-sec font-medium">Phone</span>
+                    <span className="text-passi-bleu font-extrabold">+5999-771-7171</span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-passi-text-sec font-medium">Mail</span>
+                    <span className="text-passi-bleu font-medium">{authUser?.email || 'rita@gmail.com'}</span>
+                  </div>
+                </div>
+                
+                {/* Divider */}
+                <div className="w-full h-px bg-gray-100 mb-2 -mx-6 w-[calc(100%+3rem)]"></div>
+                
+                {/* Menu Options */}
+                <div className="w-full flex flex-col px-4">
+                  {/* Dark mode */}
+                  <div className="flex items-center justify-between py-5 border-b border-gray-100">
                     <div className="flex items-center gap-4">
-                       <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-passi-corail shadow-sm"><Ticket size={24}/></div>
-                       <div>
-                         <p className="text-sm text-passi-text-sec font-medium">Réservations totales</p>
-                         <p className="text-2xl font-extrabold text-passi-bleu">{passes.length}</p>
-                       </div>
+                      <Moon size={20} className="text-passi-bleu" />
+                      <span className="text-passi-bleu text-sm font-bold">Dark mode</span>
                     </div>
-                    <ChevronRight className="text-gray-400" />
+                    {/* Toggle switch (mock) */}
+                    <div className="w-10 h-5 bg-white border-2 border-passi-bleu rounded-full relative">
+                      <div className="w-3 h-3 bg-passi-bleu rounded-full absolute left-0.5 top-0.5"></div>
+                    </div>
                   </div>
                   
-                  <div 
-                    onClick={() => setActiveTab('settings')}
-                    className="bg-passi-creme p-6 rounded-2xl flex items-center justify-between border border-orange-100 cursor-pointer hover:bg-orange-50 transition-colors"
-                  >
-                    <div className="flex items-center gap-4">
-                       <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-passi-turquoise shadow-sm"><Settings size={24}/></div>
-                       <div>
-                         <p className="text-sm text-passi-text-sec font-medium">Paramètres du compte</p>
-                         <p className="text-lg font-bold text-passi-bleu">Gérer mes infos</p>
-                       </div>
-                    </div>
-                    <ChevronRight className="text-gray-400" />
-                  </div>
-
-                  <button onClick={handleLogout} className="w-full mt-10 bg-red-50 text-red-600 font-extrabold py-5 rounded-2xl hover:bg-red-100 transition-colors flex justify-center items-center gap-3 text-lg border border-red-100">
-                    <LogOut size={24} /> Se déconnecter
+                  {/* Profile details */}
+                  <button onClick={() => setActiveTab('settings')} className="flex items-center gap-4 py-5 border-b border-gray-100 w-full text-left hover:bg-passi-creme transition-colors -mx-4 px-4 w-[calc(100%+2rem)]">
+                    <User size={20} className="text-passi-bleu" />
+                    <span className="text-passi-bleu text-sm font-bold">Profile details</span>
+                  </button>
+                  
+                  {/* Settings */}
+                  <button className="flex items-center gap-4 py-5 border-b border-gray-100 w-full text-left hover:bg-passi-creme transition-colors -mx-4 px-4 w-[calc(100%+2rem)]">
+                    <Settings size={20} className="text-passi-bleu" />
+                    <span className="text-passi-bleu text-sm font-bold">Settings</span>
+                  </button>
+                  
+                  {/* Log out */}
+                  <button onClick={handleLogout} className="flex items-center gap-4 py-5 border-b border-gray-100 w-full text-left hover:bg-red-50 transition-colors -mx-4 px-4 w-[calc(100%+2rem)]">
+                    <LogOut size={20} className="text-passi-corail" />
+                    <span className="text-passi-corail text-sm font-bold">Log out</span>
                   </button>
                 </div>
               </div>
             </div>
           )}
           {activeTab === 'settings' && (
-            <div className="animate-in fade-in slide-in-from-right-4 duration-500 max-w-2xl mx-auto">
-              <h1 className="text-4xl font-extrabold text-passi-bleu mb-10">Paramètres</h1>
-              <div className="bg-white rounded-[3rem] shadow-xl shadow-gray-100/50 border border-gray-100 p-10 md:p-14">
-                <div className="text-center mb-8">
-                  <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Settings size={32} className="text-gray-400" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-passi-bleu mb-2">Gestion du compte</h3>
-                  <p className="text-passi-text-sec font-medium">Modification des informations (Bientôt disponible)</p>
-                </div>
+            <div className="animate-in fade-in slide-in-from-right-4 duration-500 w-full max-w-2xl mx-auto bg-white rounded-3xl shadow-xl border border-gray-100 pb-24">
+              <div className="p-6 md:p-10">
+                <button onClick={() => setActiveTab('profile')} className="flex items-center gap-2 text-passi-text-sec font-medium mb-8 hover:text-passi-bleu transition-colors">
+                  <ChevronLeft size={20} /> back to Dashboard
+                </button>
                 
-                <div className="space-y-4">
-                  <div className="opacity-50 pointer-events-none">
-                    <label className="block text-sm font-bold text-passi-bleu mb-2">Nom d'utilisateur Instagram</label>
-                    <input type="text" disabled placeholder="@votre_compte" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-passi-bleu font-medium" />
+                <div className="bg-passi-creme rounded-3xl shadow-sm border border-orange-100 overflow-hidden mb-6 p-6 md:p-10">
+                  {/* Header info */}
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className="w-16 h-16 rounded-full overflow-hidden bg-gradient-to-br from-passi-turquoise to-passi-bleu flex items-center justify-center shadow-md">
+                       <User size={32} className="text-white" />
+                    </div>
+                    <div>
+                      <h2 className="font-extrabold text-passi-bleu text-xl">{authUser?.email?.split('@')[0] || 'Samantha Ashley'}</h2>
+                      <div className="flex items-center text-passi-text-sec text-sm gap-1 mt-1 font-medium">
+                        <span className="bg-white text-passi-bleu px-2 py-0.5 rounded-lg flex items-center gap-1 shadow-sm"><FileText size={12} /> 2</span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="opacity-50 pointer-events-none">
-                    <label className="block text-sm font-bold text-passi-bleu mb-2">Email</label>
-                    <input type="email" disabled placeholder="email@exemple.com" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-passi-bleu font-medium" />
+                  
+                  {/* User Info Form */}
+                  <div className="bg-white rounded-2xl p-6 shadow-sm mb-6 border border-gray-100">
+                    <h3 className="font-extrabold text-passi-bleu mb-6 text-sm uppercase tracking-wide">User Info</h3>
+                    
+                    <div className="space-y-4 mb-6">
+                      <div>
+                        <label className="block text-xs font-bold text-passi-text-sec mb-2">First name</label>
+                        <input type="text" defaultValue="Samantha" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-passi-bleu font-medium focus:outline-none focus:ring-2 focus:ring-passi-turquoise/30" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-passi-text-sec mb-2">Last name</label>
+                        <input type="text" defaultValue="Ashley" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-passi-bleu font-medium focus:outline-none focus:ring-2 focus:ring-passi-turquoise/30" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-passi-text-sec mb-2">Email address</label>
+                        <input type="email" defaultValue={authUser?.email || 'ashley@email.com'} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-passi-bleu font-medium focus:outline-none focus:ring-2 focus:ring-passi-turquoise/30" />
+                      </div>
+                    </div>
+                    
+                    <div className="flex justify-end">
+                      <button className="bg-gray-300 text-passi-bleu px-6 py-3 rounded-xl text-sm font-extrabold hover:bg-gray-400 transition-colors">
+                        Save Changes
+                      </button>
+                    </div>
                   </div>
-                  <button onClick={() => setActiveTab('profile')} className="w-full mt-6 bg-passi-bleu text-white font-bold py-4 rounded-xl hover:bg-passi-bleu/90 transition-colors">
-                    Retour au profil
-                  </button>
+                  
+                  {/* Linked Accounts */}
+                  <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                    <h3 className="font-extrabold text-passi-bleu mb-6 text-sm uppercase tracking-wide">Website Access</h3>
+                    
+                    <div className="flex flex-col">
+                      <div className="flex justify-between items-center py-2 text-xs text-passi-text-sec font-bold border-b border-gray-100 mb-2">
+                        <span className="w-1/3">Website</span>
+                        <span className="w-1/3 text-left">Role</span>
+                        <span className="w-1/3 text-right"></span>
+                      </div>
+                      
+                      <div className="flex justify-between items-center py-4 border-b border-gray-50 text-sm font-medium">
+                        <span className="w-1/3 text-passi-bleu">Facebook</span>
+                        <span className="w-1/3 text-passi-text-sec">Linked</span>
+                        <div className="w-1/3 flex justify-end">
+                          <button className="text-gray-400 hover:text-passi-bleu transition-colors"><MoreHorizontal size={20} /></button>
+                        </div>
+                      </div>
+                      
+                      <div className="flex justify-between items-center py-4 border-b border-gray-50 text-sm font-medium">
+                        <span className="w-1/3 text-passi-bleu">Instagram</span>
+                        <span className="w-1/3 text-passi-corail">Not linked</span>
+                        <div className="w-1/3 flex justify-end">
+                          <button className="text-passi-turquoise hover:text-passi-turquoise/80 font-bold transition-colors">Link</button>
+                        </div>
+                      </div>
+                      
+                      <div className="flex justify-between items-center py-4 text-sm font-medium">
+                        <span className="w-1/3 text-passi-bleu">Google</span>
+                        <span className="w-1/3 text-passi-text-sec">Linked</span>
+                        <div className="w-1/3 flex justify-end">
+                          <button className="text-gray-400 hover:text-passi-bleu transition-colors"><MoreHorizontal size={20} /></button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
