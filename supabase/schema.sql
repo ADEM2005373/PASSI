@@ -5,7 +5,7 @@ CREATE TYPE user_role AS ENUM ('admin', 'user', 'security', 'barman');
 CREATE TABLE profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     email TEXT NOT NULL,
-    instagram_handle TEXT NOT NULL,
+    instagram_handle TEXT,          -- nullable: filled via CompleteProfileModal after Google login
     role user_role DEFAULT 'user' NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -22,6 +22,8 @@ CREATE POLICY "Admins can read all profiles" ON profiles FOR SELECT USING ((SELE
 CREATE POLICY "Admins can update all profiles" ON profiles FOR UPDATE USING ((SELECT role FROM profiles WHERE id = auth.uid()) = 'admin');
 -- System handles insertions via trigger during auth.users insert, but for safety:
 CREATE POLICY "Users can insert their own profile" ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
+-- Users can update their own profile (e.g. to fill in instagram_handle after Google OAuth)
+CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
 
 
 -- Events Table

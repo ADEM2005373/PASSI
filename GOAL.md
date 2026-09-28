@@ -61,3 +61,10 @@ Develop a lightweight, mobile-first web scanner using the html5-qrcode library.
 * Generate and apply the complete Supabase SQL schema.
 * Generate a plain-text ARCHITECTURE_EXPLANATION.md file in the root directory that breaks down how the database, middleware, and state machine interact, written specifically as a study guide to help the team prepare for their technical defense and Q&A.
 * Begin scaffolding the core backend logic and frontend components.
+
+### 7. Final Execution Phase
+* **Authentication & Supabase Client Integration**: Finalize Supabase client configuration. Build registration pages requiring exact @instagram_handle.
+* **The State Machine & Dashboards**: Build User Flow (/events) to request passes (pending). Build Admin Flow (/admin) to approve (awaiting_payment) and mark as paid (activated, generating UUIDs).
+* **Dynamic QR Rendering & Live Polling**: Use qrcode.react to render QR codes. Implement polling every 3 seconds to unmount QR code if status becomes scanned.
+* **QR Scanner Implementation**: Implement html5-qrcode in components/QRScanner.tsx using display: none for hiding (avoid unmount errors). Build Next.js API routes for scanner validation (entry_qr_uuid for Security, drink_qr_uuid for Barman).
+* **Autonomous Validation**: Verify middleware.ts blocks unauthorized roles from /admin and /scanner. Simulate complete ticket lifecycle.
