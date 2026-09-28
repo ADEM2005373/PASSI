@@ -3,7 +3,7 @@
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
-import { api, Event, User, Pass } from "../../../lib/services/api";
+import { api, Event, User, Pass } from "@/lib/services/api";
 import { QRCodeSVG } from 'qrcode.react';
 import { Logo } from "@/components/Logo";
 import { Sun, Moon, ArrowLeft, LogOut, MapPin, Calendar, Clock, Ticket, Wine, CheckCircle, AlertCircle } from "lucide-react";
@@ -40,7 +40,7 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
   useEffect(() => {
     const fetchData = async () => {
       const currentUser = await api.getCurrentUser();
-      if (!currentUser) { router.push("/login"); return; }
+      if (!currentUser) { router.replace("/login"); return; }
       setUser(currentUser);
       const eventData = await api.getEvent(resolvedParams.id);
       if (eventData) setEvent(eventData);
@@ -100,7 +100,7 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
           <button onClick={() => router.push("/dashboard")} className="btn-ghost flex items-center gap-2 px-4 py-2 text-sm">
             <ArrowLeft size={16}/> Retour
           </button>
-          <button onClick={() => { api.logout(); router.push("/login"); }} className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-red-500 hover:bg-red-500/10 transition-colors">
+          <button onClick={() => { api.logout(); router.replace("/login"); }} className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-red-500 hover:bg-red-500/10 transition-colors">
             <LogOut size={16}/>
           </button>
         </div>

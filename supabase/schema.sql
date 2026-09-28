@@ -25,6 +25,36 @@ CREATE POLICY "Users can insert their own profile" ON profiles FOR INSERT WITH C
 -- Users can update their own profile (e.g. to fill in instagram_handle after Google OAuth)
 CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
 
+-- ==========================================
+-- HIGH SECURITY: PREVENT PRIVILEGE ESCALATION
+-- ==========================================
+-- Since users can insert/update their own profiles via RLS, a malicious user could pass `role: 'admin'`.
+-- This trigger enforces that non-admins cannot change their role, and self-inserted roles default to 'user'.
+CREATE OR REPLACE FUNCTION prevent_role_escalation()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    -- If a user is self-inserting, force their role to 'user'
+    IF auth.uid() IS NOT NULL AND auth.uid() = NEW.id THEN
+      NEW.role = 'user';
+    END IF;
+  ELSIF TG_OP = 'UPDATE' THEN
+    -- If the updater is not an admin, ignore any changes to the role column
+    IF (SELECT role FROM profiles WHERE id = auth.uid()) IS DISTINCT FROM 'admin' THEN
+        NEW.role = OLD.role;
+    END IF;
+  END IF;
+  
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS enforce_role_security ON profiles;
+CREATE TRIGGER enforce_role_security
+BEFORE INSERT OR UPDATE ON profiles
+FOR EACH ROW
+EXECUTE FUNCTION prevent_role_escalation();
+
 
 -- Events Table
 CREATE TABLE events (

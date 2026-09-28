@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { requireRole } from '@/lib/supabase/api-security';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -7,6 +8,9 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
 export async function POST(req: NextRequest) {
+  const { error: authError } = await requireRole(['admin']);
+  if (authError) return authError;
+
   try {
     const { title, date, location, pre_orders_enabled, max_passes_per_user, image_url, drinks } = await req.json();
 
@@ -39,6 +43,9 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
+  const { error: authError } = await requireRole(['admin']);
+  if (authError) return authError;
+
   try {
     const { id, title, date, location, pre_orders_enabled, max_passes_per_user, image_url, drinks } = await req.json();
 
@@ -73,6 +80,9 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const { error: authError } = await requireRole(['admin']);
+  if (authError) return authError;
+
   try {
     const { searchParams } = new URL(req.url);
     const eventId = searchParams.get('eventId');

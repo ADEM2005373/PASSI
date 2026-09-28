@@ -28,7 +28,7 @@ export default function UserDashboard() {
   useEffect(() => {
     if (isInitializing) return
     if (!authUser) {
-      router.push('/login')
+      router.replace('/login')
       return
     }
     // Show the profile-completion modal if instagram_handle is missing

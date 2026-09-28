@@ -74,7 +74,7 @@ export default function StaffLoginPage() {
       setError(authError.message);
       setLoading(false);
     } else {
-      router.push("/dashboard");
+      router.replace("/dashboard");
     }
   };
 

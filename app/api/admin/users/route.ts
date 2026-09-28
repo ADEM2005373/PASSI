@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { requireRole } from '@/lib/supabase/api-security';
 
 // Initialize Supabase Admin client with Service Role Key
 // This allows us to safely bypass Row Level Security to create and delete users
@@ -14,6 +15,9 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
 });
 
 export async function POST(req: NextRequest) {
+  const { error: authError } = await requireRole(['admin']);
+  if (authError) return authError;
+
   try {
     const { email, password, instagramHandle, role } = await req.json();
 
@@ -54,6 +58,9 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const { error: authError } = await requireRole(['admin']);
+  if (authError) return authError;
+
   try {
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get('userId');
@@ -98,16 +105,19 @@ export async function DELETE(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  try {
-    const { userId, role } = await req.json();
+  const { error: authError } = await requireRole(['admin']);
+  if (authError) return authError;
 
-    if (!userId || !role) {
+  try {
+    const { userId, role: newRole } = await req.json();
+
+    if (!userId || !newRole) {
       return NextResponse.json({ error: 'User ID and Role are required' }, { status: 400 });
     }
 
     const { error } = await supabaseAdmin
       .from('profiles')
-      .update({ role })
+      .update({ role: newRole })
       .eq('id', userId);
 
     if (error) throw error;

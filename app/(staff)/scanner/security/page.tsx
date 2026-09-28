@@ -3,9 +3,9 @@
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
-import { api } from "../../../lib/services/api";
+import { api } from "@/lib/services/api";
 import { useAuth } from "@/lib/context/auth-context";
-import QRScanner from "../../../components/QRScanner";
+import QRScanner from "@/components/QRScanner";
 import { Logo } from "@/components/Logo";
 import { Sun, Moon, LogOut, ShieldCheck, ChevronDown } from "lucide-react";
 
@@ -27,7 +27,7 @@ export default function SecurityScanner() {
     const init = async () => {
       const user = await api.getCurrentUser();
       if (!user || (user.role !== 'security' && user.role !== 'admin')) {
-        router.push("/login");
+        router.replace("/login");
         return;
       }
       setIsSecurity(true);

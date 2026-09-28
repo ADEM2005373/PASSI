@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
-import { api, Pass, User, Event } from "../../lib/services/api";
+import { api, Pass, User, Event } from "@/lib/services/api";
 import { useAuth } from "@/lib/context/auth-context";
 import { Logo } from "@/components/Logo";
 import { Sun, Moon, LogOut, LayoutDashboard, CalendarDays, Users, CheckSquare, Plus, Trash2, Pencil, X, ExternalLink, Check, DollarSign } from "lucide-react";
@@ -51,7 +51,7 @@ export default function AdminDashboard() {
     setMounted(true);
     const init = async () => {
       const user = await api.getCurrentUser();
-      if (!user || user.role !== 'admin') { router.push("/login"); return; }
+      if (!user || user.role !== 'admin') { router.replace("/login"); return; }
       setIsAdmin(true);
       await fetchData();
       setIsLoading(false);
