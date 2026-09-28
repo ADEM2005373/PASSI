@@ -381,20 +381,20 @@ export default function UserDashboard() {
           )}
 
           {activeTab === 'profile' && (
-            <div className="animate-in fade-in slide-in-from-right-4 duration-500 w-full max-w-md mx-auto min-h-[calc(100vh-80px)] relative overflow-hidden bg-white rounded-3xl pb-24 shadow-xl border border-gray-100">
+            <div className="animate-in fade-in slide-in-from-right-4 duration-500 max-w-3xl mx-auto bg-white rounded-[3rem] shadow-xl shadow-gray-100/50 border border-gray-100 overflow-hidden">
               {/* Top Banner */}
-              <div className="h-40 bg-gradient-to-br from-passi-turquoise/20 to-passi-bleu/10 w-full absolute top-0 left-0 z-0 rounded-t-3xl"></div>
+              <div className="h-48 md:h-64 bg-gradient-to-br from-passi-turquoise/20 to-passi-bleu/10 w-full relative"></div>
               
-              <div className="relative z-10 pt-20 px-6 flex flex-col items-center">
+              <div className="relative z-10 px-6 md:px-14 pb-14 flex flex-col items-center -mt-20 md:-mt-24">
                 {/* Profile Picture */}
-                <div className="w-28 h-28 rounded-full border-4 border-white overflow-hidden bg-white mb-4 shadow-xl flex-shrink-0">
+                <div className="w-32 h-32 md:w-40 md:h-40 rounded-full border-8 border-white overflow-hidden bg-white mb-6 shadow-xl flex-shrink-0">
                   <div className="w-full h-full bg-gradient-to-br from-passi-turquoise to-passi-bleu flex items-center justify-center">
-                    <User size={48} className="text-white" />
+                    <User size={64} className="text-white" />
                   </div>
                 </div>
                 
                 {/* Name */}
-                <h1 className="text-2xl font-extrabold text-passi-bleu mb-6">{authUser?.email?.split('@')[0] || ''}</h1>
+                <h1 className="text-3xl md:text-4xl font-extrabold text-passi-bleu mb-10 text-center">{authUser?.email?.split('@')[0] || ''}</h1>
                 
                 {/* Contact Info */}
                 <div className="w-full space-y-4 mb-8 px-4">
@@ -412,48 +412,48 @@ export default function UserDashboard() {
                 <div className="w-full h-px bg-gray-100 mb-2 -mx-6 w-[calc(100%+3rem)]"></div>
                 
                 {/* Menu Options */}
-                <div className="w-full flex flex-col px-4">
+                <div className="w-full max-w-xl mx-auto flex flex-col px-4 md:px-0">
                   {/* Dark mode */}
-                  <div className="flex items-center justify-between py-5 border-b border-gray-100">
+                  <div className="flex items-center justify-between py-6 border-b border-gray-100">
                     <div className="flex items-center gap-4">
-                      <Moon size={20} className="text-passi-bleu" />
-                      <span className="text-passi-bleu text-sm font-bold">Dark mode</span>
+                      <Moon size={24} className="text-passi-bleu" />
+                      <span className="text-passi-bleu text-base md:text-lg font-bold">Dark mode</span>
                     </div>
                     {/* Toggle switch (mock) */}
-                    <div className="w-10 h-5 bg-white border-2 border-passi-bleu rounded-full relative">
-                      <div className="w-3 h-3 bg-passi-bleu rounded-full absolute left-0.5 top-0.5"></div>
+                    <div className="w-12 h-6 bg-white border-2 border-passi-bleu rounded-full relative cursor-pointer hover:bg-gray-50 transition-colors">
+                      <div className="w-4 h-4 bg-passi-bleu rounded-full absolute left-0.5 top-0.5"></div>
                     </div>
                   </div>
                   
                   {/* Profile details */}
-                  <button onClick={() => setActiveTab('settings')} className="flex items-center gap-4 py-5 border-b border-gray-100 w-full text-left hover:bg-passi-creme transition-colors -mx-4 px-4 w-[calc(100%+2rem)]">
-                    <User size={20} className="text-passi-bleu" />
-                    <span className="text-passi-bleu text-sm font-bold">Profile details</span>
+                  <button onClick={() => setActiveTab('settings')} className="flex items-center gap-4 py-6 border-b border-gray-100 w-full text-left hover:bg-passi-creme transition-colors -mx-4 px-4 md:-mx-6 md:px-6 w-[calc(100%+2rem)] md:w-[calc(100%+3rem)] rounded-xl mt-2">
+                    <User size={24} className="text-passi-bleu" />
+                    <span className="text-passi-bleu text-base md:text-lg font-bold">Profile details</span>
                   </button>
                   
                   {/* Settings */}
-                  <button className="flex items-center gap-4 py-5 border-b border-gray-100 w-full text-left hover:bg-passi-creme transition-colors -mx-4 px-4 w-[calc(100%+2rem)]">
-                    <Settings size={20} className="text-passi-bleu" />
-                    <span className="text-passi-bleu text-sm font-bold">Settings</span>
+                  <button className="flex items-center gap-4 py-6 border-b border-gray-100 w-full text-left hover:bg-passi-creme transition-colors -mx-4 px-4 md:-mx-6 md:px-6 w-[calc(100%+2rem)] md:w-[calc(100%+3rem)] rounded-xl">
+                    <Settings size={24} className="text-passi-bleu" />
+                    <span className="text-passi-bleu text-base md:text-lg font-bold">Settings</span>
                   </button>
                   
                   {/* Log out */}
-                  <button onClick={handleLogout} className="flex items-center gap-4 py-5 border-b border-gray-100 w-full text-left hover:bg-red-50 transition-colors -mx-4 px-4 w-[calc(100%+2rem)]">
-                    <LogOut size={20} className="text-passi-corail" />
-                    <span className="text-passi-corail text-sm font-bold">Log out</span>
+                  <button onClick={handleLogout} className="flex items-center gap-4 py-6 border-b border-gray-100 w-full text-left hover:bg-red-50 transition-colors -mx-4 px-4 md:-mx-6 md:px-6 w-[calc(100%+2rem)] md:w-[calc(100%+3rem)] rounded-xl text-passi-corail">
+                    <LogOut size={24} className="text-passi-corail" />
+                    <span className="text-passi-corail text-base md:text-lg font-bold">Log out</span>
                   </button>
                 </div>
               </div>
             </div>
           )}
           {activeTab === 'settings' && (
-            <div className="animate-in fade-in slide-in-from-right-4 duration-500 w-full max-w-2xl mx-auto bg-white rounded-3xl shadow-xl border border-gray-100 pb-24">
-              <div className="p-6 md:p-10">
-                <button onClick={() => setActiveTab('profile')} className="flex items-center gap-2 text-passi-text-sec font-medium mb-8 hover:text-passi-bleu transition-colors">
-                  <ChevronLeft size={20} /> back to Dashboard
+            <div className="animate-in fade-in slide-in-from-right-4 duration-500 max-w-4xl mx-auto bg-transparent">
+              <div className="md:px-4">
+                <button onClick={() => setActiveTab('profile')} className="flex items-center gap-2 text-passi-text-sec text-sm mb-8 hover:text-passi-bleu font-medium transition-colors">
+                  <ChevronLeft size={16} /> back to Profile
                 </button>
                 
-                <div className="bg-passi-creme rounded-3xl shadow-sm border border-orange-100 overflow-hidden mb-6 p-6 md:p-10">
+                <div className="bg-passi-creme rounded-3xl shadow-sm border border-orange-100 overflow-hidden mb-10 p-6 md:p-10">
                   {/* Header info */}
                   <div className="flex items-center gap-4 mb-6">
                     <div className="w-16 h-16 rounded-full overflow-hidden bg-gradient-to-br from-passi-turquoise to-passi-bleu flex items-center justify-center shadow-md">
@@ -468,51 +468,51 @@ export default function UserDashboard() {
                   </div>
                   
                   {/* User Info Form */}
-                  <div className="bg-white rounded-2xl p-6 shadow-sm mb-6 border border-gray-100">
-                    <h3 className="font-extrabold text-passi-bleu mb-6 text-sm uppercase tracking-wide">User Info</h3>
+                  <div className="bg-white rounded-3xl p-6 md:p-10 shadow-sm mb-10 border border-gray-100">
+                    <h3 className="font-extrabold text-passi-bleu mb-8 text-base md:text-lg uppercase tracking-wide">User Info</h3>
                     
-                    <div className="space-y-4 mb-6">
+                    <div className="space-y-6 mb-8">
                       <div>
-                        <label className="block text-xs font-bold text-passi-text-sec mb-2">First name</label>
-                        <input type="text" defaultValue="" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-passi-bleu font-medium focus:outline-none focus:ring-2 focus:ring-passi-turquoise/30" />
+                        <label className="block text-sm font-bold text-passi-text-sec mb-2">First name</label>
+                        <input type="text" defaultValue="" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 md:py-4 text-passi-bleu font-medium focus:outline-none focus:ring-2 focus:ring-passi-turquoise/30" />
                       </div>
                       <div>
-                        <label className="block text-xs font-bold text-passi-text-sec mb-2">Last name</label>
-                        <input type="text" defaultValue="" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-passi-bleu font-medium focus:outline-none focus:ring-2 focus:ring-passi-turquoise/30" />
+                        <label className="block text-sm font-bold text-passi-text-sec mb-2">Last name</label>
+                        <input type="text" defaultValue="" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 md:py-4 text-passi-bleu font-medium focus:outline-none focus:ring-2 focus:ring-passi-turquoise/30" />
                       </div>
                       <div>
-                        <label className="block text-xs font-bold text-passi-text-sec mb-2">Email address</label>
-                        <input type="email" defaultValue={authUser?.email || ''} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-passi-bleu font-medium focus:outline-none focus:ring-2 focus:ring-passi-turquoise/30" />
+                        <label className="block text-sm font-bold text-passi-text-sec mb-2">Email address</label>
+                        <input type="email" defaultValue={authUser?.email || ''} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 md:py-4 text-passi-bleu font-medium focus:outline-none focus:ring-2 focus:ring-passi-turquoise/30" />
                       </div>
                     </div>
                     
                     <div className="flex justify-end">
-                      <button className="bg-gray-300 text-passi-bleu px-6 py-3 rounded-xl text-sm font-extrabold hover:bg-gray-400 transition-colors">
+                      <button className="bg-gray-300 text-passi-bleu px-8 py-4 rounded-xl text-base font-extrabold hover:bg-gray-400 transition-colors">
                         Save Changes
                       </button>
                     </div>
                   </div>
                   
                   {/* Linked Accounts */}
-                  <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                    <h3 className="font-extrabold text-passi-bleu mb-6 text-sm uppercase tracking-wide">Website Access</h3>
+                  <div className="bg-white rounded-3xl p-6 md:p-10 shadow-sm border border-gray-100">
+                    <h3 className="font-extrabold text-passi-bleu mb-6 text-base md:text-lg uppercase tracking-wide">Website Access</h3>
                     
                     <div className="flex flex-col">
-                      <div className="flex justify-between items-center py-2 text-xs text-passi-text-sec font-bold border-b border-gray-100 mb-2">
+                      <div className="flex justify-between items-center py-4 text-sm text-passi-text-sec font-bold border-b border-gray-100 mb-2">
                         <span className="w-1/3">Website</span>
                         <span className="w-1/3 text-left">Role</span>
                         <span className="w-1/3 text-right"></span>
                       </div>
                       
-                      <div className="flex justify-between items-center py-4 border-b border-gray-50 text-sm font-medium">
+                      <div className="flex justify-between items-center py-6 border-b border-gray-50 text-base md:text-lg font-medium">
                         <span className="w-1/3 text-passi-bleu">Facebook</span>
                         <span className="w-1/3 text-passi-text-sec">Linked</span>
                         <div className="w-1/3 flex justify-end">
-                          <button className="text-gray-400 hover:text-passi-bleu transition-colors"><MoreHorizontal size={20} /></button>
+                          <button className="text-gray-400 hover:text-passi-bleu transition-colors"><MoreHorizontal size={24} /></button>
                         </div>
                       </div>
                       
-                      <div className="flex justify-between items-center py-4 border-b border-gray-50 text-sm font-medium">
+                      <div className="flex justify-between items-center py-6 border-b border-gray-50 text-base md:text-lg font-medium">
                         <span className="w-1/3 text-passi-bleu">Instagram</span>
                         <span className="w-1/3 text-passi-corail">Not linked</span>
                         <div className="w-1/3 flex justify-end">
@@ -520,11 +520,11 @@ export default function UserDashboard() {
                         </div>
                       </div>
                       
-                      <div className="flex justify-between items-center py-4 text-sm font-medium">
+                      <div className="flex justify-between items-center py-6 text-base md:text-lg font-medium">
                         <span className="w-1/3 text-passi-bleu">Google</span>
                         <span className="w-1/3 text-passi-text-sec">Linked</span>
                         <div className="w-1/3 flex justify-end">
-                          <button className="text-gray-400 hover:text-passi-bleu transition-colors"><MoreHorizontal size={20} /></button>
+                          <button className="text-gray-400 hover:text-passi-bleu transition-colors"><MoreHorizontal size={24} /></button>
                         </div>
                       </div>
                     </div>
