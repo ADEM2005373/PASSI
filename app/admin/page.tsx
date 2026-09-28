@@ -142,7 +142,7 @@ export default function AdminDashboard() {
   ];
 
   const statCards = [
-    { label: "Chiffre d'affaires", value: `${stats.revenue} DA`, color: 'bg-passi-turquoise', icon: <DollarSign size={20} className="text-white" /> },
+    { label: "Chiffre d'affaires", value: `${stats.revenue} TND`, color: 'bg-passi-turquoise', icon: <DollarSign size={20} className="text-white" /> },
     { label: "Passes actifs",       value: stats.totalPasses,     color: 'bg-passi-corail',    icon: <CheckSquare size={20} className="text-white" /> },
     { label: "Utilisateurs",        value: stats.totalUsers,      color: 'bg-purple-500',      icon: <Users size={20} className="text-white" /> },
     { label: "Événements",          value: stats.totalEvents,     color: 'bg-blue-500',        icon: <CalendarDays size={20} className="text-white" /> },
@@ -264,7 +264,6 @@ export default function AdminDashboard() {
               <div className="card p-8 shadow-sm">
                 <div className="flex justify-between items-center mb-6">
                   <h3 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>Activité des passes</h3>
-                  <span className="badge bg-passi-turquoise/15 text-passi-turquoise">+14% cette semaine</span>
                 </div>
                 <div className="w-full h-56 relative" style={{ borderBottom: '1px solid var(--border)', borderLeft: '1px solid var(--border)' }}>
                   {(() => {
