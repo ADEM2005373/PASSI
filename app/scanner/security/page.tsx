@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { api } from "../../../lib/services/api";
@@ -38,13 +38,17 @@ export default function SecurityScanner() {
     init();
   }, [router]);
 
+  const isProcessingRef = useRef(false);
+
   const handleScan = async (decodedText: string) => {
-    if (scanState !== "idle") return;
+    if (isProcessingRef.current) return;
+    isProcessingRef.current = true;
+    
     try {
       if (!selectedEventId) {
         setScanState("error");
         setMessage("Sélectionnez d'abord un événement");
-        setTimeout(() => setScanState("idle"), 3000);
+        setTimeout(() => { setScanState("idle"); isProcessingRef.current = false; }, 3000);
         return;
       }
       const res = await fetch('/api/scan', {
@@ -55,11 +59,22 @@ export default function SecurityScanner() {
       const result = await res.json();
       setScanState(result.success ? "success" : "error");
       setMessage(result.message);
-      setTimeout(() => { setScanState("idle"); setMessage(""); }, 3000);
+      
+      // Auto return to idle after 3 seconds
+      setTimeout(() => { 
+        setScanState("idle"); 
+        setMessage(""); 
+        // 500ms debounce to prevent immediate rescan of the same code
+        setTimeout(() => { isProcessingRef.current = false; }, 500);
+      }, 3000);
+      
     } catch {
       setScanState("error");
       setMessage("Erreur API");
-      setTimeout(() => setScanState("idle"), 3000);
+      setTimeout(() => { 
+        setScanState("idle"); 
+        setTimeout(() => { isProcessingRef.current = false; }, 500);
+      }, 3000);
     }
   };
 

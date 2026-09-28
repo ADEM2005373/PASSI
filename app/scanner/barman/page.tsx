@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import QRScanner from '@/components/QRScanner'
 import { useRouter } from 'next/navigation'
@@ -34,8 +34,12 @@ export default function BarmanScannerPage() {
     init()
   }, [router])
 
+  const isProcessingRef = useRef(false)
+
   const handleScan = async (decodedUuid: string) => {
-    if (scanResult !== null) return
+    if (isProcessingRef.current) return
+    isProcessingRef.current = true
+    
     try {
       const res = await fetch('/api/scan', {
         method: 'POST',
@@ -51,9 +55,18 @@ export default function BarmanScannerPage() {
         setScanResult('error')
         setMessage(result.message)
       }
+      
+      // Auto close after 3 seconds
+      setTimeout(() => {
+        resetScanner()
+      }, 3000)
+      
     } catch {
       setScanResult('error')
       setMessage('Erreur API')
+      setTimeout(() => {
+        resetScanner()
+      }, 3000)
     }
   }
 
@@ -61,6 +74,10 @@ export default function BarmanScannerPage() {
     setScanResult(null)
     setMessage('')
     setDrinkDetails(null)
+    // 500ms debounce to prevent immediate rescan of the exact same code
+    setTimeout(() => {
+      isProcessingRef.current = false
+    }, 500)
   }
 
   if (!isBarman) return null
