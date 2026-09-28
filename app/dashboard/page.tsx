@@ -394,17 +394,17 @@ export default function UserDashboard() {
                 </div>
                 
                 {/* Name */}
-                <h1 className="text-2xl font-extrabold text-passi-bleu mb-6">{authUser?.email?.split('@')[0] || 'Rita Smith'}</h1>
+                <h1 className="text-2xl font-extrabold text-passi-bleu mb-6">{authUser?.email?.split('@')[0] || ''}</h1>
                 
                 {/* Contact Info */}
                 <div className="w-full space-y-4 mb-8 px-4">
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-passi-text-sec font-medium">Phone</span>
-                    <span className="text-passi-bleu font-extrabold">+5999-771-7171</span>
+                    <span className="text-passi-bleu font-extrabold"></span>
                   </div>
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-passi-text-sec font-medium">Mail</span>
-                    <span className="text-passi-bleu font-medium">{authUser?.email || 'rita@gmail.com'}</span>
+                    <span className="text-passi-bleu font-medium">{authUser?.email || ''}</span>
                   </div>
                 </div>
                 
@@ -460,7 +460,7 @@ export default function UserDashboard() {
                        <User size={32} className="text-white" />
                     </div>
                     <div>
-                      <h2 className="font-extrabold text-passi-bleu text-xl">{authUser?.email?.split('@')[0] || 'Samantha Ashley'}</h2>
+                      <h2 className="font-extrabold text-passi-bleu text-xl">{authUser?.email?.split('@')[0] || ''}</h2>
                       <div className="flex items-center text-passi-text-sec text-sm gap-1 mt-1 font-medium">
                         <span className="bg-white text-passi-bleu px-2 py-0.5 rounded-lg flex items-center gap-1 shadow-sm"><FileText size={12} /> 2</span>
                       </div>
@@ -474,15 +474,15 @@ export default function UserDashboard() {
                     <div className="space-y-4 mb-6">
                       <div>
                         <label className="block text-xs font-bold text-passi-text-sec mb-2">First name</label>
-                        <input type="text" defaultValue="Samantha" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-passi-bleu font-medium focus:outline-none focus:ring-2 focus:ring-passi-turquoise/30" />
+                        <input type="text" defaultValue="" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-passi-bleu font-medium focus:outline-none focus:ring-2 focus:ring-passi-turquoise/30" />
                       </div>
                       <div>
                         <label className="block text-xs font-bold text-passi-text-sec mb-2">Last name</label>
-                        <input type="text" defaultValue="Ashley" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-passi-bleu font-medium focus:outline-none focus:ring-2 focus:ring-passi-turquoise/30" />
+                        <input type="text" defaultValue="" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-passi-bleu font-medium focus:outline-none focus:ring-2 focus:ring-passi-turquoise/30" />
                       </div>
                       <div>
                         <label className="block text-xs font-bold text-passi-text-sec mb-2">Email address</label>
-                        <input type="email" defaultValue={authUser?.email || 'ashley@email.com'} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-passi-bleu font-medium focus:outline-none focus:ring-2 focus:ring-passi-turquoise/30" />
+                        <input type="email" defaultValue={authUser?.email || ''} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-passi-bleu font-medium focus:outline-none focus:ring-2 focus:ring-passi-turquoise/30" />
                       </div>
                     </div>
                     
