@@ -46,13 +46,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, message: "DENIED: Profile not found" }, { status: 401 });
     }
 
+    // Since RLS blocks non-owners from reading/updating passes, we use the Service Role Key here
+    // to bypass RLS safely, AFTER we have verified the user is actually security or barman.
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
     if (type === 'entry') {
       if (profile.role !== 'security' && profile.role !== 'admin') {
         return NextResponse.json({ success: false, message: "DENIED: Not Security" }, { status: 403 });
       }
 
-      // Query Passes table
-      const { data: pass, error } = await supabase
+      // Query Passes table using admin client
+      const { data: pass, error } = await supabaseAdmin
         .from('passes')
         .select('*, events(title, date)')
         .eq('entry_qr_uuid', qrUuid)
@@ -67,8 +74,8 @@ export async function POST(request: Request) {
       
       const eventTitle = pass.events?.title || 'Unknown Event';
 
-      // Update to scanned
-      const { error: updateError } = await supabase
+      // Update to scanned using admin client
+      const { error: updateError } = await supabaseAdmin
         .from('passes')
         .update({ entry_status: 'scanned' })
         .eq('id', pass.id);
@@ -82,8 +89,8 @@ export async function POST(request: Request) {
         return NextResponse.json({ success: false, message: "DENIED: Not Barman" }, { status: 403 });
       }
 
-      // Query passes table directly
-      const { data: passDrink, error } = await supabase
+      // Query passes table directly using admin client
+      const { data: passDrink, error } = await supabaseAdmin
         .from('passes')
         .select('id, drink_status, drink_menus(name)')
         .eq('drink_qr_uuid', qrUuid)
@@ -93,7 +100,7 @@ export async function POST(request: Request) {
       if (passDrink.drink_status === 'scanned') return NextResponse.json({ success: false, message: "DENIED: Déjà Scanné" });
       if (passDrink.drink_status !== 'activated') return NextResponse.json({ success: false, message: `DENIED: Statut: ${passDrink.drink_status}` });
 
-      const { error: updateError } = await supabase
+      const { error: updateError } = await supabaseAdmin
         .from('passes')
         .update({ drink_status: 'scanned' })
         .eq('id', passDrink.id);
