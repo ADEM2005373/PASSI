@@ -226,13 +226,13 @@ export default function AdminDashboard() {
 
       {/* ─── MAIN ─── */}
       <main className="flex-1 overflow-y-auto hide-scrollbar pb-24 md:pb-0">
-        <div className="max-w-5xl mx-auto p-6 md:p-10 space-y-8 animate-fade-in-up">
+        <div className="max-w-5xl mx-auto p-4 md:p-10 space-y-6 md:space-y-8 animate-fade-in-up">
 
           {/* Header */}
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-xs font-bold tracking-widest uppercase text-passi-corail mb-1">Passi Admin</p>
-              <h1 className="text-3xl font-extrabold capitalize" style={{ color: 'var(--text-primary)' }}>
+              <p className="text-[10px] md:text-xs font-bold tracking-widest uppercase text-passi-corail mb-1">Passi Admin</p>
+              <h1 className="text-2xl md:text-3xl font-extrabold capitalize" style={{ color: 'var(--text-primary)' }}>
                 {navItems.find(n => n.id === activeTab)?.label}
               </h1>
             </div>
@@ -247,14 +247,14 @@ export default function AdminDashboard() {
 
           {/* ── DASHBOARD TAB ── */}
           {activeTab === 'dashboard' && (
-            <div className="space-y-8">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
+            <div className="space-y-6 md:space-y-8">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-5">
                 {statCards.map((s, i) => (
-                  <div key={i} className="card p-5 flex items-center gap-4 shadow-sm">
-                    <div className={`w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 ${s.color}`}>{s.icon}</div>
-                    <div>
-                      <p className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>{s.label}</p>
-                      <p className="text-2xl font-extrabold" style={{ color: 'var(--text-primary)' }}>{s.value}</p>
+                  <div key={i} className="card p-4 md:p-5 flex items-center gap-3 md:gap-4 shadow-sm">
+                    <div className={`w-10 h-10 md:w-11 md:h-11 rounded-xl md:rounded-2xl flex items-center justify-center flex-shrink-0 ${s.color}`}>{s.icon}</div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] md:text-xs font-semibold leading-tight mb-0.5 truncate" style={{ color: 'var(--text-secondary)' }} title={s.label}>{s.label}</p>
+                      <p className="text-xl md:text-2xl font-extrabold truncate" style={{ color: 'var(--text-primary)' }}>{s.value}</p>
                     </div>
                   </div>
                 ))}
