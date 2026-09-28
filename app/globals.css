@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-passi-bleu: #101828;
   --color-passi-corail: #FF6B5E;
