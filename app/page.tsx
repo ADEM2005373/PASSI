@@ -37,6 +37,9 @@ export default function LandingPage() {
                 {resolvedTheme === 'dark' ? <Sun size={18} className="md:w-5 md:h-5" /> : <Moon size={18} className="md:w-5 md:h-5" />}
               </button>
             )}
+            <Link href="/staff/login" className="text-sm md:text-base font-bold text-passi-bleu dark:text-passi-creme hover:text-passi-corail dark:hover:text-passi-corail transition-colors">
+              Carrières
+            </Link>
             <Link href="/login" className="text-sm md:text-base font-bold text-passi-bleu dark:text-passi-creme hover:text-passi-corail dark:hover:text-passi-corail transition-colors">
               Connexion
             </Link>
@@ -159,44 +162,6 @@ export default function LandingPage() {
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Staff / Career Section */}
-      <section className="py-24 bg-white dark:bg-passi-surface transition-colors border-t border-gray-100 dark:border-gray-800">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="text-center mb-16">
-            <h2 className="text-sm font-bold text-passi-corail tracking-widest uppercase mb-2">Espace Staff & Carrières</h2>
-            <h3 className="text-3xl md:text-5xl font-extrabold text-passi-bleu dark:text-white">Portail de Connexion Staff</h3>
-            <p className="mt-4 text-passi-text-sec max-w-2xl mx-auto">
-              L'accès à l'espace staff est strictement réservé. Votre compte doit d'abord être créé par un administrateur. Lors de votre première connexion, vous devez utiliser Google pour lier votre compte.
-            </p>
-          </div>
-          <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
-            <button onClick={() => api.signInWithOAuth('google')} className="bg-gray-50 dark:bg-gray-800 p-8 rounded-3xl border border-gray-100 dark:border-gray-700 hover:shadow-xl hover:-translate-y-2 transition-all flex flex-col items-center text-center group cursor-pointer">
-              <div className="w-16 h-16 rounded-2xl bg-passi-bleu dark:bg-passi-creme text-white dark:text-passi-bleu flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                <ShieldCheck size={32} />
-              </div>
-              <h4 className="text-xl font-extrabold text-passi-bleu dark:text-white mb-2">Admin</h4>
-              <p className="text-sm text-passi-text-sec">Connexion Administrateur</p>
-            </button>
-
-            <button onClick={() => api.signInWithOAuth('google')} className="bg-gray-50 dark:bg-gray-800 p-8 rounded-3xl border border-gray-100 dark:border-gray-700 hover:shadow-xl hover:-translate-y-2 transition-all flex flex-col items-center text-center group cursor-pointer">
-              <div className="w-16 h-16 rounded-2xl bg-passi-corail text-white flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                <Sparkles size={32} />
-              </div>
-              <h4 className="text-xl font-extrabold text-passi-bleu dark:text-white mb-2">Sécurité</h4>
-              <p className="text-sm text-passi-text-sec">Connexion Scan Entrée</p>
-            </button>
-
-            <button onClick={() => api.signInWithOAuth('google')} className="bg-gray-50 dark:bg-gray-800 p-8 rounded-3xl border border-gray-100 dark:border-gray-700 hover:shadow-xl hover:-translate-y-2 transition-all flex flex-col items-center text-center group cursor-pointer">
-              <div className="w-16 h-16 rounded-2xl bg-passi-turquoise text-white flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                <Zap size={32} />
-              </div>
-              <h4 className="text-xl font-extrabold text-passi-bleu dark:text-white mb-2">Barman</h4>
-              <p className="text-sm text-passi-text-sec">Connexion Scan Bar</p>
-            </button>
           </div>
         </div>
       </section>

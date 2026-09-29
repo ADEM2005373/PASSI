@@ -5,7 +5,7 @@ import { useTheme } from "next-themes";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Logo } from "@/components/Logo";
-import { Sun, Moon, AlertCircle } from "lucide-react";
+import { Sun, Moon, AlertCircle, Ticket, QrCode } from "lucide-react";
 
 // ── Social login SVG icons ──────────────────────────────────────────────────
 
@@ -151,33 +151,43 @@ function LoginContent() {
 
         <div className="relative z-10 space-y-8">
           <h2 className="text-5xl font-extrabold text-white leading-tight">
-            Votre pass.
+            Votre pass
             <br />
-            <span className="text-passi-corail">Votre soirée.</span>
+            <span className="text-passi-corail">Votre soirée</span>
           </h2>
-          <p className="text-passi-text-sec text-lg font-medium leading-relaxed max-w-sm">
-            Réservez, scannez, consommez. Passi centralise toute votre
-            expérience événementielle en un seul endroit.
-          </p>
-          <div className="flex gap-3 flex-wrap">
-            {["Billetterie numérique", "QR sécurisé", "Boissons incluses"].map(
-              (tag) => (
-                <span
-                  key={tag}
-                  className="badge bg-white/10 text-passi-text-sec border border-white/10"
-                >
-                  {tag}
-                </span>
-              )
-            )}
-          </div>
+          
+          {/* Interactive Coded Ticket */}
+          <div className="relative mt-8 group perspective-[1000px]">
+            {/* Glow effect behind */}
+            <div className="absolute inset-0 bg-gradient-to-tr from-passi-corail to-passi-turquoise rounded-3xl blur-2xl opacity-40 group-hover:opacity-70 transition-opacity duration-700 animate-pulse" style={{ animationDuration: '3s' }}></div>
+            
+            {/* The Ticket */}
+            <div className="relative bg-white/10 backdrop-blur-xl border border-white/20 p-8 rounded-3xl shadow-2xl transform transition-transform duration-500 hover:-translate-y-2 hover:rotate-2">
+              <div className="flex justify-between items-start mb-8">
+                <div>
+                  <div className="text-passi-turquoise text-xs font-black uppercase tracking-widest mb-2">Accès Premium</div>
+                  <div className="text-white font-extrabold text-2xl tracking-tight">VIP Experience</div>
+                </div>
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-passi-corail to-orange-400 flex items-center justify-center shadow-lg transform group-hover:rotate-12 transition-transform duration-500">
+                  <Ticket className="text-white w-6 h-6" />
+                </div>
+              </div>
+              
+              <div className="w-full h-40 bg-white/5 rounded-2xl border border-white/10 flex items-center justify-center relative overflow-hidden group-hover:bg-white/10 transition-colors duration-500">
+                {/* Decorative scanner line */}
+                <div className="absolute top-0 left-0 w-full h-1 bg-passi-turquoise/50 blur-sm transform -translate-y-full group-hover:translate-y-[10rem] transition-transform duration-[2s] ease-in-out"></div>
+                
+                <QrCode className="text-white/90 w-20 h-20 group-hover:scale-110 transition-transform duration-500 drop-shadow-2xl" strokeWidth={1.5} />
+              </div>
 
-          {/* Security trust line */}
-          <div className="flex items-center gap-2 pt-2">
-            <div className="w-2 h-2 rounded-full bg-passi-turquoise animate-pulse" />
-            <span className="text-passi-text-sec text-sm font-medium">
-              Connexion 100% sécurisée via OAuth
-            </span>
+              <div className="mt-8 flex justify-between items-center text-sm font-bold text-white/70">
+                <div className="flex items-center gap-2 bg-black/20 px-3 py-1.5 rounded-full border border-white/10">
+                  <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
+                  <span className="text-green-400">Prêt à scanner</span>
+                </div>
+                <div className="font-mono text-white/50 tracking-widest">#PS-84729</div>
+              </div>
+            </div>
           </div>
         </div>
 
