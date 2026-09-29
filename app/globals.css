@@ -34,27 +34,30 @@
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
+  scrollbar-color: rgba(150, 150, 150, 0.5) transparent;
   transition: background-color 0.25s ease, border-color 0.25s ease, color 0.2s ease;
 }
 
 /* Custom WebKit Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
   background: transparent;
+  margin: 4px; /* Optional: adds some spacing from edges */
 }
 
 ::-webkit-scrollbar-thumb {
-  background-color: var(--border);
-  border-radius: 20px;
+  background-color: rgba(150, 150, 150, 0.4);
+  border-radius: 9999px; /* Fully rounded */
+  border: 2px solid transparent; /* Creates padding inside the thumb to make it look thinner */
+  background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background-color: var(--text-muted);
+  background-color: rgba(150, 150, 150, 0.7);
 }
 
 body {
