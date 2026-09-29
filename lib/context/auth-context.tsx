@@ -117,12 +117,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [fetchProfile])
 
   const logout = useCallback(async () => {
+    const isStaff = user?.role === 'admin' || user?.role === 'security' || user?.role === 'barman'
     const supabase = createClient()
     await supabase.auth.signOut()
     setUser(null)
-    router.replace("/login")
+    router.replace(isStaff ? "/staff/login" : "/login")
     router.refresh()
-  }, [router])
+  }, [router, user])
 
   const refreshUser = useCallback(async () => {
     setIsLoading(true)
