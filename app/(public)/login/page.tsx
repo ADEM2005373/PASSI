@@ -159,36 +159,76 @@ function LoginContent() {
             <span className="text-passi-corail">Votre soirée</span>
           </h2>
           
-          {/* Interactive Coded Ticket */}
-          <div className="relative mt-8 group perspective-[1000px]">
-            {/* Glow effect behind */}
-            <div className="absolute inset-0 bg-gradient-to-tr from-passi-corail to-passi-turquoise rounded-3xl blur-2xl opacity-40 group-hover:opacity-70 transition-opacity duration-700 animate-pulse" style={{ animationDuration: '3s' }}></div>
+          {/* Interactive Coded Ticket / Poster */}
+          <div className="relative mt-12 w-full max-w-sm mx-auto group">
+            <style dangerouslySetInnerHTML={{__html: `
+              @keyframes blob {
+                0% { transform: translate(0px, 0px) scale(1); }
+                33% { transform: translate(30px, -50px) scale(1.1); }
+                66% { transform: translate(-20px, 20px) scale(0.9); }
+                100% { transform: translate(0px, 0px) scale(1); }
+              }
+              .animate-blob { animation: blob 7s infinite; }
+              .animation-delay-2000 { animation-delay: 2s; }
+              .animation-delay-4000 { animation-delay: 4s; }
+              @keyframes shimmer {
+                100% { transform: translateX(100%); }
+              }
+              @keyframes scan {
+                0% { top: 5%; opacity: 0; }
+                10% { opacity: 1; }
+                90% { opacity: 1; }
+                100% { top: 95%; opacity: 0; }
+              }
+            `}} />
             
-            {/* The Ticket */}
-            <div className="relative bg-white/10 backdrop-blur-xl border border-white/20 p-8 rounded-3xl shadow-2xl transform transition-transform duration-500 hover:-translate-y-2 hover:rotate-2">
-              <div className="flex justify-between items-start mb-8">
-                <div>
-                  <div className="text-passi-turquoise text-xs font-black uppercase tracking-widest mb-2">Accès Premium</div>
-                  <div className="text-white font-extrabold text-2xl tracking-tight">VIP Experience</div>
-                </div>
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-passi-corail to-orange-400 flex items-center justify-center shadow-lg transform group-hover:rotate-12 transition-transform duration-500">
-                  <Ticket className="text-white w-6 h-6" />
-                </div>
-              </div>
+            {/* Animated gradient blobs in background */}
+            <div className="absolute top-0 -left-4 w-48 h-48 bg-passi-corail rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob"></div>
+            <div className="absolute top-0 -right-4 w-48 h-48 bg-passi-turquoise rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob animation-delay-2000"></div>
+            <div className="absolute -bottom-8 left-20 w-48 h-48 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob animation-delay-4000"></div>
+
+            {/* Glassmorphic Card */}
+            <div className="relative bg-white/10 dark:bg-black/20 backdrop-blur-3xl border border-white/30 p-6 rounded-[2rem] shadow-[0_8px_32px_0_rgba(31,38,135,0.37)] overflow-hidden transform transition-all duration-500 hover:scale-[1.02] hover:rotate-1">
               
-              <div className="w-full h-40 bg-white/5 rounded-2xl border border-white/10 flex items-center justify-center relative overflow-hidden group-hover:bg-white/10 transition-colors duration-500">
-                {/* Decorative scanner line */}
-                <div className="absolute top-0 left-0 w-full h-1 bg-passi-turquoise/50 blur-sm transform -translate-y-full group-hover:translate-y-[10rem] transition-transform duration-[2s] ease-in-out"></div>
-                
-                <QrCode className="text-white/90 w-20 h-20 group-hover:scale-110 transition-transform duration-500 drop-shadow-2xl" strokeWidth={1.5} />
+              {/* Shine effect */}
+              <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/20 to-white/0 transform -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]"></div>
+
+              {/* Event Cover Image placeholder / Top Section */}
+              <div className="relative w-full h-32 rounded-2xl bg-gradient-to-br from-gray-800 to-gray-900 overflow-hidden mb-6 flex items-center justify-center border border-white/10 shadow-inner">
+                <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1540039155733-d7696f4bc20c?q=80&w=800&auto=format&fit=crop')] bg-cover bg-center opacity-70 mix-blend-overlay"></div>
+                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"></div>
+                <div className="relative z-10 w-full px-4 text-left flex justify-between items-end h-full pb-3">
+                  <div>
+                    <span className="bg-passi-corail text-white text-[10px] font-black uppercase px-2 py-1 rounded-lg mb-1 inline-block shadow-lg">VIP Pass</span>
+                    <h3 className="text-white font-extrabold text-xl leading-none drop-shadow-md">Summer Festival</h3>
+                  </div>
+                  <Ticket className="text-white/80 w-6 h-6 mb-1" />
+                </div>
               </div>
 
-              <div className="mt-8 flex justify-between items-center text-sm font-bold text-white/70">
-                <div className="flex items-center gap-2 bg-black/20 px-3 py-1.5 rounded-full border border-white/10">
-                  <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
-                  <span className="text-green-400">Prêt à scanner</span>
+              {/* QR Code Section */}
+              <div className="bg-white rounded-2xl p-4 flex flex-col items-center justify-center relative shadow-[inset_0_0_20px_rgba(0,0,0,0.05)] border-2 border-transparent group-hover:border-passi-turquoise/30 transition-colors duration-500">
+                {/* Scanner Laser */}
+                <div className="absolute top-0 left-0 w-full h-0.5 bg-passi-turquoise shadow-[0_0_15px_rgba(0,255,255,0.8)] z-20 animate-[scan_2s_ease-in-out_infinite]"></div>
+                <QrCode className="w-32 h-32 text-gray-900 drop-shadow-sm" strokeWidth={1.5} />
+                <div className="mt-3 text-gray-400 font-mono text-xs tracking-widest uppercase">ID: 84729-PASSI</div>
+              </div>
+
+              {/* Footer details */}
+              <div className="mt-6 flex justify-between items-center text-sm">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-gray-200 border-2 border-white/50 overflow-hidden shadow-sm">
+                    <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="avatar" className="w-full h-full object-cover" />
+                  </div>
+                  <div>
+                    <div className="text-white font-bold text-xs">Alex Dupont</div>
+                    <div className="text-white/70 text-[10px] font-medium">1x Entrée • 2x Boissons</div>
+                  </div>
                 </div>
-                <div className="font-mono text-white/50 tracking-widest">#PS-84729</div>
+                <div className="flex items-center gap-1.5 bg-green-500/20 text-green-400 px-3 py-1.5 rounded-full border border-green-500/30 backdrop-blur-sm">
+                  <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></div>
+                  <span className="text-xs font-bold uppercase tracking-wider">Actif</span>
+                </div>
               </div>
             </div>
           </div>
