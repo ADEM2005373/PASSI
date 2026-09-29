@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { useTheme } from "next-themes";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Logo } from "@/components/Logo";
 import { Sun, Moon, AlertCircle, Ticket, QrCode } from "lucide-react";
@@ -147,7 +148,9 @@ function LoginContent() {
         <div className="absolute -top-20 -left-20 w-80 h-80 bg-passi-corail/20 rounded-full blur-3xl" />
         <div className="absolute bottom-0 right-0 w-96 h-96 bg-passi-turquoise/15 rounded-full blur-3xl" />
 
-        <Logo variant="dark" className="w-[140px] h-[42px] relative z-10" />
+        <Link href="/" className="relative z-10 block w-fit hover:opacity-80 transition-opacity">
+          <Logo variant="dark" className="w-[140px] h-[42px]" />
+        </Link>
 
         <div className="relative z-10 space-y-8">
           <h2 className="text-5xl font-extrabold text-white leading-tight">
@@ -213,7 +216,9 @@ function LoginContent() {
 
         {/* Mobile logo */}
         <div className="lg:hidden mb-10">
-          <Logo variant="auto" className="w-[140px] h-[42px]" />
+          <Link href="/" className="hover:opacity-80 transition-opacity block w-fit">
+            <Logo variant="auto" className="w-[140px] h-[42px]" />
+          </Link>
         </div>
 
         <div className="w-full max-w-sm space-y-6">

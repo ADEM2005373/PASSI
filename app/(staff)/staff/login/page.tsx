@@ -11,14 +11,27 @@ export default function StaffLoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isGoogleLinked, setIsGoogleLinked] = useState<boolean | null>(null);
+
   const router = useRouter();
   const { user, isInitializing } = useAuth();
   const supabase = createClient();
 
-  const isGoogleLinked = user?.app_metadata?.providers?.includes('google');
+  useEffect(() => {
+    if (user) {
+      if (user.role === 'admin') {
+        const supabaseClient = createClient();
+        supabaseClient.auth.getUser().then(({ data }: any) => {
+          setIsGoogleLinked(data.user?.app_metadata?.providers?.includes('google') ?? false);
+        });
+      } else {
+        setIsGoogleLinked(true);
+      }
+    }
+  }, [user]);
 
   // If already logged in, show linking options or redirect to dashboard
-  if (!isInitializing && user) {
+  if (!isInitializing && user && isGoogleLinked !== null) {
     if (user.role === 'admin' && !isGoogleLinked) {
       return (
         <div className="min-h-screen bg-passi-creme flex flex-col items-center justify-center p-6">
