@@ -144,7 +144,7 @@ function LoginContent() {
   return (
     <div className="min-h-screen flex" style={{ backgroundColor: "var(--bg)" }}>
       {/* ── Left decorative panel ─── */}
-      <div className="hidden lg:flex lg:w-1/2 bg-passi-bleu dark:bg-passi-surface relative flex-col justify-between p-16 overflow-hidden">
+      <div className="hidden lg:flex lg:w-1/2 bg-passi-bleu dark:bg-passi-surface relative flex-col justify-between p-16 pb-10 overflow-y-auto overflow-x-hidden scrollbar-hide">
         <div className="absolute -top-20 -left-20 w-80 h-80 bg-passi-corail/20 rounded-full blur-3xl" />
         <div className="absolute bottom-0 right-0 w-96 h-96 bg-passi-turquoise/15 rounded-full blur-3xl" />
 
@@ -152,7 +152,7 @@ function LoginContent() {
           <Logo variant="dark" className="w-[140px] h-[42px]" />
         </Link>
 
-        <div className="relative z-10 space-y-8">
+        <div className="relative z-10 space-y-8 flex-1 flex flex-col justify-center my-12">
           <h2 className="text-5xl font-extrabold text-white leading-tight">
             Votre pass
             <br />
@@ -234,7 +234,7 @@ function LoginContent() {
           </div>
         </div>
 
-        <p className="text-passi-text-sec text-xs font-medium relative z-10">
+        <p className="text-passi-text-sec text-xs font-medium relative z-10 mt-8">
           © {new Date().getFullYear()} Passi · Tous droits réservés
         </p>
       </div>
