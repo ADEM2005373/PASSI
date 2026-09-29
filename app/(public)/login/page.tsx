@@ -194,15 +194,15 @@ function LoginContent() {
               <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/20 to-white/0 transform -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]"></div>
 
               {/* Event Cover Image placeholder / Top Section */}
-              <div className="relative w-full h-32 rounded-2xl bg-gradient-to-br from-gray-800 to-gray-900 overflow-hidden mb-6 flex items-center justify-center border border-white/10 shadow-inner">
-                <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1540039155733-d7696f4bc20c?q=80&w=800&auto=format&fit=crop')] bg-cover bg-center opacity-70 mix-blend-overlay"></div>
-                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"></div>
+              <div className="relative w-full h-32 rounded-2xl overflow-hidden mb-6 flex items-center justify-center shadow-inner">
+                <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=800&auto=format&fit=crop')] bg-cover bg-center"></div>
+                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-black/10"></div>
                 <div className="relative z-10 w-full px-4 text-left flex justify-between items-end h-full pb-3">
                   <div>
                     <span className="bg-passi-corail text-white text-[10px] font-black uppercase px-2 py-1 rounded-lg mb-1 inline-block shadow-lg">VIP Pass</span>
                     <h3 className="text-white font-extrabold text-xl leading-none drop-shadow-md">Summer Festival</h3>
                   </div>
-                  <Ticket className="text-white/80 w-6 h-6 mb-1" />
+                  <Ticket className="text-white w-6 h-6 mb-1 drop-shadow-lg" />
                 </div>
               </div>
 
