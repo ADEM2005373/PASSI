@@ -85,26 +85,10 @@ export async function GET(request: NextRequest) {
 
   if (!existingProfile) {
     // ── First-time login: create the profile ─────────────────────────────────
-    // Try to extract the Instagram / Facebook username from OAuth metadata.
-    // Facebook/Instagram provider sets `user_name` or `preferred_username`.
-    const rawHandle: string =
-      meta.user_name ||
-      meta.preferred_username ||
-      meta.full_name ||
-      ''
-
-    // Normalise: add @ prefix if the handle looks like a username
-    const instagramHandle: string | null =
-      rawHandle && !rawHandle.includes(' ')
-        ? rawHandle.startsWith('@')
-          ? rawHandle
-          : `@${rawHandle}`
-        : null
-
     const { error: insertError } = await supabase.from('profiles').insert({
       id: authUser.id,
       email: authUser.email ?? '',
-      instagram_handle: instagramHandle, // null = user must complete profile
+      instagram_handle: null, // Force the user to provide their valid Instagram URL in the modal
       role: 'user',
     })
 

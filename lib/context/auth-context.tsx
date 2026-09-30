@@ -59,20 +59,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!profile) {
       // Profile row not yet created (race condition between callback and provider
       // redirect). Create it now as a safety net with data from OAuth metadata.
-      const meta = authUser.user_metadata ?? {}
-      const rawHandle: string =
-        meta.user_name || meta.preferred_username || meta.full_name || ""
-      const instagramHandle: string | null =
-        rawHandle && !rawHandle.includes(" ")
-          ? rawHandle.startsWith("@")
-            ? rawHandle
-            : `@${rawHandle}`
-          : null
-
       await supabase.from("profiles").upsert({
         id: authUser.id,
         email: authUser.email ?? "",
-        instagram_handle: instagramHandle,
+        instagram_handle: null, // Force the user to provide their valid Instagram URL in the modal
         role: "user",
       })
 
