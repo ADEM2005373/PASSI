@@ -24,6 +24,28 @@ export default function UserDashboard() {
   const [searchLocation, setSearchLocation] = useState('')
   const [searchDate, setSearchDate] = useState('')
   const [searchCategory, setSearchCategory] = useState('')
+  const [isDarkMode, setIsDarkMode] = useState(false)
+
+  useEffect(() => {
+    // Initialize dark mode from localStorage or classList
+    if (typeof window !== 'undefined') {
+      const isDark = document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark'
+      setIsDarkMode(isDark)
+      if (isDark) document.documentElement.classList.add('dark')
+    }
+  }, [])
+
+  const toggleDarkMode = () => {
+    if (isDarkMode) {
+      document.documentElement.classList.remove('dark')
+      localStorage.setItem('theme', 'light')
+      setIsDarkMode(false)
+    } else {
+      document.documentElement.classList.add('dark')
+      localStorage.setItem('theme', 'dark')
+      setIsDarkMode(true)
+    }
+  }
 
   useEffect(() => {
     if (isInitializing) return
@@ -429,9 +451,12 @@ export default function UserDashboard() {
                       <Moon size={24} className="text-passi-bleu" />
                       <span className="text-passi-bleu text-base md:text-lg font-bold">Dark mode</span>
                     </div>
-                    {/* Toggle switch (mock) */}
-                    <div className="w-12 h-6 bg-white border-2 border-passi-bleu rounded-full relative cursor-pointer hover:bg-gray-50 transition-colors">
-                      <div className="w-4 h-4 bg-passi-bleu rounded-full absolute left-0.5 top-0.5"></div>
+                    {/* Toggle switch */}
+                    <div 
+                      onClick={toggleDarkMode}
+                      className={`w-12 h-6 border-2 rounded-full relative cursor-pointer transition-colors duration-300 ${isDarkMode ? 'bg-passi-bleu border-passi-bleu' : 'bg-white border-passi-bleu hover:bg-gray-50'}`}
+                    >
+                      <div className={`w-4 h-4 rounded-full absolute top-0.5 transition-transform duration-300 ${isDarkMode ? 'bg-white translate-x-[1.4rem]' : 'bg-passi-bleu translate-x-[0.1rem]'}`}></div>
                     </div>
                   </div>
                   
