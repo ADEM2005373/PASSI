@@ -163,19 +163,6 @@ export default function AdminDashboard() {
     } catch (err: any) { setUserMsg("Erreur: " + err.message); }
   };
 
-  if (isLoading) return (
-    <div className="h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--bg)' }}>
-      <div className="flex flex-col items-center gap-4">
-        <svg className="animate-spin w-10 h-10 text-passi-corail" viewBox="0 0 24 24" fill="none">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-        </svg>
-        <p className="font-bold" style={{ color: 'var(--text-secondary)' }}>Chargement du workspace...</p>
-      </div>
-    </div>
-  );
-  if (!isAdmin) return null;
-
   const navItems = [
     { id: 'dashboard', label: 'Tableau de bord', icon: <LayoutDashboard size={20} /> },
     { id: 'evenements',    label: 'Événements',       icon: <CalendarDays size={20} /> },
@@ -198,6 +185,19 @@ export default function AdminDashboard() {
     const newPath = id === 'dashboard' ? '/admin' : `/admin/${id}`;
     router.push(newPath);
   };
+
+  if (isLoading) return (
+    <div className="h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--bg)' }}>
+      <div className="flex flex-col items-center gap-4">
+        <svg className="animate-spin w-10 h-10 text-passi-corail" viewBox="0 0 24 24" fill="none">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+        </svg>
+        <p className="font-bold" style={{ color: 'var(--text-secondary)' }}>Chargement du workspace...</p>
+      </div>
+    </div>
+  );
+  if (!isAdmin) return null;
 
   const statCards = [
     { label: "Chiffre d'affaires", value: `${stats.revenue} TND`, color: 'bg-passi-turquoise', icon: <DollarSign size={20} className="text-white" /> },
