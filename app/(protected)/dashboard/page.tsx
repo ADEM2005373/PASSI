@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { QRCodeSVG } from 'qrcode.react'
-import { Search, Calendar, MapPin, Heart, Ticket, User, Home, Compass, LogOut, FileText, ChevronRight, Settings, Moon, ChevronLeft, MoreHorizontal } from 'lucide-react'
+import { Search, Calendar, MapPin, Heart, Ticket, User, Home, Compass, LogOut, FileText, ChevronRight, Settings, Moon, ChevronLeft, MoreHorizontal, Clock } from 'lucide-react'
 import { api } from '@/lib/services/api'
 import { Logo } from '@/components/Logo'
 import { createClient } from '@/lib/supabase/client'
@@ -25,6 +25,7 @@ export default function UserDashboard() {
   const [searchDate, setSearchDate] = useState('')
   const [searchCategory, setSearchCategory] = useState('')
   const [isDarkMode, setIsDarkMode] = useState(false)
+  const [authIdentities, setAuthIdentities] = useState<any[]>([])
 
   useEffect(() => {
     // Initialize dark mode from localStorage or classList
@@ -110,6 +111,13 @@ export default function UserDashboard() {
       return
     }
 
+    const { createClient } = await import('@/lib/supabase/client');
+    const supabaseClient = createClient();
+    const { data: { user: sbUser } } = await supabaseClient.auth.getUser();
+    if (sbUser) {
+      setAuthIdentities(sbUser.identities || []);
+    }
+
     const [passesData, eventsData] = await Promise.all([
       api.getUserPasses(user.id),
       api.getEvents()
@@ -154,7 +162,7 @@ export default function UserDashboard() {
 
   const handleUnlinkProvider = async (provider: string) => {
     const supabase = createClient()
-    const identity = authUser?.identities?.find((id: any) => id.provider === provider)
+    const identity = authIdentities.find((id: any) => id.provider === provider)
     if (!identity) return
 
     const { error } = await supabase.auth.unlinkIdentity(identity)
@@ -405,7 +413,7 @@ export default function UserDashboard() {
                         {pass.entry_status === 'pending' && (
                           <div className="h-full flex flex-col justify-center items-center text-center">
                             <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
-                              <Bell className="text-gray-400" size={24} />
+                              <Clock className="text-gray-400" size={24} />
                             </div>
                             <h3 className="text-xl font-bold text-passi-bleu mb-2">En attente</h3>
                             <p className="text-gray-500 font-medium">Votre demande est en cours de validation par notre équipe.</p>
@@ -571,7 +579,7 @@ export default function UserDashboard() {
                       </div>
                       
                       {(['facebook', 'instagram', 'google'] as const).map((provider, index) => {
-                        const isLinked = authUser?.identities?.some(id => id.provider === provider)
+                        const isLinked = authIdentities.some((id: any) => id.provider === provider)
                         const isLast = index === 2
                         
                         return (
