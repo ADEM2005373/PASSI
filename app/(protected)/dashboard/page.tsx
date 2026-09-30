@@ -73,6 +73,20 @@ export default function UserDashboard() {
       router.push('/scanner/security')
       return
     }
+    if (user.role === 'admin') {
+      // Check if they have linked a Google account
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      const isGoogleLinked = authUser?.identities?.some(id => id.provider === 'google') ?? false;
+
+      if (!isGoogleLinked) {
+        router.push('/staff/login')
+      } else {
+        router.push('/admin')
+      }
+      return
+    }
 
     const [passesData, eventsData] = await Promise.all([
       api.getUserPasses(user.id),

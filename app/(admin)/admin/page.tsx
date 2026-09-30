@@ -51,7 +51,19 @@ export default function AdminDashboard() {
     setMounted(true);
     const init = async () => {
       const user = await api.getCurrentUser();
-      if (!user || user.role !== 'admin') { router.replace("/login"); return; }
+      if (!user || user.role !== 'admin') { router.replace("/staff/login"); return; }
+      
+      // Check if they have linked a Google account
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      const isGoogleLinked = authUser?.identities?.some(id => id.provider === 'google') ?? false;
+
+      if (!isGoogleLinked) {
+        router.replace("/staff/login");
+        return;
+      }
+
       setIsAdmin(true);
       await fetchData();
       setIsLoading(false);
