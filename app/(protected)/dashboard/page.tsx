@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { QRCodeSVG } from 'qrcode.react'
-import { Search, Calendar, MapPin, Heart, Ticket, User, Home, Compass, Bell, LogOut, FileText, ChevronRight, Settings, Moon, ChevronLeft, MoreHorizontal } from 'lucide-react'
+import { Search, Calendar, MapPin, Heart, Ticket, User, Home, Compass, LogOut, FileText, ChevronRight, Settings, Moon, ChevronLeft, MoreHorizontal } from 'lucide-react'
 import { api } from '@/lib/services/api'
 import { Logo } from '@/components/Logo'
 import { createClient } from '@/lib/supabase/client'
@@ -170,10 +170,6 @@ export default function UserDashboard() {
         {/* Mobile Header */}
         <header className="md:hidden flex items-center justify-between px-6 py-5 bg-passi-bleu text-passi-creme rounded-b-[30px] shadow-lg z-20 relative">
           <Logo variant="dark" className="w-[100px] h-[30px]" />
-          <button className="bg-white/10 p-2 rounded-full relative">
-             <Bell size={20} />
-             <span className="absolute top-1 right-1 w-2 h-2 bg-passi-corail rounded-full"></span>
-          </button>
         </header>
 
         {/* Scrollable Content */}
