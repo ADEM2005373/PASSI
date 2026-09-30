@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Logo } from "@/components/Logo";
 import { useAuth } from "@/lib/context/auth-context";
 
-export default function StaffLoginPage() {
+function StaffLoginContent() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -46,6 +46,17 @@ export default function StaffLoginPage() {
 
   const [linkError, setLinkError] = useState("");
   const [isLinking, setIsLinking] = useState(false);
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    if (searchParams.get('error')) {
+      if (searchParams.get('error') === 'oauth_failed') {
+        setLinkError("L'authentification Google a été annulée ou a échoué.");
+      } else {
+        setLinkError("Erreur lors de la liaison Google. Ce compte est peut-être déjà utilisé.");
+      }
+    }
+  }, [searchParams]);
 
   // If already logged in and needs linking, show linking options
   if (!isInitializing && user && isGoogleLinked === false && user.role === 'admin') {
@@ -192,5 +203,13 @@ export default function StaffLoginPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function StaffLoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-passi-creme flex items-center justify-center p-6"><div className="w-8 h-8 border-4 border-gray-800 border-t-transparent rounded-full animate-spin"></div></div>}>
+      <StaffLoginContent />
+    </Suspense>
   );
 }

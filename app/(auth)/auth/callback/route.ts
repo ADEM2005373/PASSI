@@ -17,40 +17,57 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get('code')
   const next = searchParams.get('next') ?? '/dashboard'
 
-  // Safety: if there's no code the provider returned an error
-  if (!code) {
-    const errorUrl = request.nextUrl.clone()
-    errorUrl.pathname = '/login'
-    errorUrl.searchParams.set('error', 'oauth_failed')
-    return NextResponse.redirect(errorUrl)
-  }
-
   const cookieStore = await cookies()
-
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() {
-          return cookieStore.getAll()
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          )
-        },
+        getAll() { return cookieStore.getAll() },
+        setAll(cookiesToSet) { cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options)) },
       },
     }
   )
 
+  // Safety: if there's no code the provider returned an error (e.g. user cancelled)
+  if (!code) {
+    // Check if they are already logged in (e.g., admin trying to link account)
+    const { data: { user: currentUser } } = await supabase.auth.getUser()
+    const errorUrl = request.nextUrl.clone()
+    
+    if (currentUser) {
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', currentUser.id).maybeSingle()
+      if (profile?.role === 'admin') {
+        errorUrl.pathname = '/staff/login'
+        errorUrl.searchParams.set('error', 'oauth_failed')
+        return NextResponse.redirect(errorUrl)
+      }
+    }
+
+    errorUrl.pathname = '/login'
+    errorUrl.searchParams.set('error', 'oauth_failed')
+    return NextResponse.redirect(errorUrl)
+  }
+
   // Exchange the auth code for a session
-  const { data: sessionData, error: sessionError } =
-    await supabase.auth.exchangeCodeForSession(code)
+  const { data: sessionData, error: sessionError } = await supabase.auth.exchangeCodeForSession(code)
 
   if (sessionError || !sessionData.user) {
     console.error('[auth/callback] Session exchange failed:', sessionError)
+    
+    // Check if they are already logged in (e.g., admin trying to link account)
+    const { data: { user: currentUser } } = await supabase.auth.getUser()
     const errorUrl = request.nextUrl.clone()
+    
+    if (currentUser) {
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', currentUser.id).maybeSingle()
+      if (profile?.role === 'admin') {
+        errorUrl.pathname = '/staff/login'
+        errorUrl.searchParams.set('error', 'session_exchange_failed')
+        return NextResponse.redirect(errorUrl)
+      }
+    }
+
     errorUrl.pathname = '/login'
     errorUrl.searchParams.set('error', 'session_exchange_failed')
     return NextResponse.redirect(errorUrl)
