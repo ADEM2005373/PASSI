@@ -112,7 +112,7 @@ export default function AdminDashboard() {
     e.preventDefault();
     setUserMsg("Création en cours...");
     try {
-      if (!newUserInsta.startsWith('@') || newUserInsta.length < 2) { setUserMsg("Le pseudo Instagram doit commencer par @"); return; }
+      if (!/^https?:\/\/(www\.)?instagram\.com\/[a-zA-Z0-9_.]{1,30}\/?(\?.*)?$/.test(newUserInsta)) { setUserMsg("URL Instagram invalide"); return; }
       await api.adminCreateUser(newUserEmail, newUserPassword, newUserInsta, newUserRole);
       setUserMsg("✓ Compte créé avec succès");
       setNewUserEmail(""); setNewUserPassword(""); setNewUserInsta(""); setNewUserRole("user");
@@ -398,7 +398,7 @@ export default function AdminDashboard() {
                   {[
                     { label:"Email", type:"email", val:newUserEmail, set:setNewUserEmail, ph:"admin@passi.com" },
                     { label:"Mot de passe", type:"password", val:newUserPassword, set:setNewUserPassword, ph:"••••••••" },
-                    { label:"Instagram (@)", type:"text", val:newUserInsta, set:setNewUserInsta, ph:"@pseudo" },
+                    { label:"URL Instagram", type:"url", val:newUserInsta, set:setNewUserInsta, ph:"https://instagram.com/pseudo" },
                   ].map(f => (
                     <div key={f.label}>
                       <label className="label">{f.label}</label>
@@ -483,13 +483,13 @@ export default function AdminDashboard() {
                           </div>
                           <div>
                             <p className="font-bold text-base" style={{ color: 'var(--text-primary)' }}>{pass.guest_first_name} {pass.guest_last_name}</p>
-                            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>@{pass.instagram_handle?.replace('@','')}</p>
+                            <p className="text-sm truncate max-w-[200px]" title={pass.instagram_handle} style={{ color: 'var(--text-secondary)' }}>{pass.instagram_handle}</p>
                             <span className={`badge mt-1 ${sc.bg} ${sc.color}`}>{sc.label}</span>
                           </div>
                         </div>
                         <div className="flex flex-wrap gap-2">
                           <a
-                            href={`https://instagram.com/${pass.instagram_handle?.replace('@','')}`}
+                            href={pass.instagram_handle || '#'}
                             target="_blank" rel="noreferrer"
                             className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-pink-500 to-rose-500 hover:shadow-lg transition-all"
                           >

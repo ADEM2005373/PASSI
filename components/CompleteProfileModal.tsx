@@ -33,12 +33,11 @@ export function CompleteProfileModal({ userId, onComplete }: Props) {
   const [done, setDone] = useState(false)
 
   const validate = (value: string): string => {
-    if (!value.trim()) return "Le pseudo Instagram est requis."
-    const clean = value.startsWith("@") ? value.slice(1) : value
-    if (clean.length < 1) return "Le pseudo Instagram est requis."
-    // Instagram allows letters, numbers, underscores and periods
-    if (!/^[a-zA-Z0-9_.]{1,30}$/.test(clean))
-      return "Pseudo invalide. Utilisez uniquement des lettres, chiffres, _ ou ."
+    if (!value.trim()) return "L'URL Instagram est requise."
+    const clean = value.trim()
+    if (!/^https?:\/\/(www\.)?instagram\.com\/[a-zA-Z0-9_.]{1,30}\/?(\?.*)?$/.test(clean)) {
+      return "URL invalide. Exemple: https://instagram.com/votre_pseudo"
+    }
     return ""
   }
 
@@ -50,9 +49,7 @@ export function CompleteProfileModal({ userId, onComplete }: Props) {
     setError("")
     setIsSaving(true)
 
-    const normalised = handle.trim().startsWith("@")
-      ? handle.trim()
-      : `@${handle.trim()}`
+    const normalised = handle.trim()
 
     const supabase = createClient()
     const { error: dbError } = await supabase
@@ -101,7 +98,7 @@ export function CompleteProfileModal({ userId, onComplete }: Props) {
                 className="text-sm font-medium mt-1 max-w-xs mx-auto leading-relaxed"
                 style={{ color: "var(--text-secondary)" }}
               >
-                Votre pseudo Instagram est requis pour valider votre identité
+                Votre lien de profil Instagram est requis pour valider votre identité
                 lors des événements.
               </p>
             </div>
@@ -138,29 +135,21 @@ export function CompleteProfileModal({ userId, onComplete }: Props) {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label htmlFor="ig-handle" className="label">
-                  Pseudo Instagram
+                  Lien du profil Instagram
                 </label>
                 <div className="relative">
-                  <span
-                    className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-bold"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    @
-                  </span>
                   <input
                     id="ig-handle"
-                    type="text"
-                    autoComplete="username"
+                    type="url"
+                    autoComplete="url"
                     autoFocus
-                    value={handle.startsWith("@") ? handle.slice(1) : handle}
+                    value={handle}
                     onChange={(e) => {
                       setError("")
                       setHandle(e.target.value)
                     }}
                     className="input"
-                    style={{ paddingLeft: "2.5rem" }}
-                    placeholder="votre_pseudo"
-                    maxLength={31}
+                    placeholder="https://instagram.com/votre_pseudo"
                   />
                 </div>
               </div>
