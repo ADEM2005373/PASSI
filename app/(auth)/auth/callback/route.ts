@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 
 /**
@@ -85,7 +86,14 @@ export async function GET(request: NextRequest) {
 
   if (!existingProfile) {
     // ── First-time login: create the profile ─────────────────────────────────
-    const { error: insertError } = await supabase.from('profiles').insert({
+    // Use service role to bypass RLS since the current server client might not have 
+    // the exchanged session fully propagated yet.
+    const supabaseAdmin = createSupabaseClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
+
+    const { error: insertError } = await supabaseAdmin.from('profiles').insert({
       id: authUser.id,
       email: authUser.email ?? '',
       instagram_handle: null, // Force the user to provide their valid Instagram URL in the modal
