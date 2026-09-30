@@ -26,6 +26,9 @@ export default function UserDashboard() {
   const [searchCategory, setSearchCategory] = useState('')
   const [isDarkMode, setIsDarkMode] = useState(false)
   const [authIdentities, setAuthIdentities] = useState<any[]>([])
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
+  const [isSavingInfo, setIsSavingInfo] = useState(false)
 
   useEffect(() => {
     // Initialize dark mode from localStorage or classList
@@ -116,6 +119,8 @@ export default function UserDashboard() {
     const { data: { user: sbUser } } = await supabaseClient.auth.getUser();
     if (sbUser) {
       setAuthIdentities(sbUser.identities || []);
+      setFirstName(sbUser.user_metadata?.first_name || '');
+      setLastName(sbUser.user_metadata?.last_name || '');
     }
 
     const [passesData, eventsData] = await Promise.all([
@@ -171,6 +176,23 @@ export default function UserDashboard() {
       alert(`Erreur lors de la dissociation de ${provider}: ${error.message}`)
     } else {
       window.location.reload()
+    }
+  }
+
+  const handleSaveUserInfo = async () => {
+    setIsSavingInfo(true)
+    const supabase = createClient()
+    const { error } = await supabase.auth.updateUser({
+      data: {
+        first_name: firstName,
+        last_name: lastName,
+      }
+    })
+    setIsSavingInfo(false)
+    if (error) {
+      alert("Erreur lors de la sauvegarde: " + error.message)
+    } else {
+      alert("Profil mis à jour avec succès!")
     }
   }
 
@@ -543,21 +565,21 @@ export default function UserDashboard() {
                     <div className="space-y-6 mb-8">
                       <div>
                         <label className="block text-sm font-bold text-passi-text-sec mb-2">First name</label>
-                        <input type="text" defaultValue="" className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-3 md:py-4 text-passi-bleu dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-passi-turquoise/30" />
+                        <input type="text" value={firstName} onChange={e => setFirstName(e.target.value)} className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-3 md:py-4 text-passi-bleu dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-passi-turquoise/30" />
                       </div>
                       <div>
                         <label className="block text-sm font-bold text-passi-text-sec mb-2">Last name</label>
-                        <input type="text" defaultValue="" className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-3 md:py-4 text-passi-bleu dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-passi-turquoise/30" />
+                        <input type="text" value={lastName} onChange={e => setLastName(e.target.value)} className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-3 md:py-4 text-passi-bleu dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-passi-turquoise/30" />
                       </div>
                       <div>
                         <label className="block text-sm font-bold text-passi-text-sec mb-2">Email address</label>
-                        <input type="email" defaultValue={authUser?.email || ''} className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-3 md:py-4 text-passi-bleu dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-passi-turquoise/30" />
+                        <input type="email" disabled defaultValue={authUser?.email || ''} className="w-full opacity-70 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl px-4 py-3 md:py-4 text-passi-bleu dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-passi-turquoise/30" />
                       </div>
                     </div>
                     
                     <div className="flex justify-end">
-                      <button className="bg-gray-300 text-passi-bleu dark:text-white px-8 py-4 rounded-xl text-base font-extrabold hover:bg-gray-400 transition-colors">
-                        Save Changes
+                      <button onClick={handleSaveUserInfo} disabled={isSavingInfo} className="bg-passi-turquoise text-white px-8 py-4 rounded-xl text-base font-extrabold hover:bg-passi-turquoise/80 transition-colors disabled:opacity-50">
+                        {isSavingInfo ? 'Saving...' : 'Save Changes'}
                       </button>
                     </div>
                   </div>
