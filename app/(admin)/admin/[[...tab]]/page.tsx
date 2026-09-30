@@ -30,6 +30,7 @@ export default function AdminDashboard() {
   const [newDrinks, setNewDrinks] = useState<{name: string}[]>([]);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
 
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newUserPassword, setNewUserPassword] = useState("");
   const [newUserInsta, setNewUserInsta] = useState("");
@@ -53,7 +54,6 @@ export default function AdminDashboard() {
       const user = await api.getCurrentUser();
       if (!user || user.role !== 'admin') { router.replace("/staff/login"); return; }
       
-      // Check if they have linked a Google account
       const { createClient } = await import('@/lib/supabase/client');
       const supabase = createClient();
       const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -76,6 +76,10 @@ export default function AdminDashboard() {
 
   const handleSaveEvent = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (new Date(newDate).getTime() < Date.now()) {
+      alert("La date de l'événement doit être supérieure à la date d'aujourd'hui.");
+      return;
+    }
     const validDrinks = newDrinks.filter(d => d.name.trim() !== "");
     if (editingEventId) {
       await api.updateEvent(editingEventId, newTitle, new Date(newDate).toISOString(), newLocation, false, newMax, newImageUrl, validDrinks);
@@ -111,23 +115,49 @@ export default function AdminDashboard() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleRoleChange = async (userId: string, newRole: string) => { await api.updateRole(userId, newRole); await fetchData(); };
+  const cancelUserEdit = () => {
+    setEditingUserId(null);
+    setNewUserEmail(""); setNewUserPassword(""); setNewUserInsta(""); setNewUserRole("user");
+  };
+
+  const handleEditUserClick = (u: User) => {
+    setEditingUserId(u.id);
+    setNewUserEmail(u.email);
+    setNewUserInsta(u.instagram_handle || "");
+    setNewUserRole(u.role);
+    setNewUserPassword("");
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleRoleChange = async (userId: string, newRole: string) => { 
+    try {
+      await api.updateRole(userId, newRole); 
+      await fetchData(); 
+    } catch (err: any) { alert("Erreur: " + err.message); }
+  };
 
   const handleDeleteUser = async (userId: string) => {
     if (confirm("Supprimer définitivement cet utilisateur et tous ses passes ?")) {
-      try { await api.deleteUser(userId); await fetchData(); }
+      try { await api.deleteUser(userId); if (editingUserId === userId) cancelUserEdit(); await fetchData(); }
       catch (err: any) { alert("Erreur: " + err.message); }
     }
   };
 
-  const handleCreateUser = async (e: React.FormEvent) => {
+  const handleSaveUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    setUserMsg("Création en cours...");
+    setUserMsg("Enregistrement en cours...");
     try {
-      if (!/^https?:\/\/(www\.)?instagram\.com\/[a-zA-Z0-9_.]{1,30}\/?(\?.*)?$/.test(newUserInsta)) { setUserMsg("URL Instagram invalide"); return; }
-      await api.adminCreateUser(newUserEmail, newUserPassword, newUserInsta, newUserRole);
-      setUserMsg("✓ Compte créé avec succès");
-      setNewUserEmail(""); setNewUserPassword(""); setNewUserInsta(""); setNewUserRole("user");
+      if (newUserInsta && !/^https?:\/\/(www\.)?instagram\.com\/[a-zA-Z0-9_.]{1,30}\/?(\?.*)?$/.test(newUserInsta)) { setUserMsg("URL Instagram invalide"); return; }
+      
+      if (editingUserId) {
+        await api.adminUpdateUser(editingUserId, newUserEmail, newUserPassword || undefined, newUserInsta, newUserRole);
+        setUserMsg("✓ Compte mis à jour avec succès");
+        cancelUserEdit();
+      } else {
+        await api.adminCreateUser(newUserEmail, newUserPassword, newUserInsta, newUserRole);
+        setUserMsg("✓ Compte créé avec succès");
+        cancelUserEdit();
+      }
       await fetchData();
       setTimeout(() => setUserMsg(""), 3000);
     } catch (err: any) { setUserMsg("Erreur: " + err.message); }
@@ -148,10 +178,26 @@ export default function AdminDashboard() {
 
   const navItems = [
     { id: 'dashboard', label: 'Tableau de bord', icon: <LayoutDashboard size={20} /> },
-    { id: 'events',    label: 'Événements',       icon: <CalendarDays size={20} /> },
-    { id: 'staff',     label: 'Utilisateurs',      icon: <Users size={20} /> },
-    { id: 'passes',    label: 'Approbations',      icon: <CheckSquare size={20} /> },
+    { id: 'evenements',    label: 'Événements',       icon: <CalendarDays size={20} /> },
+    { id: 'utilisateurs',     label: 'Utilisateurs',      icon: <Users size={20} /> },
+    { id: 'approbations',    label: 'Approbations',      icon: <CheckSquare size={20} /> },
   ];
+
+  useEffect(() => {
+    const pathParts = window.location.pathname.split('/');
+    const tabName = pathParts[2]; // /admin/[tabName]
+    if (tabName && navItems.some(n => n.id === tabName)) {
+      setActiveTab(tabName);
+    } else {
+      setActiveTab('dashboard');
+    }
+  }, []);
+
+  const handleTabClick = (id: string) => {
+    setActiveTab(id);
+    const newPath = id === 'dashboard' ? '/admin' : `/admin/${id}`;
+    window.history.pushState(null, '', newPath);
+  };
 
   const statCards = [
     { label: "Chiffre d'affaires", value: `${stats.revenue} TND`, color: 'bg-passi-turquoise', icon: <DollarSign size={20} className="text-white" /> },
@@ -187,7 +233,7 @@ export default function AdminDashboard() {
             {navItems.map(({ id, label, icon }) => (
               <button
                 key={id}
-                onClick={() => setActiveTab(id)}
+                onClick={() => handleTabClick(id)}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-150 ${activeTab === id ? 'nav-active' : 'hover:bg-[var(--bg-input)]'}`}
                 style={{ color: activeTab === id ? '#FF6B5E' : 'var(--text-secondary)' }}
               >
@@ -227,7 +273,7 @@ export default function AdminDashboard() {
         {navItems.map(({ id, label, icon }) => (
           <button
             key={id}
-            onClick={() => setActiveTab(id)}
+            onClick={() => handleTabClick(id)}
             className={`flex flex-col items-center gap-1 ${activeTab === id ? 'text-passi-corail' : 'text-gray-400'}`}
           >
             {icon}
@@ -245,7 +291,7 @@ export default function AdminDashboard() {
             <div>
               <p className="text-[10px] md:text-xs font-bold tracking-widest uppercase text-passi-corail mb-1">Passi Admin</p>
               <h1 className="text-2xl md:text-3xl font-extrabold capitalize" style={{ color: 'var(--text-primary)' }}>
-                {navItems.find(n => n.id === activeTab)?.label}
+                {navItems.find(n => n.id === activeTab)?.label || 'Tableau de bord'}
               </h1>
             </div>
             <div className="flex items-center gap-3">
@@ -309,7 +355,7 @@ export default function AdminDashboard() {
           )}
 
           {/* ── EVENTS TAB ── */}
-          {activeTab === 'events' && (
+          {activeTab === 'evenements' && (
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
               {/* Form */}
               <div className="lg:col-span-2 card p-7 shadow-sm self-start">
@@ -402,19 +448,26 @@ export default function AdminDashboard() {
           )}
 
           {/* ── STAFF TAB ── */}
-          {activeTab === 'staff' && (
+          {activeTab === 'utilisateurs' && (
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
               <div className="lg:col-span-2 card p-7 shadow-sm self-start">
-                <h3 className="text-lg font-bold mb-6" style={{ color: 'var(--text-primary)' }}>Créer un compte</h3>
-                <form onSubmit={handleCreateUser} className="space-y-4">
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>
+                    {editingUserId ? "Modifier un compte" : "Créer un compte"}
+                  </h3>
+                  {editingUserId && (
+                    <button onClick={cancelUserEdit} className="text-sm text-passi-corail underline">Annuler</button>
+                  )}
+                </div>
+                <form onSubmit={handleSaveUser} className="space-y-4">
                   {[
                     { label:"Email", type:"email", val:newUserEmail, set:setNewUserEmail, ph:"admin@passi.com" },
-                    { label:"Mot de passe", type:"password", val:newUserPassword, set:setNewUserPassword, ph:"••••••••" },
-                    { label:"URL Instagram", type:"url", val:newUserInsta, set:setNewUserInsta, ph:"https://instagram.com/pseudo" },
+                    { label: editingUserId ? "Mot de passe (optionnel)" : "Mot de passe", type:"password", val:newUserPassword, set:setNewUserPassword, ph:"••••••••" },
+                    { label:"URL Instagram (Optionnel)", type:"url", val:newUserInsta, set:setNewUserInsta, ph:"https://instagram.com/pseudo" },
                   ].map(f => (
                     <div key={f.label}>
                       <label className="label">{f.label}</label>
-                      <input type={f.type} required value={f.val} placeholder={f.ph} onChange={e => f.set(e.target.value)} className="input"/>
+                      <input type={f.type} required={f.type !== "url" && !(f.type === "password" && editingUserId)} value={f.val} placeholder={f.ph} onChange={e => f.set(e.target.value)} className="input"/>
                     </div>
                   ))}
                   <div>
@@ -426,7 +479,9 @@ export default function AdminDashboard() {
                       <option value="barman">Barman</option>
                     </select>
                   </div>
-                  <button type="submit" className="btn-primary w-full">Créer le membre</button>
+                  <button type="submit" className="btn-primary w-full">
+                    {editingUserId ? "Enregistrer les modifications" : "Créer le membre"}
+                  </button>
                   {userMsg && (
                     <p className={`text-xs font-semibold px-3 py-2 rounded-xl ${userMsg.startsWith('✓') ? 'bg-passi-turquoise/10 text-passi-turquoise' : 'bg-passi-corail/10 text-passi-corail'}`}>{userMsg}</p>
                   )}
@@ -458,6 +513,9 @@ export default function AdminDashboard() {
                           <option value="security">Sécurité</option>
                           <option value="barman">Barman</option>
                         </select>
+                        <button onClick={() => handleEditUserClick(p)} className="p-2 rounded-xl bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 transition-colors">
+                          <Pencil size={15}/>
+                        </button>
                         <button onClick={() => handleDeleteUser(p.id)} className="p-2 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-colors">
                           <Trash2 size={15}/>
                         </button>
@@ -470,7 +528,7 @@ export default function AdminDashboard() {
           )}
 
           {/* ── PASSES TAB ── */}
-          {activeTab === 'passes' && (
+          {activeTab === 'approbations' && (
             <div className="card p-7 shadow-sm">
               <h3 className="text-lg font-bold mb-6" style={{ color: 'var(--text-primary)' }}>Approbation des passes</h3>
               {passes.length === 0 ? (

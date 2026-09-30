@@ -109,18 +109,35 @@ export async function PATCH(req: NextRequest) {
   if (authError) return authError;
 
   try {
-    const { userId, role: newRole } = await req.json();
+    const { userId, role, email, password, instagramHandle } = await req.json();
 
-    if (!userId || !newRole) {
-      return NextResponse.json({ error: 'User ID and Role are required' }, { status: 400 });
+    if (!userId) {
+      return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
 
-    const { error } = await supabaseAdmin
-      .from('profiles')
-      .update({ role: newRole })
-      .eq('id', userId);
+    // 1. Update Auth User if email or password are provided
+    if (email || password) {
+      const { error: authUpdateError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+        ...(email && { email }),
+        ...(password && { password }),
+      });
+      if (authUpdateError) throw authUpdateError;
+    }
 
-    if (error) throw error;
+    // 2. Update Profile
+    const profileUpdates: any = {};
+    if (role) profileUpdates.role = role;
+    if (email) profileUpdates.email = email;
+    if (instagramHandle !== undefined) profileUpdates.instagram_handle = instagramHandle;
+
+    if (Object.keys(profileUpdates).length > 0) {
+      const { error } = await supabaseAdmin
+        .from('profiles')
+        .update(profileUpdates)
+        .eq('id', userId);
+
+      if (error) throw error;
+    }
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

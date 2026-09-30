@@ -104,6 +104,9 @@ function LoginContent() {
   const [mounted, setMounted] = useState(false);
   const [loadingProvider, setLoadingProvider] = useState<Provider | null>(null);
   const [error, setError] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const searchParams = useSearchParams();
 
@@ -113,24 +116,58 @@ function LoginContent() {
     if (urlError) setError("La connexion a échoué. Réessayez.");
   }, [searchParams]);
 
+  const handleEmailLogin = async () => {
+    setError("");
+    setLoading(true);
+    const supabase = createClient();
+
+    // First try to sign in
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (signInError) {
+      // If invalid credentials, maybe user doesn't exist. We could try to sign up.
+      if (signInError.message.includes("Invalid login credentials")) {
+        const { error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            emailRedirectTo: `${window.location.origin}/auth/callback`,
+          },
+        });
+        
+        if (signUpError) {
+          setError(signUpError.message || "Erreur d'inscription.");
+        } else {
+          setError("Veuillez vérifier vos emails pour confirmer votre inscription.");
+        }
+      } else {
+        setError(signInError.message || "La connexion a échoué.");
+      }
+    } else {
+      window.location.href = "/";
+    }
+    setLoading(false);
+  };
+
   const handleOAuth = async (provider: Provider) => {
     setError("");
     setLoadingProvider(provider);
     const supabase = createClient();
 
     // Map "instagram" to the "facebook" Supabase provider
-    // (Supabase uses Facebook's OAuth infrastructure for Instagram logins)
     const supabaseProvider = provider === "instagram" ? "facebook" : provider;
 
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: supabaseProvider,
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
-        // Note: Removed instagram_basic scopes to prevent Meta "Invalid Scopes" error.
-        // Standard Facebook login automatically covers Instagram users anyway!
-        ...(provider === "instagram" && {
-          queryParams: { display: "popup" },
-        }),
+        queryParams: {
+          prompt: 'select_account',
+          ...(provider === "instagram" && { display: "popup" }),
+        }
       },
     });
 
@@ -138,7 +175,6 @@ function LoginContent() {
       setError("La connexion a échoué. Réessayez.");
       setLoadingProvider(null);
     }
-    // If no error the browser will navigate away to the OAuth provider
   };
 
   return (
@@ -290,6 +326,49 @@ function LoginContent() {
             </div>
           )}
 
+          {/* Email/Password Form */}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleEmailLogin();
+            }}
+            className="space-y-4"
+          >
+            <div>
+              <input
+                type="email"
+                placeholder="Email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full px-5 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-black text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-passi-turquoise/50 transition-all"
+              />
+            </div>
+            <div>
+              <input
+                type="password"
+                placeholder="Mot de passe"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-5 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-black text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-passi-turquoise/50 transition-all"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full px-5 py-3.5 rounded-2xl text-sm font-bold bg-passi-turquoise text-white hover:opacity-90 disabled:opacity-60 transition-all shadow-sm hover:shadow-md hover:-translate-y-0.5"
+            >
+              {loading ? "Connexion..." : "Se connecter / S'inscrire"}
+            </button>
+          </form>
+
+          <div className="flex items-center gap-3 py-2">
+            <div className="flex-1 h-px" style={{ backgroundColor: "var(--border)" }} />
+            <span className="text-xs font-medium uppercase tracking-widest text-gray-400">Ou</span>
+            <div className="flex-1 h-px" style={{ backgroundColor: "var(--border)" }} />
+          </div>
+
           {/* Provider buttons */}
           <div className="space-y-3">
             {PROVIDERS.map(({ id, label, icon, bg, border, text }) => (
@@ -297,7 +376,7 @@ function LoginContent() {
                 key={id}
                 id={`login-${id}`}
                 onClick={() => handleOAuth(id)}
-                disabled={!!loadingProvider}
+                disabled={loading}
                 className={`
                   w-full flex items-center justify-center gap-3
                   px-5 py-3.5 rounded-2xl

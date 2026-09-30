@@ -268,15 +268,23 @@ export const api = {
   async updateRole(userId: string, role: string): Promise<void> {
     const res = await fetch('/api/admin/users', {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId, role }),
     });
-
     if (!res.ok) {
       const { error } = await res.json();
-      console.error("Error updating role:", error);
+      throw new Error(error);
+    }
+  },
+
+  async adminUpdateUser(userId: string, email?: string, password?: string, instagramHandle?: string, role?: string): Promise<void> {
+    const res = await fetch('/api/admin/users', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, email, password, instagramHandle, role }),
+    });
+    if (!res.ok) {
+      const { error } = await res.json();
       throw new Error(error);
     }
   },

@@ -231,20 +231,19 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
                     </div>
                   </div>
 
-                  <div>
-                    <label className="label flex items-center gap-1.5"><Wine size={14} className="text-passi-turquoise"/> Boisson incluse</label>
-                    <select required value={guest.drinkId}
-                      onChange={e => { const g=[...guests]; g[index].drinkId=e.target.value; setGuests(g); }}
-                      className="input">
-                      <option value="">Sélectionner une boisson...</option>
-                      {((event as any).drink_menus && (event as any).drink_menus.length > 0)
-                        ? (event as any).drink_menus.map((drink: any) => (
-                            <option key={drink.id} value={drink.id}>{drink.name}</option>
-                          ))
-                        : <option value="" disabled>Aucune boisson configurée</option>
-                      }
-                    </select>
-                  </div>
+                  {((event as any).drink_menus && (event as any).drink_menus.length > 0) && (
+                    <div>
+                      <label className="label flex items-center gap-1.5"><Wine size={14} className="text-passi-turquoise"/> Boisson incluse</label>
+                      <select required value={guest.drinkId}
+                        onChange={e => { const g=[...guests]; g[index].drinkId=e.target.value; setGuests(g); }}
+                        className="input">
+                        <option value="">Sélectionner une boisson...</option>
+                        {(event as any).drink_menus.map((drink: any) => (
+                          <option key={drink.id} value={drink.id}>{drink.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
               ))}
 

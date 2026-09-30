@@ -486,8 +486,7 @@ export default function UserDashboard() {
                   </div>
                 </div>
                 
-                {/* Name */}
-                <h1 className="text-3xl md:text-4xl font-extrabold text-passi-bleu dark:text-white mb-10 text-center">{authUser?.email?.split('@')[0] || ''}</h1>
+                <h1 className="text-3xl md:text-4xl font-extrabold text-passi-bleu dark:text-white mb-10 text-center">{authUser?.email?.split('@')[0] || 'Utilisateur'}</h1>
                 
                 {/* Contact Info */}
                 <div className="w-full space-y-4 mb-8 px-4">
