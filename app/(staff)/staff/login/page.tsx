@@ -83,8 +83,7 @@ export default function StaffLoginPage() {
           </div>
         </div>
       );
-    }
-
+    } else if (!isInitializing && user) {
       // Render nothing or a loading spinner while redirecting
       return (
         <div className="min-h-screen bg-passi-creme flex flex-col items-center justify-center p-6">
@@ -92,7 +91,6 @@ export default function StaffLoginPage() {
         </div>
       );
     }
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
