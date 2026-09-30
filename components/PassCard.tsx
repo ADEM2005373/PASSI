@@ -62,7 +62,7 @@ export function PassCard({ pass }: PassCardProps) {
               </div>
             ) : pass.entry_qr_uuid ? (
               <>
-                <div className="bg-white p-5 rounded-[2rem] shadow-xl shadow-black/50">
+                <div className="bg-white dark:bg-passi-surface p-5 rounded-[2rem] shadow-xl shadow-black/50">
                   <QRCodeSVG value={pass.entry_qr_uuid} size={220} />
                 </div>
                 <p className="mt-8 text-[#888888] text-sm font-medium tracking-wide uppercase">
@@ -89,7 +89,7 @@ export function PassCard({ pass }: PassCardProps) {
               </div>
             ) : pass.drink_qr_uuid ? (
               <>
-                <div className="bg-white p-5 rounded-[2rem] shadow-xl shadow-black/50">
+                <div className="bg-white dark:bg-passi-surface p-5 rounded-[2rem] shadow-xl shadow-black/50">
                   <QRCodeSVG value={pass.drink_qr_uuid} size={220} />
                 </div>
                 <p className="mt-8 text-[#888888] text-sm font-medium tracking-wide uppercase">
