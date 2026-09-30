@@ -505,12 +505,7 @@ export default function UserDashboard() {
                     <span className="text-passi-bleu dark:text-white text-base md:text-lg font-bold">Profile details</span>
                   </button>
                   
-                  {/* Settings */}
-                  <button className="flex items-center gap-4 py-6 border-b border-gray-100 dark:border-slate-700 w-full text-left hover:bg-passi-creme dark:bg-passi-bleu transition-colors -mx-4 px-4 md:-mx-6 md:px-6 w-[calc(100%+2rem)] md:w-[calc(100%+3rem)] rounded-xl">
-                    <Settings size={24} className="text-passi-bleu dark:text-white" />
-                    <span className="text-passi-bleu dark:text-white text-base md:text-lg font-bold">Settings</span>
-                  </button>
-                  
+
                   {/* Log out */}
                   <button onClick={handleLogout} className="flex items-center gap-4 py-6 border-b border-gray-100 dark:border-slate-700 w-full text-left hover:bg-red-50 transition-colors -mx-4 px-4 md:-mx-6 md:px-6 w-[calc(100%+2rem)] md:w-[calc(100%+3rem)] rounded-xl text-passi-corail">
                     <LogOut size={24} className="text-passi-corail" />
