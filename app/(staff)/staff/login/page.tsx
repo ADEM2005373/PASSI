@@ -30,13 +30,26 @@ export default function StaffLoginPage() {
     }
   }, [user]);
 
-  // If already logged in, show linking options or redirect to dashboard
-  if (!isInitializing && user && isGoogleLinked !== null) {
-    if (user.role === 'admin' && !isGoogleLinked) {
+  useEffect(() => {
+    if (!isInitializing && user && isGoogleLinked !== null) {
+      if (user.role === 'admin' && !isGoogleLinked) {
+        // Stay on page to show Google Linking UI
+      } else {
+        // Auto-redirect to appropriate dashboard
+        if (user.role === 'admin') router.replace('/admin');
+        else if (user.role === 'security') router.replace('/scanner/security');
+        else if (user.role === 'barman') router.replace('/scanner/barman');
+        else router.replace('/dashboard');
+      }
+    }
+  }, [isInitializing, user, isGoogleLinked, router]);
+
+  // If already logged in and needs linking, show linking options
+  if (!isInitializing && user && isGoogleLinked === false && user.role === 'admin') {
       return (
         <div className="min-h-screen bg-passi-creme flex flex-col items-center justify-center p-6">
           <div className="bg-white p-8 md:p-10 rounded-[2.5rem] shadow-xl max-w-md w-full text-center space-y-6">
-            <Logo variant="dark" className="w-[120px] h-[35px] mx-auto mb-4" />
+            <Logo variant="light" className="w-[120px] h-[35px] mx-auto mb-4" />
             <h2 className="text-2xl font-bold text-passi-bleu">Welcome, {user.email}</h2>
             <p className="text-gray-500 font-medium">
               You are logged in as <strong className="text-passi-corail uppercase">{user.role}</strong>.
@@ -72,25 +85,13 @@ export default function StaffLoginPage() {
       );
     }
 
-    return (
-      <div className="min-h-screen bg-passi-creme flex flex-col items-center justify-center p-6">
-        <div className="bg-white p-8 md:p-10 rounded-[2.5rem] shadow-xl max-w-md w-full text-center space-y-6">
-          <Logo variant="dark" className="w-[120px] h-[35px] mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-passi-bleu">Welcome, {user.email}</h2>
-          <p className="text-gray-500 font-medium">
-            You are logged in as <strong className="text-passi-corail uppercase">{user.role}</strong>.
-          </p>
-          
-          <button
-            onClick={() => router.push('/dashboard')}
-            className="w-full bg-passi-bleu text-white py-4 rounded-xl font-bold mt-4 hover:bg-passi-bleu/90 transition-colors"
-          >
-            Accéder à mon espace
-          </button>
+      // Render nothing or a loading spinner while redirecting
+      return (
+        <div className="min-h-screen bg-passi-creme flex flex-col items-center justify-center p-6">
+          <div className="w-16 h-16 border-4 border-passi-corail border-t-transparent rounded-full animate-spin"></div>
         </div>
-      </div>
-    );
-  }
+      );
+    }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -105,9 +106,8 @@ export default function StaffLoginPage() {
     if (authError) {
       setError(authError.message);
       setLoading(false);
-    } else {
-      router.replace("/dashboard");
     }
+    // No else block needed: the useEffect above will handle the redirect once `user` state updates!
   };
 
   return (
@@ -118,7 +118,7 @@ export default function StaffLoginPage() {
         <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-passi-corail/10 rounded-full blur-2xl"></div>
 
         <div className="relative z-10 flex justify-center mb-8">
-          <Logo variant="dark" className="w-[140px] h-[42px]" />
+          <Logo variant="light" className="w-[140px] h-[42px]" />
         </div>
         
         <div className="relative z-10 text-center mb-8">
