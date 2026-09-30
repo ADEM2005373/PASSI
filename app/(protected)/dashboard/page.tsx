@@ -493,9 +493,9 @@ export default function UserDashboard() {
                     {/* Toggle switch */}
                     <div 
                       onClick={toggleDarkMode}
-                      className={`w-12 h-6 border-2 rounded-full relative cursor-pointer transition-colors duration-300 ${isDarkMode ? 'bg-passi-bleu border-passi-bleu' : 'bg-white dark:bg-passi-surface border-passi-bleu hover:bg-gray-50 dark:bg-slate-800'}`}
+                      className={`w-12 h-6 border-2 rounded-full relative cursor-pointer transition-colors duration-300 ${isDarkMode ? 'bg-passi-bleu border-passi-bleu dark:bg-passi-turquoise dark:border-passi-turquoise' : 'bg-white border-passi-bleu hover:bg-gray-50'}`}
                     >
-                      <div className={`w-4 h-4 rounded-full absolute top-0.5 transition-transform duration-300 ${isDarkMode ? 'bg-white dark:bg-passi-surface translate-x-[1.4rem]' : 'bg-passi-bleu translate-x-[0.1rem]'}`}></div>
+                      <div className={`w-4 h-4 rounded-full absolute top-0.5 transition-transform duration-300 ${isDarkMode ? 'bg-white translate-x-[1.4rem]' : 'bg-passi-bleu translate-x-[0.1rem]'}`}></div>
                     </div>
                   </div>
                   
