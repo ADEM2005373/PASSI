@@ -135,6 +135,37 @@ export default function UserDashboard() {
     })
   }, [events, searchQuery, searchLocation, searchDate, searchCategory])
 
+  const handleLinkProvider = async (provider: 'google' | 'facebook' | 'instagram') => {
+    const supabase = createClient()
+    const { error } = await supabase.auth.linkIdentity({
+      provider,
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+        ...(provider === "instagram" && {
+          queryParams: { display: "popup" },
+        }),
+      }
+    })
+    if (error) {
+      console.error(`Error linking ${provider}:`, error.message)
+      alert(`Erreur lors de la liaison avec ${provider}`)
+    }
+  }
+
+  const handleUnlinkProvider = async (provider: string) => {
+    const supabase = createClient()
+    const identity = authUser?.identities?.find((id: any) => id.provider === provider)
+    if (!identity) return
+
+    const { error } = await supabase.auth.unlinkIdentity(identity)
+    if (error) {
+      console.error(`Error unlinking ${provider}:`, error.message)
+      alert(`Erreur lors de la dissociation de ${provider}: ${error.message}`)
+    } else {
+      window.location.reload()
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-passi-creme flex flex-col items-center justify-center">
@@ -539,29 +570,37 @@ export default function UserDashboard() {
                         <span className="w-1/3 text-right"></span>
                       </div>
                       
-                      <div className="flex justify-between items-center py-6 border-b border-gray-50 text-base md:text-lg font-medium">
-                        <span className="w-1/3 text-passi-bleu">Facebook</span>
-                        <span className="w-1/3 text-passi-text-sec">Linked</span>
-                        <div className="w-1/3 flex justify-end">
-                          <button className="text-gray-400 hover:text-passi-bleu transition-colors"><MoreHorizontal size={24} /></button>
-                        </div>
-                      </div>
-                      
-                      <div className="flex justify-between items-center py-6 border-b border-gray-50 text-base md:text-lg font-medium">
-                        <span className="w-1/3 text-passi-bleu">Instagram</span>
-                        <span className="w-1/3 text-passi-corail">Not linked</span>
-                        <div className="w-1/3 flex justify-end">
-                          <button className="text-passi-turquoise hover:text-passi-turquoise/80 font-bold transition-colors">Link</button>
-                        </div>
-                      </div>
-                      
-                      <div className="flex justify-between items-center py-6 text-base md:text-lg font-medium">
-                        <span className="w-1/3 text-passi-bleu">Google</span>
-                        <span className="w-1/3 text-passi-text-sec">Linked</span>
-                        <div className="w-1/3 flex justify-end">
-                          <button className="text-gray-400 hover:text-passi-bleu transition-colors"><MoreHorizontal size={24} /></button>
-                        </div>
-                      </div>
+                      {(['facebook', 'instagram', 'google'] as const).map((provider, index) => {
+                        const isLinked = authUser?.identities?.some(id => id.provider === provider)
+                        const isLast = index === 2
+                        
+                        return (
+                          <div key={provider} className={`flex justify-between items-center py-6 ${!isLast ? 'border-b border-gray-50' : ''} text-base md:text-lg font-medium`}>
+                            <span className="w-1/3 text-passi-bleu capitalize">{provider}</span>
+                            <span className={`w-1/3 ${isLinked ? 'text-passi-text-sec' : 'text-passi-corail'}`}>
+                              {isLinked ? 'Linked' : 'Not linked'}
+                            </span>
+                            <div className="w-1/3 flex justify-end">
+                              {isLinked ? (
+                                <button 
+                                  onClick={() => handleUnlinkProvider(provider)}
+                                  className="text-gray-400 hover:text-red-500 text-sm font-bold transition-colors"
+                                  title="Unlink account"
+                                >
+                                  Unlink
+                                </button>
+                              ) : (
+                                <button 
+                                  onClick={() => handleLinkProvider(provider)}
+                                  className="text-passi-turquoise hover:text-passi-turquoise/80 font-bold transition-colors"
+                                >
+                                  Link
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
                     </div>
                   </div>
                 </div>
