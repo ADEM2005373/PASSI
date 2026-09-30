@@ -78,7 +78,7 @@ export default function UserDashboard() {
       const { createClient } = await import('@/lib/supabase/client');
       const supabase = createClient();
       const { data: { user: authUser } } = await supabase.auth.getUser();
-      const isGoogleLinked = authUser?.identities?.some(id => id.provider === 'google') ?? false;
+      const isGoogleLinked = authUser?.identities?.some((id: any) => id.provider === 'google') ?? false;
 
       if (!isGoogleLinked) {
         router.push('/staff/login')
