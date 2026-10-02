@@ -36,12 +36,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isInitializing, setIsInitializing] = useState(true)
   const router = useRouter()
 
-  const fetchProfile = useCallback(async () => {
+  const fetchProfile = useCallback(async (authUser: User | any) => {
     const supabase = createClient()
-    const {
-      data: { user: authUser },
-    } = await supabase.auth.getUser()
-
+    
     if (!authUser) {
       setUser(null)
       setIsLoading(false)
@@ -57,12 +54,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .maybeSingle()
 
     if (!profile) {
-      // Profile row not yet created (race condition between callback and provider
-      // redirect). Create it now as a safety net with data from OAuth metadata.
+      // Profile row not yet created
       await supabase.from("profiles").upsert({
         id: authUser.id,
         email: authUser.email ?? "",
-        instagram_handle: null, // Force the user to provide their valid Instagram URL in the modal
+        instagram_handle: null,
         role: "user",
       })
 
@@ -82,14 +78,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
-    // Initial load
-    fetchProfile()
+    let mounted = true;
+    const supabase = createClient()
+
+    // Initial load - use getSession to avoid network request if possible
+    const loadUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.user) {
+        if (mounted) await fetchProfile(session.user)
+      } else {
+        if (mounted) {
+          setUser(null)
+          setIsLoading(false)
+          setIsInitializing(false)
+        }
+      }
+    }
+    
+    loadUser()
 
     // React to Supabase auth state changes
-    const supabase = createClient()
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event: any) => {
+    } = supabase.auth.onAuthStateChange((event: any, session: any) => {
       if (event === "SIGNED_OUT") {
         setUser(null)
         setIsLoading(false)
@@ -99,11 +110,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         event === "TOKEN_REFRESHED" ||
         event === "USER_UPDATED"
       ) {
-        fetchProfile()
+        if (session?.user) {
+          fetchProfile(session.user)
+        }
       }
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      mounted = false;
+      subscription.unsubscribe()
+    }
   }, [fetchProfile])
 
   const logout = useCallback(async () => {
@@ -117,7 +133,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshUser = useCallback(async () => {
     setIsLoading(true)
-    await fetchProfile()
+    const supabase = createClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session?.user) {
+      await fetchProfile(session.user)
+    } else {
+      setUser(null)
+      setIsLoading(false)
+    }
   }, [fetchProfile])
 
   return (
