@@ -55,10 +55,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (!profile) {
       // Profile row not yet created
+      const meta = authUser.user_metadata ?? {}
+      let inferredHandle = null
+      if (meta.user_name) inferredHandle = `https://instagram.com/${meta.user_name}`
+      else if (meta.preferred_username) inferredHandle = `https://instagram.com/${meta.preferred_username}`
+      else if (meta.name) inferredHandle = `https://instagram.com/${meta.name.replace(/\s+/g, '').toLowerCase()}`
+      else inferredHandle = `https://instagram.com/user_${authUser.id.substring(0, 8)}`
+
       await supabase.from("profiles").upsert({
         id: authUser.id,
         email: authUser.email ?? "",
-        instagram_handle: null,
+        instagram_handle: inferredHandle,
         role: "user",
       })
 

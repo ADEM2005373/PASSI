@@ -77,6 +77,18 @@ export async function GET(request: NextRequest) {
   const authUser = sessionData.user
   const meta = authUser.user_metadata ?? {}
 
+  // ── Extract potential Instagram handle from OAuth meta ───────────────────
+  let inferredHandle = null
+  if (meta.user_name) {
+    inferredHandle = `https://instagram.com/${meta.user_name}`
+  } else if (meta.preferred_username) {
+    inferredHandle = `https://instagram.com/${meta.preferred_username}`
+  } else if (meta.name) {
+    inferredHandle = `https://instagram.com/${meta.name.replace(/\s+/g, '').toLowerCase()}`
+  } else {
+    inferredHandle = `https://instagram.com/user_${authUser.id.substring(0, 8)}`
+  }
+
   // ── Check whether this user already has a profile row ─────────────────────
   const { data: existingProfile } = await supabase
     .from('profiles')
@@ -96,7 +108,7 @@ export async function GET(request: NextRequest) {
     const { error: insertError } = await supabaseAdmin.from('profiles').insert({
       id: authUser.id,
       email: authUser.email ?? '',
-      instagram_handle: null, // Force the user to provide their valid Instagram URL in the modal
+      instagram_handle: inferredHandle,
       role: 'user',
     })
 

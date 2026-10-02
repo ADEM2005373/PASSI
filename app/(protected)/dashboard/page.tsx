@@ -264,10 +264,6 @@ export default function UserDashboard() {
                 <h1 className="text-4xl md:text-5xl font-extrabold text-passi-bleu dark:text-white mt-4 leading-tight">
                   Trouvez votre <br /> prochaine <span className="text-passi-corail">sortie.</span>
                 </h1>
-                <div className="hidden md:flex items-center space-x-2 text-passi-text-sec text-sm font-medium">
-                   <span>Bizerte, TN</span>
-                   <MapPin size={16} className="text-passi-corail" />
-                </div>
               </div>
 
               {/* Advanced Search Bar */}
