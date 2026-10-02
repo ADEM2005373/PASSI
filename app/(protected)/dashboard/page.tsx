@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { QRCodeSVG } from 'qrcode.react'
-import { Search, Calendar, MapPin, Heart, Ticket, User, Home, Compass, LogOut, FileText, ChevronRight, Settings, Moon, ChevronLeft, MoreHorizontal, Clock } from 'lucide-react'
+import { Search, Calendar, MapPin, Heart, Ticket, User, Home, Compass, LogOut, FileText, ChevronRight, Settings, Moon, ChevronLeft, MoreHorizontal, Clock, Info, Shirt } from 'lucide-react'
 import { api } from '@/lib/services/api'
 import { Logo } from '@/components/Logo'
 import { createClient } from '@/lib/supabase/client'
@@ -378,6 +378,18 @@ export default function UserDashboard() {
                           <div className="bg-white dark:bg-passi-surface p-1.5 rounded-lg mr-3 shadow-sm"><MapPin size={16} className="text-passi-corail" /></div> 
                           {event.location}
                         </div>
+                        {event.dress_code && (
+                          <div className="flex items-center text-sm font-medium text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-slate-800 p-2 rounded-xl">
+                            <div className="bg-white dark:bg-passi-surface p-1.5 rounded-lg mr-3 shadow-sm"><Shirt size={16} className="text-purple-500" /></div> 
+                            {event.dress_code}
+                          </div>
+                        )}
+                        {event.description && (
+                          <div className="flex text-sm font-medium text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-slate-800 p-2 rounded-xl">
+                            <div className="bg-white dark:bg-passi-surface p-1.5 rounded-lg mr-3 shadow-sm h-fit"><Info size={16} className="text-blue-500" /></div> 
+                            <span className="line-clamp-2">{event.description}</span>
+                          </div>
+                        )}
                       </div>
                       <Link href={`/events/${event.id}`} className="block text-center w-full bg-passi-bleu text-white py-4 rounded-2xl font-bold hover:bg-passi-corail transition-colors shadow-lg shadow-passi-bleu/20">
                         Réserver maintenant

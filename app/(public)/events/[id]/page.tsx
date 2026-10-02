@@ -6,7 +6,7 @@ import { useTheme } from "next-themes";
 import { api, Event, User, Pass } from "@/lib/services/api";
 import { QRCodeSVG } from 'qrcode.react';
 import { Logo } from "@/components/Logo";
-import { Sun, Moon, ArrowLeft, LogOut, MapPin, Calendar, Clock, Ticket, Wine, CheckCircle, AlertCircle } from "lucide-react";
+import { Sun, Moon, ArrowLeft, LogOut, MapPin, Calendar, Clock, Ticket, Wine, CheckCircle, AlertCircle, Info, Shirt } from "lucide-react";
 
 export default function EventPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
@@ -129,7 +129,23 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
                 <MapPin size={16} className="text-passi-corail"/>
                 {event.location}
               </span>
+              {event.dress_code && (
+                <span className="flex items-center gap-2 text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>
+                  <Shirt size={16} className="text-purple-500"/>
+                  {event.dress_code}
+                </span>
+              )}
             </div>
+            {event.description && (
+              <div className="mt-6 p-5 rounded-2xl" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border)' }}>
+                <h3 className="flex items-center gap-2 text-sm font-bold mb-2 uppercase tracking-wide" style={{ color: 'var(--text-primary)' }}>
+                  <Info size={16} className="text-blue-500"/> À propos de l'événement
+                </h3>
+                <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-secondary)' }}>
+                  {event.description}
+                </p>
+              </div>
+            )}
           </div>
         </div>
 
