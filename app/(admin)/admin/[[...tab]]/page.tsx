@@ -27,6 +27,8 @@ export default function AdminDashboard() {
   const [newLocation, setNewLocation] = useState("");
   const [newMax, setNewMax] = useState(1);
   const [newImageUrl, setNewImageUrl] = useState("");
+  const [newDescription, setNewDescription] = useState("");
+  const [newDressCode, setNewDressCode] = useState("");
   const [newDrinks, setNewDrinks] = useState<{name: string}[]>([]);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
 
@@ -82,9 +84,9 @@ export default function AdminDashboard() {
     }
     const validDrinks = newDrinks.filter(d => d.name.trim() !== "");
     if (editingEventId) {
-      await api.updateEvent(editingEventId, newTitle, new Date(newDate).toISOString(), newLocation, false, newMax, newImageUrl, validDrinks);
+      await api.updateEvent(editingEventId, newTitle, new Date(newDate).toISOString(), newLocation, false, newMax, newImageUrl, newDescription, newDressCode, validDrinks);
     } else {
-      await api.createEvent(newTitle, new Date(newDate).toISOString(), newLocation, false, newMax, newImageUrl, validDrinks);
+      await api.createEvent(newTitle, new Date(newDate).toISOString(), newLocation, false, newMax, newImageUrl, newDescription, newDressCode, validDrinks);
     }
     cancelEdit();
     await fetchData();
@@ -92,7 +94,7 @@ export default function AdminDashboard() {
 
   const cancelEdit = () => {
     setEditingEventId(null);
-    setNewTitle(""); setNewDate(""); setNewLocation(""); setNewMax(1); setNewImageUrl(""); setNewDrinks([]);
+    setNewTitle(""); setNewDate(""); setNewLocation(""); setNewMax(1); setNewImageUrl(""); setNewDescription(""); setNewDressCode(""); setNewDrinks([]);
   };
 
   const handleDeleteEvent = async (eventId: string) => {
@@ -111,6 +113,8 @@ export default function AdminDashboard() {
     setNewLocation(event.location);
     setNewMax(event.max_passes_per_user);
     setNewImageUrl(event.image_url || "");
+    setNewDescription(event.description || "");
+    setNewDressCode(event.dress_code || "");
     setNewDrinks(event.drink_menus?.map(d => ({name: d.name})) || []);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -376,6 +380,14 @@ export default function AdminDashboard() {
                   <div>
                     <label className="label">Max passes / utilisateur</label>
                     <input type="number" min="1" max="10" required value={newMax} onChange={e => setNewMax(parseInt(e.target.value))} className="input" />
+                  </div>
+                  <div>
+                    <label className="label">Description / Détails</label>
+                    <textarea value={newDescription} onChange={e => setNewDescription(e.target.value)} placeholder="Ajoutez les détails de l'événement..." className="input min-h-[80px] py-3" />
+                  </div>
+                  <div>
+                    <label className="label">Dress code (optionnel)</label>
+                    <input type="text" value={newDressCode} onChange={e => setNewDressCode(e.target.value)} placeholder="Ex: Tenue correcte exigée..." className="input" />
                   </div>
                   <div>
                     <label className="label">URL de l'image (optionnel)</label>

@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
   if (authError) return authError;
 
   try {
-    const { title, date, location, pre_orders_enabled, max_passes_per_user, image_url, drinks } = await req.json();
+    const { title, date, location, pre_orders_enabled, max_passes_per_user, image_url, description, dress_code, drinks } = await req.json();
 
     const { data: event, error } = await supabaseAdmin.from('events').insert({ 
       title, 
@@ -20,7 +20,9 @@ export async function POST(req: NextRequest) {
       location, 
       pre_orders_enabled, 
       max_passes_per_user,
-      image_url
+      image_url,
+      description,
+      dress_code
     }).select().single();
 
     if (error) throw error;
@@ -47,7 +49,7 @@ export async function PUT(req: NextRequest) {
   if (authError) return authError;
 
   try {
-    const { id, title, date, location, pre_orders_enabled, max_passes_per_user, image_url, drinks } = await req.json();
+    const { id, title, date, location, pre_orders_enabled, max_passes_per_user, image_url, description, dress_code, drinks } = await req.json();
 
     if (!id) throw new Error("Missing event id");
 
@@ -57,7 +59,9 @@ export async function PUT(req: NextRequest) {
       location, 
       pre_orders_enabled, 
       max_passes_per_user,
-      image_url
+      image_url,
+      description,
+      dress_code
     }).eq('id', id).select().single();
 
     if (error) throw error;

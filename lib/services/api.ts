@@ -16,6 +16,8 @@ export type Event = {
   pre_orders_enabled: boolean;
   max_passes_per_user: number;
   image_url?: string;
+  description?: string;
+  dress_code?: string;
   drink_menus?: { id: string, name: string }[];
 };
 
@@ -234,20 +236,20 @@ export const api = {
   },
 
   // --- MISSING ADMIN FEATURES (Events, Staff) ---
-  async createEvent(title: string, date: string, location: string, pre_orders_enabled: boolean, max_passes_per_user: number, image_url: string, drinks?: {name: string}[]): Promise<void> {
+  async createEvent(title: string, date: string, location: string, pre_orders_enabled: boolean, max_passes_per_user: number, image_url: string, description?: string, dress_code?: string, drinks?: {name: string}[]): Promise<void> {
     const res = await fetch('/api/admin/events', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, date, location, pre_orders_enabled, max_passes_per_user, image_url, drinks }),
+      body: JSON.stringify({ title, date, location, pre_orders_enabled, max_passes_per_user, image_url, description, dress_code, drinks }),
     });
     if (!res.ok) throw new Error("Failed to create event");
   },
 
-  async updateEvent(id: string, title: string, date: string, location: string, pre_orders_enabled: boolean, max_passes_per_user: number, image_url: string, drinks?: {name: string}[]): Promise<void> {
+  async updateEvent(id: string, title: string, date: string, location: string, pre_orders_enabled: boolean, max_passes_per_user: number, image_url: string, description?: string, dress_code?: string, drinks?: {name: string}[]): Promise<void> {
     const res = await fetch('/api/admin/events', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, title, date, location, pre_orders_enabled, max_passes_per_user, image_url, drinks }),
+      body: JSON.stringify({ id, title, date, location, pre_orders_enabled, max_passes_per_user, image_url, description, dress_code, drinks }),
     });
     if (!res.ok) throw new Error("Failed to update event");
   },
