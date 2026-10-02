@@ -492,17 +492,17 @@ export default function AdminDashboard() {
                 <h3 className="text-lg font-bold mb-6" style={{ color: 'var(--text-primary)' }}>Annuaire & Permissions</h3>
                 <div className="space-y-3 max-h-[600px] overflow-y-auto hide-scrollbar">
                   {profiles.map(p => (
-                    <div key={p.id} className="flex justify-between items-center p-4 rounded-2xl transition-colors" style={{ backgroundColor: 'var(--bg-input)', border: '1.5px solid var(--border)' }}>
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-passi-corail to-orange-400 flex items-center justify-center text-white font-bold text-sm uppercase">
+                    <div key={p.id} className="flex justify-between items-center p-4 rounded-2xl transition-colors gap-4" style={{ backgroundColor: 'var(--bg-input)', border: '1.5px solid var(--border)' }}>
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div className="w-9 h-9 flex-shrink-0 rounded-full bg-gradient-to-tr from-passi-corail to-orange-400 flex items-center justify-center text-white font-bold text-sm uppercase">
                           {p.email[0]}
                         </div>
-                        <div>
-                          <p className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>{p.email}</p>
-                          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{p.instagram_handle}</p>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-bold text-sm truncate" style={{ color: 'var(--text-primary)' }}>{p.email}</p>
+                          <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{p.instagram_handle}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-shrink-0">
                         <select
                           value={p.role}
                           onChange={e => handleRoleChange(p.id, e.target.value)}
