@@ -503,6 +503,16 @@ export default function AdminDashboard() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
+                        {p.instagram_handle && (
+                          <a
+                            href={p.instagram_handle}
+                            target="_blank" rel="noreferrer"
+                            className="p-2 rounded-xl bg-pink-500/10 text-pink-500 hover:bg-pink-500/20 transition-colors flex items-center justify-center"
+                            title="Profil IG"
+                          >
+                            <ExternalLink size={15}/>
+                          </a>
+                        )}
                         <select
                           value={p.role}
                           onChange={e => handleRoleChange(p.id, e.target.value)}
