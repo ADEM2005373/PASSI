@@ -183,7 +183,7 @@ export default function AdminDashboard() {
   const handleTabClick = (id: string) => {
     setActiveTab(id);
     const newPath = id === 'dashboard' ? '/admin' : `/admin/${id}`;
-    router.push(newPath);
+    window.history.pushState(null, '', newPath);
   };
 
   if (isLoading) return (
