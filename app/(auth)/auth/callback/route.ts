@@ -144,7 +144,8 @@ export async function GET(request: NextRequest) {
 
     // New users always go to dashboard where the modal will appear if needed
     dest.pathname = next === '/update-password' ? next : '/dashboard'
-    return NextResponse.redirect(dest, { headers: response.headers })
+    response.headers.set('Location', dest.toString())
+    return response
   }
 
   // ── Returning user: route by role ─────────────────────────────────────────
@@ -164,5 +165,6 @@ export async function GET(request: NextRequest) {
   }
 
   // Update the redirect URL in the existing response
-  return NextResponse.redirect(dest, { headers: response.headers })
+  response.headers.set('Location', dest.toString())
+  return response
 }
