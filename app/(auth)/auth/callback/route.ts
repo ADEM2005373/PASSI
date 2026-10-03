@@ -16,6 +16,8 @@ import { cookies } from 'next/headers'
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl
   const code = searchParams.get('code')
+  const token_hash = searchParams.get('token_hash')
+  const type = searchParams.get('type')
   const next = searchParams.get('next') ?? '/dashboard'
 
   const dest = request.nextUrl.clone()
@@ -44,9 +46,21 @@ export async function GET(request: NextRequest) {
     }
   )
 
-  // Safety: if there's no code the provider returned an error (e.g. user cancelled)
-  if (!code) {
-    // Check if they are already logged in (e.g., admin trying to link account)
+  let sessionData: any
+  let sessionError: any
+
+  if (token_hash && type === 'recovery') {
+    // 1) Handle OTP flow (bypasses PKCE cookie issues entirely)
+    const { data, error } = await supabase.auth.verifyOtp({ token_hash, type: 'recovery' })
+    sessionData = data
+    sessionError = error
+  } else if (code) {
+    // 2) Handle standard OAuth/PKCE flow
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+    sessionData = data
+    sessionError = error
+  } else {
+    // Safety: no valid auth parameters
     const { data: { user: currentUser } } = await supabase.auth.getUser()
     const errorUrl = request.nextUrl.clone()
     
@@ -64,10 +78,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(errorUrl)
   }
 
-  // Exchange the auth code for a session
-  const { data: sessionData, error: sessionError } = await supabase.auth.exchangeCodeForSession(code)
-
-  if (sessionError || !sessionData.user) {
+  if (sessionError || !sessionData?.user) {
     console.error('[auth/callback] Session exchange failed:', sessionError)
     
     // Check if they are already logged in (e.g., admin trying to link account)
