@@ -353,6 +353,14 @@ function LoginContent() {
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-5 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-black text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-passi-turquoise/50 transition-all"
               />
+              <div className="flex justify-end mt-2">
+                <Link 
+                  href="/forgot-password" 
+                  className="text-xs font-semibold text-passi-turquoise hover:text-passi-turquoise/80 transition-colors"
+                >
+                  Mot de passe oublié ?
+                </Link>
+              </div>
             </div>
             <button
               type="submit"
