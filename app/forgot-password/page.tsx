@@ -5,6 +5,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Logo } from "@/components/Logo";
 import { AlertCircle, CheckCircle2, ArrowLeft } from "lucide-react";
+import { resetPassword } from "./actions";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -18,13 +19,10 @@ export default function ForgotPasswordPage() {
     setError("");
     setSuccess(false);
 
-    const supabase = createClient();
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/callback?next=/update-password`,
-    });
+    const result = await resetPassword(email, window.location.origin);
 
-    if (resetError) {
-      setError(resetError.message || "Une erreur est survenue lors de l'envoi de l'email.");
+    if (result.error) {
+      setError(result.error || "Une erreur est survenue lors de l'envoi de l'email.");
     } else {
       setSuccess(true);
     }
