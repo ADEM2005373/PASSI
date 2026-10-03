@@ -119,7 +119,7 @@ export async function GET(request: NextRequest) {
 
     // New users always go to dashboard where the modal will appear if needed
     const dest = request.nextUrl.clone()
-    dest.pathname = '/dashboard'
+    dest.pathname = next === '/update-password' ? next : '/dashboard'
     dest.search = ''
     return NextResponse.redirect(dest)
   }
@@ -129,10 +129,18 @@ export async function GET(request: NextRequest) {
   const dest = request.nextUrl.clone()
   dest.search = ''
 
-  if (role === 'admin') dest.pathname = '/admin'
-  else if (role === 'security') dest.pathname = '/scanner/security'
-  else if (role === 'barman') dest.pathname = '/scanner/barman'
-  else dest.pathname = next
+  // Priority to specific flows like password update
+  if (next === '/update-password') {
+    dest.pathname = next
+  } else if (role === 'admin') {
+    dest.pathname = '/admin'
+  } else if (role === 'security') {
+    dest.pathname = '/scanner/security'
+  } else if (role === 'barman') {
+    dest.pathname = '/scanner/barman'
+  } else {
+    dest.pathname = next
+  }
 
   return NextResponse.redirect(dest)
 }
