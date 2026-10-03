@@ -162,15 +162,14 @@ export default function AdminDashboard() {
       }
     });
 
-    if (totalDrinks === 0) {
-      alert("Aucune boisson n'a été réservée pour cet événement.");
-      return;
-    }
-
     const doc = new jsPDF();
     doc.text(`Rapport des boissons: ${eventTitle}`, 14, 20);
     
-    const tableData = Object.entries(drinkCounts).map(([name, count]) => [name, count]);
+    let tableData = Object.entries(drinkCounts).map(([name, count]) => [name, count]);
+    
+    if (tableData.length === 0) {
+      tableData = [['Aucune boisson réservée', 0]];
+    }
     
     (doc as any).autoTable({
       startY: 30,
