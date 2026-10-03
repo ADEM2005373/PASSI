@@ -6,7 +6,9 @@ import { useTheme } from "next-themes";
 import { api, Pass, User, Event } from "@/lib/services/api";
 import { useAuth } from "@/lib/context/auth-context";
 import { Logo } from "@/components/Logo";
-import { Sun, Moon, LogOut, LayoutDashboard, CalendarDays, Users, CheckSquare, Plus, Trash2, Pencil, X, ExternalLink, Check, DollarSign } from "lucide-react";
+import { Sun, Moon, LogOut, LayoutDashboard, CalendarDays, Users, CheckSquare, Plus, Trash2, Pencil, X, ExternalLink, Check, DollarSign, Download } from "lucide-react";
+import jsPDF from "jspdf";
+import "jspdf-autotable";
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -145,6 +147,39 @@ export default function AdminDashboard() {
       try { await api.deleteUser(userId); if (editingUserId === userId) cancelUserEdit(); await fetchData(); }
       catch (err: any) { alert("Erreur: " + err.message); }
     }
+  };
+
+  const handleDownloadDrinksReport = (eventId: string, eventTitle: string) => {
+    const eventPasses = passes.filter(p => p.event_id === eventId && p.drink_menus);
+    const drinkCounts: Record<string, number> = {};
+    let totalDrinks = 0;
+    
+    eventPasses.forEach(p => {
+      if (p.drink_menus) {
+        const dName = p.drink_menus.name;
+        drinkCounts[dName] = (drinkCounts[dName] || 0) + 1;
+        totalDrinks++;
+      }
+    });
+
+    if (totalDrinks === 0) {
+      alert("Aucune boisson n'a été réservée pour cet événement.");
+      return;
+    }
+
+    const doc = new jsPDF();
+    doc.text(`Rapport des boissons: ${eventTitle}`, 14, 20);
+    
+    const tableData = Object.entries(drinkCounts).map(([name, count]) => [name, count]);
+    
+    (doc as any).autoTable({
+      startY: 30,
+      head: [['Boisson', 'Quantité']],
+      body: tableData,
+      foot: [['Total', totalDrinks]],
+    });
+
+    doc.save(`boissons_${eventTitle.replace(/\s+/g, '_')}.pdf`);
   };
 
   const handleSaveUser = async (e: React.FormEvent) => {
@@ -445,6 +480,9 @@ export default function AdminDashboard() {
                         </p>
                       </div>
                       <div className="flex gap-2">
+                        <button onClick={() => handleDownloadDrinksReport(ev.id, ev.title)} className="p-2.5 rounded-xl bg-passi-turquoise/10 text-passi-turquoise hover:bg-passi-turquoise/20 transition-colors" title="Télécharger le rapport des boissons">
+                          <Download size={16}/>
+                        </button>
                         <button onClick={() => handleEditClick(ev)} className="btn-ghost p-2.5 !rounded-xl">
                           <Pencil size={16}/>
                         </button>
@@ -576,7 +614,15 @@ export default function AdminDashboard() {
                           <div>
                             <p className="font-bold text-base" style={{ color: 'var(--text-primary)' }}>{pass.guest_first_name} {pass.guest_last_name}</p>
                             <p className="text-sm truncate max-w-[200px]" title={pass.instagram_handle} style={{ color: 'var(--text-secondary)' }}>{pass.instagram_handle}</p>
-                            <span className={`badge mt-1 ${sc.bg} ${sc.color}`}>{sc.label}</span>
+                            <p className="text-xs font-semibold mt-1" style={{ color: 'var(--text-muted)' }}>
+                              Événement: {pass.events?.title || 'Inconnu'}
+                            </p>
+                            {pass.drink_menus && (
+                              <p className="text-xs font-semibold text-passi-corail">
+                                Boisson: {pass.drink_menus.name}
+                              </p>
+                            )}
+                            <span className={`badge mt-2 inline-block ${sc.bg} ${sc.color}`}>{sc.label}</span>
                           </div>
                         </div>
                         <div className="flex flex-wrap gap-2">

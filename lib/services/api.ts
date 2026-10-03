@@ -30,6 +30,8 @@ export type Pass = {
   entry_qr_uuid: string | null;
   entry_status: 'pending' | 'awaiting_payment' | 'activated' | 'scanned';
   instagram_handle?: string;
+  drink_menus?: { name: string } | null;
+  events?: { title: string } | null;
 };
 
 export const api = {
@@ -169,7 +171,7 @@ export const api = {
     const supabase = createClient();
     
     // Fetch all passes
-    const { data: passesData } = await supabase.from('passes').select('*');
+    const { data: passesData } = await supabase.from('passes').select('*, drink_menus(name), events(title)');
     if (!passesData) return [];
     
     // Fetch all profiles to map instagram handles manually
