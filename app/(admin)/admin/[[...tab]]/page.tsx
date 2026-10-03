@@ -8,7 +8,7 @@ import { useAuth } from "@/lib/context/auth-context";
 import { Logo } from "@/components/Logo";
 import { Sun, Moon, LogOut, LayoutDashboard, CalendarDays, Users, CheckSquare, Plus, Trash2, Pencil, X, ExternalLink, Check, DollarSign, Download } from "lucide-react";
 import jsPDF from "jspdf";
-import "jspdf-autotable";
+import autoTable from "jspdf-autotable";
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -171,7 +171,7 @@ export default function AdminDashboard() {
       tableData = [['Aucune boisson réservée', 0]];
     }
     
-    (doc as any).autoTable({
+    autoTable(doc, {
       startY: 30,
       head: [['Boisson', 'Quantité']],
       body: tableData,
