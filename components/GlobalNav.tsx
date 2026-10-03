@@ -55,7 +55,7 @@ export function GlobalNav() {
   const [mobileOpen, setMobileOpen] = useState(false)
 
   // Don't render nav on public pages, login pages (to prevent flash during redirect), or pages with their own embedded nav
-  const EXCLUDED_PATHS = ["/dashboard", "/admin", "/scanner", "/login", "/staff/login"]
+  const EXCLUDED_PATHS = ["/dashboard", "/admin", "/scanner", "/login", "/staff/login", "/forgot-password", "/update-password"]
   const isExcluded = pathname === "/" || EXCLUDED_PATHS.some((p) => pathname?.startsWith(p))
   if (!user || isExcluded) return null
 
