@@ -364,12 +364,12 @@ function LoginContent() {
           </form>
 
           <div className="flex justify-center -mt-2">
-            <Link 
+            <a 
               href="/forgot-password" 
               className="text-xs font-semibold text-passi-turquoise hover:text-passi-turquoise/80 transition-colors"
             >
               Mot de passe oublié ?
-            </Link>
+            </a>
           </div>
 
           <div className="flex items-center gap-3 py-2">
