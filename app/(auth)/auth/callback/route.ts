@@ -18,14 +18,28 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get('code')
   const next = searchParams.get('next') ?? '/dashboard'
 
-  const cookieStore = await cookies()
+  const dest = request.nextUrl.clone()
+  dest.search = ''
+  
+  // Create response early so we can attach cookies to it
+  const response = NextResponse.redirect(dest)
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() { return cookieStore.getAll() },
-        setAll(cookiesToSet) { cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options)) },
+        getAll() {
+          return request.cookies.getAll()
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            // Update the request cookies so subsequent calls in this route handler see the new value
+            request.cookies.set(name, value)
+            // Attach the cookie to the response
+            response.cookies.set(name, value, options)
+          })
+        },
       },
     }
   )
@@ -118,16 +132,12 @@ export async function GET(request: NextRequest) {
     }
 
     // New users always go to dashboard where the modal will appear if needed
-    const dest = request.nextUrl.clone()
     dest.pathname = next === '/update-password' ? next : '/dashboard'
-    dest.search = ''
-    return NextResponse.redirect(dest)
+    return NextResponse.redirect(dest, { headers: response.headers })
   }
 
   // ── Returning user: route by role ─────────────────────────────────────────
   const role = existingProfile.role ?? 'user'
-  const dest = request.nextUrl.clone()
-  dest.search = ''
 
   // Priority to specific flows like password update
   if (next === '/update-password') {
@@ -142,5 +152,6 @@ export async function GET(request: NextRequest) {
     dest.pathname = next
   }
 
-  return NextResponse.redirect(dest)
+  // Update the redirect URL in the existing response
+  return NextResponse.redirect(dest, { headers: response.headers })
 }

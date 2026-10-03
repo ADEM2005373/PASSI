@@ -16,7 +16,11 @@ export async function resetPassword(email: string, origin: string) {
         },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
+            cookieStore.set(name, value, {
+              ...options,
+              sameSite: 'none',
+              secure: true,
+            })
           );
         },
       },
