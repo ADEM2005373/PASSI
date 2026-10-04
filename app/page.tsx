@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useTheme } from 'next-themes'
-import { ArrowRight, Moon, Sun, Ticket, ShieldCheck, Zap, Sparkles } from 'lucide-react'
+import { ArrowRight, Moon, Sun, Ticket, ShieldCheck, Zap, Sparkles, Instagram } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { api } from '@/lib/services/api'
 import { Logo } from '@/components/Logo'
@@ -178,7 +178,18 @@ export default function LandingPage() {
           <Link href="/">
             <Logo className="w-[120px] h-[35px]" />
           </Link>
-          <p className="text-passi-text-sec font-medium text-sm">© {new Date().getFullYear()} Passi. Tous droits réservés.</p>
+          <div className="flex flex-col md:flex-row items-center gap-4 md:gap-8">
+            <a 
+              href="https://www.instagram.com/passi_community_216?stkn=MWNwYzB1NzdmdTZ6ag==" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="flex items-center gap-2 text-passi-text-sec hover:text-passi-corail transition-colors font-medium text-sm"
+            >
+              <Instagram size={20} />
+              <span>Visiter notre Instagram</span>
+            </a>
+            <p className="text-passi-text-sec font-medium text-sm">© {new Date().getFullYear()} Passi. Tous droits réservés.</p>
+          </div>
         </div>
       </footer>
     </div>
