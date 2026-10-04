@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useTheme } from 'next-themes'
-import { ArrowRight, Moon, Sun, Ticket, ShieldCheck, Zap, Sparkles, Instagram } from 'lucide-react'
+import { ArrowRight, Moon, Sun, Ticket, ShieldCheck, Zap, Sparkles } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { api } from '@/lib/services/api'
 import { Logo } from '@/components/Logo'
@@ -185,7 +185,7 @@ export default function LandingPage() {
               rel="noopener noreferrer" 
               className="flex items-center gap-2 text-passi-text-sec hover:text-passi-corail transition-colors font-medium text-sm"
             >
-              <Instagram size={20} />
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="20" x="2" y="2" rx="5" ry="5" /><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" /><line x1="17.5" x2="17.51" y1="6.5" y2="6.5" /></svg>
               <span>Visiter notre Instagram</span>
             </a>
             <p className="text-passi-text-sec font-medium text-sm">© {new Date().getFullYear()} Passi. Tous droits réservés.</p>
