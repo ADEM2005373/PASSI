@@ -1,7 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
+import { createClient } from '@/lib/supabase/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
-import { cookies } from 'next/headers'
 
 /**
  * OAuth Callback Route Handler
@@ -14,43 +13,19 @@ import { cookies } from 'next/headers'
  *  4. Redirect the user to the correct dashboard based on their role.
  */
 export async function GET(request: NextRequest) {
-  const { searchParams } = request.nextUrl
+  const { searchParams, origin } = request.nextUrl
   const code = searchParams.get('code')
   const token_hash = searchParams.get('token_hash')
   const type = searchParams.get('type')
   const next = searchParams.get('next') ?? '/dashboard'
 
-  const dest = request.nextUrl.clone()
-  dest.search = ''
-  
-  // Create response early so we can attach cookies to it
-  const response = NextResponse.redirect(dest)
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll()
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            // Update the request cookies so subsequent calls in this route handler see the new value
-            request.cookies.set(name, value)
-            // Attach the cookie to the response
-            response.cookies.set(name, value, options)
-          })
-        },
-      },
-    }
-  )
+  const supabase = await createClient()
 
   let sessionData: any
   let sessionError: any
 
   if (token_hash && type === 'recovery') {
-    // 1) Handle OTP flow (bypasses PKCE cookie issues entirely)
+    // 1) Handle OTP flow
     const { data, error } = await supabase.auth.verifyOtp({ token_hash, type: 'recovery' })
     sessionData = data
     sessionError = error
@@ -130,28 +105,24 @@ export async function GET(request: NextRequest) {
     }
 
     // New users always go to dashboard where the modal will appear if needed
-    dest.pathname = next === '/update-password' ? next : '/dashboard'
-    response.headers.set('Location', dest.toString())
-    return response
+    const finalPath = next === '/update-password' ? next : '/dashboard'
+    return NextResponse.redirect(`${origin}${finalPath}`)
   }
 
   // ── Returning user: route by role ─────────────────────────────────────────
   const role = existingProfile.role ?? 'user'
+  let finalPath = next
 
   // Priority to specific flows like password update
   if (next === '/update-password') {
-    dest.pathname = next
+    finalPath = next
   } else if (role === 'admin') {
-    dest.pathname = '/admin'
+    finalPath = '/admin'
   } else if (role === 'security') {
-    dest.pathname = '/scanner/security'
+    finalPath = '/scanner/security'
   } else if (role === 'barman') {
-    dest.pathname = '/scanner/barman'
-  } else {
-    dest.pathname = next
+    finalPath = '/scanner/barman'
   }
 
-  // Update the redirect URL in the existing response
-  response.headers.set('Location', dest.toString())
-  return response
+  return NextResponse.redirect(`${origin}${finalPath}`)
 }
