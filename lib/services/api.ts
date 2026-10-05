@@ -5,6 +5,7 @@ export type User = {
   email: string;
   instagram_handle: string;
   role: 'admin' | 'user' | 'security' | 'barman';
+  full_name?: string;
   created_at?: string;
 };
 

@@ -58,7 +58,15 @@ export async function updateSession(request: NextRequest) {
       .eq('id', user.id)
       .single()
 
-    const role = profile?.role || 'user'
+    let role = profile?.role || 'user'
+    
+    if (role === 'admin') {
+      const override = request.cookies.get('passi_impersonate_role')?.value;
+      if (override && ['admin', 'user', 'barman', 'security'].includes(override)) {
+        role = override;
+      }
+    }
+
     const path = request.nextUrl.pathname
 
     // Allow auth callbacks to process

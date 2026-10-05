@@ -70,7 +70,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       setUser(newProfile ?? null)
     } else {
-      setUser(profile as User)
+      let userProfile = profile as User;
+      if (userProfile.role === 'admin' && typeof document !== 'undefined') {
+        const match = document.cookie.match(/(?:^|; )passi_impersonate_role=([^;]*)/);
+        if (match) {
+          const override = match[1];
+          if (['admin', 'user', 'barman', 'security'].includes(override)) {
+            userProfile = { ...userProfile, role: override as any };
+          }
+        }
+      }
+      setUser(userProfile)
     }
 
     setIsLoading(false)

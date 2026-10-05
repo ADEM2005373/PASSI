@@ -19,11 +19,14 @@ export const metadata: Metadata = {
   },
 }
 
+import { ImpersonationBanner } from '@/components/ImpersonationBanner'
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="fr" suppressHydrationWarning className={inter.className}>
       <body className="min-h-screen antialiased transition-colors duration-300">
         <Providers>
+          <ImpersonationBanner />
           {children}
         </Providers>
       </body>
