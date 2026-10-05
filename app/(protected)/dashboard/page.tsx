@@ -57,8 +57,9 @@ export default function UserDashboard() {
       router.replace('/login')
       return
     }
-    // Show the profile-completion modal if instagram_handle is missing
-    setNeedsProfile(!authUser.instagram_handle)
+    // Show the profile-completion modal if instagram_handle is missing (and they are not an admin)
+    const isAdmin = authUser.role === 'admin' || authUser.original_role === 'admin'
+    setNeedsProfile(!authUser.instagram_handle && !isAdmin)
     fetchUserAndPasses()
     
     // Supabase Realtime: Listen for instant updates instead of polling

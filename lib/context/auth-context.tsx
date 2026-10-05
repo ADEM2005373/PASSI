@@ -76,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (match) {
           const override = match[1];
           if (['admin', 'user', 'barman', 'security'].includes(override)) {
-            userProfile = { ...userProfile, role: override as any };
+            userProfile = { ...userProfile, role: override as any, original_role: 'admin' };
           }
         }
       }

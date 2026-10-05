@@ -6,7 +6,7 @@ import { useTheme } from "next-themes";
 import { api, Pass, User, Event } from "@/lib/services/api";
 import { useAuth } from "@/lib/context/auth-context";
 import { Logo } from "@/components/Logo";
-import { Sun, Moon, LogOut, LayoutDashboard, CalendarDays, Users, CheckSquare, Plus, Trash2, Pencil, X, ExternalLink, Check, DollarSign, Download } from "lucide-react";
+import { Sun, Moon, LogOut, LayoutDashboard, CalendarDays, Users, CheckSquare, Plus, Trash2, Pencil, X, ExternalLink, Check, DollarSign, Download, User as UserIcon } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
@@ -41,6 +41,45 @@ export default function AdminDashboard() {
   const [newUserInsta, setNewUserInsta] = useState("");
   const [newUserRole, setNewUserRole] = useState("user");
   const [userMsg, setUserMsg] = useState("");
+
+  const [adminFullName, setAdminFullName] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
+  const [isSavingAdmin, setIsSavingAdmin] = useState(false);
+  const [adminMsg, setAdminMsg] = useState("");
+
+  useEffect(() => {
+    if (user?.full_name) setAdminFullName(user.full_name);
+  }, [user]);
+
+  const handleSaveAdminProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingAdmin(true);
+    setAdminMsg("Enregistrement en cours...");
+    try {
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+      
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({ full_name: adminFullName })
+        .eq('id', user?.id);
+        
+      if (profileError) throw profileError;
+      
+      if (adminPassword) {
+        const { error: pwdError } = await supabase.auth.updateUser({ password: adminPassword });
+        if (pwdError) throw pwdError;
+      }
+      
+      setAdminMsg("✓ Profil mis à jour avec succès");
+      setAdminPassword("");
+      setTimeout(() => setAdminMsg(""), 3000);
+    } catch (err: any) {
+      setAdminMsg("Erreur: " + err.message);
+    } finally {
+      setIsSavingAdmin(false);
+    }
+  };
 
   const fetchData = async () => {
     const allPasses = await api.getAllPasses();
@@ -207,6 +246,7 @@ export default function AdminDashboard() {
     { id: 'evenements',    label: 'Événements',       icon: <CalendarDays size={20} /> },
     { id: 'utilisateurs',     label: 'Utilisateurs',      icon: <Users size={20} /> },
     { id: 'approbations',    label: 'Approbations',      icon: <CheckSquare size={20} /> },
+    { id: 'profil',          label: 'Mon Profil',        icon: <UserIcon size={20} /> },
   ];
 
   useEffect(() => {
@@ -356,7 +396,7 @@ export default function AdminDashboard() {
                   <div className="absolute right-0 mt-2 w-48 rounded-xl shadow-lg bg-white dark:bg-passi-bleu ring-1 ring-black ring-opacity-5 transition-all duration-200 overflow-hidden z-50">
                     <div className="py-1">
                       <div className="px-4 py-2 text-xs text-gray-500 uppercase font-bold border-b border-gray-100 dark:border-gray-800">Mon Compte</div>
-                      <button onClick={() => { alert("Profil functionality to be implemented"); setIsDropdownOpen(false); }} className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-passi-surface/20">Profil</button>
+                      <button onClick={() => { handleTabClick('profil'); setIsDropdownOpen(false); }} className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-passi-surface/20">Profil</button>
                       <div className="px-4 py-2 text-xs text-gray-500 uppercase font-bold border-y border-gray-100 dark:border-gray-800 mt-1">Passer en</div>
                       <button onClick={() => { document.cookie = "passi_impersonate_role=user; path=/;"; window.location.href = "/dashboard"; }} className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-passi-surface/20">Utilisateur</button>
                       <button onClick={() => { document.cookie = "passi_impersonate_role=barman; path=/;"; window.location.href = "/scanner/barman"; }} className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-passi-surface/20">Barman</button>
@@ -673,6 +713,43 @@ export default function AdminDashboard() {
                   })}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* ── PROFILE TAB ── */}
+          {activeTab === 'profil' && (
+            <div className="card p-7 shadow-sm max-w-2xl">
+              <h3 className="text-lg font-bold mb-6" style={{ color: 'var(--text-primary)' }}>Mon Profil</h3>
+              
+              <form onSubmit={handleSaveAdminProfile} className="space-y-6">
+                <div>
+                  <label className="label">Nom complet</label>
+                  <input type="text" value={adminFullName} onChange={e => setAdminFullName(e.target.value)} placeholder="Votre nom" className="input" />
+                </div>
+                
+                <div>
+                  <label className="label">Email (lecture seule)</label>
+                  <input type="email" disabled value={user?.email || ''} className="input opacity-70 cursor-not-allowed" />
+                </div>
+                
+                <hr style={{ borderColor: 'var(--border)' }} />
+                
+                <div>
+                  <label className="label">Nouveau mot de passe (optionnel)</label>
+                  <input type="password" value={adminPassword} onChange={e => setAdminPassword(e.target.value)} placeholder="••••••••" className="input" />
+                  <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Laissez vide si vous ne souhaitez pas modifier votre mot de passe.</p>
+                </div>
+                
+                <button type="submit" disabled={isSavingAdmin} className="btn-primary w-full">
+                  {isSavingAdmin ? "Enregistrement..." : "Mettre à jour le profil"}
+                </button>
+                
+                {adminMsg && (
+                  <p className={`text-sm font-semibold px-4 py-3 rounded-xl mt-4 ${adminMsg.startsWith('✓') ? 'bg-passi-turquoise/10 text-passi-turquoise' : 'bg-passi-corail/10 text-passi-corail'}`}>
+                    {adminMsg}
+                  </p>
+                )}
+              </form>
             </div>
           )}
 
