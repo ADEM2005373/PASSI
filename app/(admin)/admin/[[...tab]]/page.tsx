@@ -17,6 +17,7 @@ export default function AdminDashboard() {
   const [mounted, setMounted] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [activeTab, setActiveTab] = useState("dashboard");
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   const [passes, setPasses] = useState<Pass[]>([]);
   const [profiles, setProfiles] = useState<User[]>([]);
@@ -332,8 +333,11 @@ export default function AdminDashboard() {
                 {navItems.find(n => n.id === activeTab)?.label || 'Tableau de bord'}
               </h1>
             </div>
-            <div className="relative group cursor-pointer z-50">
-              <div className="flex items-center gap-3">
+            <div className="relative z-50">
+              <div 
+                className="flex items-center gap-3 cursor-pointer"
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+              >
                 <div className="w-9 h-9 rounded-full bg-passi-corail flex items-center justify-center text-white font-bold text-sm">
                   {user?.full_name ? user.full_name[0].toUpperCase() : (user?.email ? user.email[0].toUpperCase() : 'A')}
                 </div>
@@ -346,16 +350,21 @@ export default function AdminDashboard() {
               </div>
               
               {/* Dropdown menu */}
-              <div className="absolute right-0 mt-2 w-48 rounded-xl shadow-lg bg-white dark:bg-passi-bleu ring-1 ring-black ring-opacity-5 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 overflow-hidden">
-                <div className="py-1">
-                  <div className="px-4 py-2 text-xs text-gray-500 uppercase font-bold border-b border-gray-100 dark:border-gray-800">Mon Compte</div>
-                  <button onClick={() => alert("Profil functionality to be implemented")} className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-passi-surface/20">Profil</button>
-                  <div className="px-4 py-2 text-xs text-gray-500 uppercase font-bold border-y border-gray-100 dark:border-gray-800 mt-1">Passer en</div>
-                  <button onClick={() => { document.cookie = "passi_impersonate_role=user; path=/;"; window.location.href = "/dashboard"; }} className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-passi-surface/20">Utilisateur</button>
-                  <button onClick={() => { document.cookie = "passi_impersonate_role=barman; path=/;"; window.location.href = "/scanner/barman"; }} className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-passi-surface/20">Barman</button>
-                  <button onClick={() => { document.cookie = "passi_impersonate_role=security; path=/;"; window.location.href = "/scanner/security"; }} className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-passi-surface/20">Sécurité</button>
-                </div>
-              </div>
+              {isDropdownOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setIsDropdownOpen(false)}></div>
+                  <div className="absolute right-0 mt-2 w-48 rounded-xl shadow-lg bg-white dark:bg-passi-bleu ring-1 ring-black ring-opacity-5 transition-all duration-200 overflow-hidden z-50">
+                    <div className="py-1">
+                      <div className="px-4 py-2 text-xs text-gray-500 uppercase font-bold border-b border-gray-100 dark:border-gray-800">Mon Compte</div>
+                      <button onClick={() => { alert("Profil functionality to be implemented"); setIsDropdownOpen(false); }} className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-passi-surface/20">Profil</button>
+                      <div className="px-4 py-2 text-xs text-gray-500 uppercase font-bold border-y border-gray-100 dark:border-gray-800 mt-1">Passer en</div>
+                      <button onClick={() => { document.cookie = "passi_impersonate_role=user; path=/;"; window.location.href = "/dashboard"; }} className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-passi-surface/20">Utilisateur</button>
+                      <button onClick={() => { document.cookie = "passi_impersonate_role=barman; path=/;"; window.location.href = "/scanner/barman"; }} className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-passi-surface/20">Barman</button>
+                      <button onClick={() => { document.cookie = "passi_impersonate_role=security; path=/;"; window.location.href = "/scanner/security"; }} className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-passi-surface/20">Sécurité</button>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
