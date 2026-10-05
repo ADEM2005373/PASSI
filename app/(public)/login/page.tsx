@@ -147,7 +147,7 @@ function LoginContent() {
         setError(signInError.message || "La connexion a échoué.");
       }
     } else {
-      window.location.href = "/";
+      window.location.href = "/dashboard";
     }
     setLoading(false);
   };
