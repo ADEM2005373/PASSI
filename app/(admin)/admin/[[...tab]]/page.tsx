@@ -12,7 +12,7 @@ import autoTable from "jspdf-autotable";
 
 export default function AdminDashboard() {
   const router = useRouter();
-  const { logout: contextLogout } = useAuth();
+  const { user, logout: contextLogout } = useAuth();
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
