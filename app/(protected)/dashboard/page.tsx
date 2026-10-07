@@ -432,9 +432,10 @@ export default function UserDashboard() {
                             ${pass.entry_status === 'activated' ? 'bg-passi-turquoise text-passi-bleu dark:text-white' : ''}
                             ${pass.entry_status === 'awaiting_payment' ? 'bg-orange-400 text-white' : ''}
                             ${pass.entry_status === 'pending' ? 'bg-white dark:bg-passi-surface/20 text-white' : ''}
-                            ${pass.entry_status === 'scanned' ? 'bg-red-500 text-white' : ''}
+                            ${pass.entry_status === 'scanned' ? 'bg-gray-500 text-white' : ''}
+                            ${pass.entry_status === 'rejected' ? 'bg-red-500 text-white' : ''}
                           `}>
-                            {pass.entry_status === 'awaiting_payment' ? 'À PAYER' : pass.entry_status}
+                            {pass.entry_status === 'awaiting_payment' ? 'À PAYER' : pass.entry_status === 'rejected' ? 'REJETÉ' : pass.entry_status}
                           </span>
                         </div>
                       </div>
@@ -455,6 +456,20 @@ export default function UserDashboard() {
                           <div className="h-full flex flex-col justify-center bg-orange-50 rounded-3xl p-8 border border-orange-100">
                             <strong className="block text-2xl text-orange-600 mb-3 font-extrabold">Validation réussie ! 🎉</strong> 
                             <p className="text-orange-700 font-medium text-lg leading-relaxed">Veuillez payer en espèces à l'organisateur sur place pour obtenir votre QR Code d'entrée.</p>
+                          </div>
+                        )}
+
+                        {pass.entry_status === 'rejected' && (
+                          <div className="h-full flex flex-col justify-center bg-red-50 dark:bg-red-900/10 rounded-3xl p-8 border border-red-100 dark:border-red-900/30">
+                            <strong className="block text-2xl text-red-600 mb-3 font-extrabold">Demande rejetée</strong> 
+                            <p className="text-red-700 dark:text-red-400 font-medium text-lg leading-relaxed">
+                              Désolé, votre demande a été rejetée par l'organisation.
+                            </p>
+                            {pass.rejection_reason && (
+                              <div className="mt-4 p-4 bg-white/50 dark:bg-black/20 rounded-xl text-red-800 dark:text-red-300 italic text-sm">
+                                "{pass.rejection_reason}"
+                              </div>
+                            )}
                           </div>
                         )}
                         

@@ -47,6 +47,11 @@ export default function AdminDashboard() {
   const [isSavingAdmin, setIsSavingAdmin] = useState(false);
   const [adminMsg, setAdminMsg] = useState("");
 
+  const [rejectModalPass, setRejectModalPass] = useState<Pass | null>(null);
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [isRejecting, setIsRejecting] = useState(false);
+  const [approbationMsg, setApprobationMsg] = useState("");
+
   useEffect(() => {
     if (user?.full_name) setAdminFullName(user.full_name);
   }, [user]);
@@ -115,8 +120,38 @@ export default function AdminDashboard() {
     init();
   }, [router]);
 
-  const handleApprove = async (passId: string) => { await api.approvePass(passId); await fetchData(); };
-  const handleMarkPaid = async (passId: string) => { await api.markPassPaid(passId); await fetchData(); };
+  const showApprobationMsg = (msg: string) => {
+    setApprobationMsg(msg);
+    setTimeout(() => setApprobationMsg(""), 3000);
+  };
+
+  const handleApprove = async (passId: string) => { 
+    await api.approvePass(passId); 
+    showApprobationMsg("Application approuvée !");
+    await fetchData(); 
+  };
+  const handleMarkPaid = async (passId: string) => { 
+    await api.markPassPaid(passId); 
+    showApprobationMsg("Paiement confirmé !");
+    await fetchData(); 
+  };
+
+  const handleReject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!rejectModalPass) return;
+    setIsRejecting(true);
+    try {
+      await api.rejectPass(rejectModalPass.id, rejectionReason);
+      setRejectModalPass(null);
+      setRejectionReason("");
+      showApprobationMsg("Pass rejeté !");
+      await fetchData();
+    } catch (err: any) {
+      alert("Erreur: " + err.message);
+    } finally {
+      setIsRejecting(false);
+    }
+  };
 
   const handleSaveEvent = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -656,7 +691,14 @@ export default function AdminDashboard() {
           {/* ── PASSES TAB ── */}
           {activeTab === 'approbations' && (
             <div className="card p-7 shadow-sm">
-              <h3 className="text-lg font-bold mb-6" style={{ color: 'var(--text-primary)' }}>Approbation des passes</h3>
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>Approbation des passes</h3>
+                {approbationMsg && (
+                  <p className="text-sm font-semibold px-4 py-2 rounded-xl bg-passi-turquoise/10 text-passi-turquoise">
+                    ✓ {approbationMsg}
+                  </p>
+                )}
+              </div>
               {passes.length === 0 ? (
                 <div className="text-center py-20 rounded-2xl" style={{ backgroundColor: 'var(--bg-input)', border: '1.5px dashed var(--border)' }}>
                   <Check size={40} className="mx-auto mb-3 text-passi-turquoise" />
@@ -669,13 +711,14 @@ export default function AdminDashboard() {
                       pending: { color: 'text-amber-500', bg: 'bg-amber-500/10', label: 'En attente' },
                       awaiting_payment: { color: 'text-blue-500', bg: 'bg-blue-500/10', label: 'Att. paiement' },
                       activated: { color: 'text-passi-turquoise', bg: 'bg-passi-turquoise/10', label: 'Activé' },
+                      rejected: { color: 'text-passi-corail', bg: 'bg-passi-corail/10', label: 'Rejeté' },
                     };
                     const sc = statusConfig[pass.entry_status] || { color: 'text-gray-500', bg: 'bg-gray-500/10', label: pass.entry_status };
                     return (
-                      <div key={pass.id} className="p-5 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-colors" style={{ backgroundColor: 'var(--bg-input)', border: '1.5px solid var(--border)' }}>
+                      <div key={pass.id} className={`p-5 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-colors ${sc.bg === 'bg-passi-corail/10' ? 'opacity-70' : ''}`} style={{ backgroundColor: 'var(--bg-input)', border: '1.5px solid var(--border)' }}>
                         <div className="flex items-center gap-4">
                           <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl font-bold ${sc.bg} ${sc.color}`}>
-                            {pass.entry_status === 'pending' ? '!' : pass.entry_status === 'awaiting_payment' ? '$' : '✓'}
+                            {pass.entry_status === 'pending' ? '!' : pass.entry_status === 'awaiting_payment' ? '$' : pass.entry_status === 'rejected' ? 'X' : '✓'}
                           </div>
                           <div>
                             <p className="font-bold text-base" style={{ color: 'var(--text-primary)' }}>{pass.guest_first_name} {pass.guest_last_name}</p>
@@ -700,12 +743,21 @@ export default function AdminDashboard() {
                             <ExternalLink size={15}/> Profil IG
                           </a>
                           {pass.entry_status === 'pending' && (
-                            <button onClick={() => handleApprove(pass.id)} className="btn-ghost px-4 py-2 text-sm">Approuver</button>
+                            <>
+                              <button onClick={() => handleApprove(pass.id)} className="btn-primary px-4 py-2 text-sm bg-green-500 hover:bg-green-600 border-none">Approuver Application</button>
+                              <button onClick={() => setRejectModalPass(pass)} className="btn-ghost px-4 py-2 text-sm border border-red-500 text-red-500">Rejeter</button>
+                            </>
                           )}
                           {pass.entry_status === 'awaiting_payment' && (
-                            <button onClick={() => handleMarkPaid(pass.id)} className="px-4 py-2 rounded-xl text-sm font-bold text-white bg-passi-turquoise hover:bg-passi-turquoise/90 transition-all">
-                              Activer le pass
-                            </button>
+                            <>
+                              <button onClick={() => handleMarkPaid(pass.id)} className="px-4 py-2 rounded-xl text-sm font-bold text-white bg-green-500 hover:bg-green-600 transition-all">Confirmer Paiement</button>
+                              <button onClick={() => setRejectModalPass(pass)} className="btn-ghost px-4 py-2 text-sm border border-red-500 text-red-500">Annuler / Rejeter</button>
+                            </>
+                          )}
+                          {['activated', 'scanned'].includes(pass.entry_status) && (
+                            <div className="flex items-center gap-2 px-4 py-2 bg-green-500/10 text-green-600 rounded-xl font-bold text-sm" title="Paid passes cannot be modified or revoked.">
+                              <Check size={16} /> Payé & Confirmé
+                            </div>
                           )}
                         </div>
                       </div>
@@ -750,6 +802,37 @@ export default function AdminDashboard() {
                   </p>
                 )}
               </form>
+            </div>
+          )}
+
+          {/* ── REJECTION MODAL ── */}
+          {rejectModalPass && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+              <div className="bg-white dark:bg-passi-bleu p-6 rounded-2xl w-full max-w-md shadow-xl" style={{ border: '1px solid var(--border)' }}>
+                <h3 className="text-xl font-bold mb-2">Rejeter le Pass</h3>
+                <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
+                  Êtes-vous sûr de vouloir rejeter ce pass ? Cette action marquera la demande comme rejetée.
+                </p>
+                <form onSubmit={handleReject} className="space-y-4">
+                  <div>
+                    <label className="label">Raison du rejet (Optionnel)</label>
+                    <textarea
+                      value={rejectionReason}
+                      onChange={e => setRejectionReason(e.target.value)}
+                      placeholder="Notes internes ou raison..."
+                      className="input min-h-[80px]"
+                    />
+                  </div>
+                  <div className="flex gap-3 justify-end">
+                    <button type="button" onClick={() => setRejectModalPass(null)} className="btn-ghost px-4 py-2">
+                      Annuler
+                    </button>
+                    <button type="submit" disabled={isRejecting} className="btn-primary px-4 py-2 bg-red-500 hover:bg-red-600 border-none text-white">
+                      {isRejecting ? "En cours..." : "Confirmer le Rejet"}
+                    </button>
+                  </div>
+                </form>
+              </div>
             </div>
           )}
 

@@ -30,7 +30,9 @@ export type Pass = {
   guest_first_name: string;
   guest_last_name: string;
   entry_qr_uuid: string | null;
-  entry_status: 'pending' | 'awaiting_payment' | 'activated' | 'scanned';
+  entry_status: 'pending' | 'awaiting_payment' | 'activated' | 'scanned' | 'rejected';
+  rejection_reason?: string | null;
+  updated_at?: string;
   instagram_handle?: string;
   drink_menus?: { name: string } | null;
   events?: { title: string } | null;
@@ -165,7 +167,7 @@ export const api = {
   // --- ADMIN (Phase 2 & 3) ---
   async getPendingPasses(): Promise<Pass[]> {
     const supabase = createClient();
-    const { data } = await supabase.from('passes').select('*').eq('entry_status', 'pending');
+    const { data } = await supabase.from('passes').select('*').in('entry_status', ['pending', 'awaiting_payment']);
     return data || [];
   },
 
@@ -206,13 +208,16 @@ export const api = {
     if (!res.ok) throw new Error("Failed to activate pass");
   },
 
-  async deletePass(passId: string): Promise<void> {
+  async rejectPass(passId: string, reason?: string): Promise<void> {
     const res = await fetch('/api/admin/passes', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ passId, action: 'reject' }),
+      body: JSON.stringify({ passId, action: 'reject', rejectionReason: reason }),
     });
-    if (!res.ok) throw new Error("Failed to delete pass");
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || "Failed to reject pass");
+    }
   },
 
   // --- SCANNER (Phase 5) ---

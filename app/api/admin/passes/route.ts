@@ -12,17 +12,35 @@ export async function PATCH(req: NextRequest) {
   if (authError) return authError;
 
   try {
-    const { passId, action } = await req.json();
+    const { passId, action, rejectionReason } = await req.json();
 
     if (!passId || !action) {
       return NextResponse.json({ error: 'Pass ID and action are required' }, { status: 400 });
+    }
+
+    // Backend Validation Guards
+    const { data: existingPass, error: fetchError } = await supabaseAdmin
+      .from('passes')
+      .select('entry_status, drink_id')
+      .eq('id', passId)
+      .single();
+
+    if (fetchError || !existingPass) {
+      return NextResponse.json({ error: 'Pass not found' }, { status: 404 });
+    }
+
+    if (['activated', 'scanned'].includes(existingPass.entry_status)) {
+      return NextResponse.json(
+        { error: 'Finalized and paid passes are immutable and cannot be rejected, modified, or deleted.' },
+        { status: 403 }
+      );
     }
 
     if (action === 'approve') {
       // Step 1: Approve -> Awaiting Payment
       const { error } = await supabaseAdmin
         .from('passes')
-        .update({ entry_status: 'awaiting_payment' })
+        .update({ entry_status: 'awaiting_payment', updated_at: new Date().toISOString() })
         .eq('id', passId);
 
       if (error) throw error;
@@ -32,15 +50,13 @@ export async function PATCH(req: NextRequest) {
       // Step 2: Mark Paid -> Activated & Generate QR
       const qrUuid = crypto.randomUUID();
       
-      // First, get the pass to see if it has a drink
-      const { data: pass } = await supabaseAdmin.from('passes').select('drink_id').eq('id', passId).single();
-      
       const updateData: any = { 
         entry_status: 'activated',
-        entry_qr_uuid: qrUuid
+        entry_qr_uuid: qrUuid,
+        updated_at: new Date().toISOString()
       };
       
-      if (pass?.drink_id) {
+      if (existingPass.drink_id) {
         updateData.drink_status = 'activated';
         updateData.drink_qr_uuid = crypto.randomUUID();
       }
@@ -55,14 +71,18 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ success: true, status: 'activated' });
 
     } else if (action === 'reject') {
-      // Delete the pass request
+      // Soft delete / Reject
       const { error } = await supabaseAdmin
         .from('passes')
-        .delete()
+        .update({ 
+          entry_status: 'rejected',
+          rejection_reason: rejectionReason || null,
+          updated_at: new Date().toISOString()
+        })
         .eq('id', passId);
 
       if (error) throw error;
-      return NextResponse.json({ success: true, status: 'deleted' });
+      return NextResponse.json({ success: true, status: 'rejected' });
     }
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
