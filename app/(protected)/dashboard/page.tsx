@@ -431,20 +431,31 @@ export default function UserDashboard() {
                         <div className="relative z-10 mt-12">
                           <div className="text-xs uppercase tracking-widest font-bold text-passi-creme/60 mb-2">Statut</div>
                           <span className={`inline-block px-5 py-2.5 rounded-2xl text-sm font-extrabold uppercase tracking-wider
-                            ${pass.entry_status === 'activated' ? 'bg-passi-turquoise text-passi-bleu dark:text-white' : ''}
-                            ${pass.entry_status === 'awaiting_payment' ? 'bg-orange-400 text-white' : ''}
-                            ${pass.entry_status === 'pending' ? 'bg-white dark:bg-passi-surface/20 text-white' : ''}
-                            ${pass.entry_status === 'scanned' ? 'bg-gray-500 text-white' : ''}
-                            ${pass.entry_status === 'rejected' ? 'bg-red-500 text-white' : ''}
+                            ${pass.pass_type === 'VIP' ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/30' : ''}
+                            ${pass.pass_type === 'GIFT' ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/30' : ''}
+                            ${pass.pass_type === 'INVITATION' ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/30' : ''}
+                            ${!pass.pass_type || pass.pass_type === 'NORMAL' ? (
+                              pass.entry_status === 'activated' ? 'bg-passi-turquoise text-passi-bleu dark:text-white' :
+                              pass.entry_status === 'awaiting_payment' ? 'bg-orange-400 text-white' :
+                              pass.entry_status === 'pending' ? 'bg-white dark:bg-passi-surface/20 text-white' :
+                              pass.entry_status === 'scanned' ? 'bg-gray-500 text-white' :
+                              pass.entry_status === 'rejected' ? 'bg-red-500 text-white' : ''
+                            ) : ''}
                           `}>
-                            {pass.entry_status === 'awaiting_payment' ? 'À PAYER' : pass.entry_status === 'rejected' ? 'REJETÉ' : pass.entry_status}
+                            {pass.pass_type === 'VIP' ? 'VIP' :
+                             pass.pass_type === 'GIFT' ? 'CADEAU' :
+                             pass.pass_type === 'INVITATION' ? `INVITATION (${pass.invitation_status === 'ACCEPTED' ? 'ACCEPTÉE' : pass.invitation_status === 'DECLINED' ? 'DÉCLINÉE' : 'EN ATTENTE'})` :
+                             pass.entry_status === 'awaiting_payment' ? 'À PAYER' : 
+                             pass.entry_status === 'rejected' ? 'REJETÉ' : pass.entry_status}
                           </span>
                         </div>
                       </div>
 
                       {/* Billet Content */}
-                      <div className="p-8 md:w-2/3">
-                        {pass.entry_status === 'pending' && (
+                      <div className="p-8 md:w-2/3 flex items-center justify-center">
+                        {['INVITATION', 'VIP', 'GIFT'].includes((pass.pass_type || '').toUpperCase()) ? (
+                          <PassCard pass={pass} onUpdate={() => fetchUserAndPasses(false)} />
+                        ) : pass.entry_status === 'pending' ? (
                           <div className="h-full flex flex-col justify-center items-center text-center">
                             <div className="w-16 h-16 bg-gray-50 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
                               <Clock className="text-gray-400" size={24} />
@@ -452,16 +463,12 @@ export default function UserDashboard() {
                             <h3 className="text-xl font-bold text-passi-bleu dark:text-white mb-2">En attente</h3>
                             <p className="text-gray-500 dark:text-gray-400 font-medium">Votre demande est en cours de validation par notre équipe.</p>
                           </div>
-                        )}
-                        
-                        {pass.entry_status === 'awaiting_payment' && (
+                        ) : pass.entry_status === 'awaiting_payment' ? (
                           <div className="h-full flex flex-col justify-center bg-orange-50 rounded-3xl p-8 border border-orange-100">
                             <strong className="block text-2xl text-orange-600 mb-3 font-extrabold">Validation réussie ! 🎉</strong> 
                             <p className="text-orange-700 font-medium text-lg leading-relaxed">Veuillez payer en espèces à l'organisateur sur place pour obtenir votre QR Code d'entrée.</p>
                           </div>
-                        )}
-
-                        {pass.entry_status === 'rejected' && (
+                        ) : pass.entry_status === 'rejected' ? (
                           <div className="h-full flex flex-col justify-center bg-red-50 dark:bg-red-900/10 rounded-3xl p-8 border border-red-100 dark:border-red-900/30">
                             <strong className="block text-2xl text-red-600 mb-3 font-extrabold">Demande rejetée</strong> 
                             <p className="text-red-700 dark:text-red-400 font-medium text-lg leading-relaxed">
@@ -473,10 +480,8 @@ export default function UserDashboard() {
                               </div>
                             )}
                           </div>
-                        )}
-                        
-                        {(pass.entry_status === 'activated' || pass.entry_status === 'scanned') && (
-                          <PassCard pass={pass} />
+                        ) : (
+                          <PassCard pass={pass} onUpdate={() => fetchUserAndPasses(false)} />
                         )}
                       </div>
                     </div>

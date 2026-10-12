@@ -46,8 +46,16 @@ export type Pass = {
   payment_approved_at?: string | null;
   updated_at?: string;
   instagram_handle?: string;
-  drink_menus?: { name: string } | null;
-  events?: { title: string, base_price?: number } | null;
+  drink_menus?: { id?: string; name: string; price?: number; image_url?: string } | null;
+  events?: { id?: string; title: string; base_price?: number; date?: string; location?: string } | null;
+  // Special Pass Types (NORMAL, GIFT, INVITATION, VIP) & Asynchronous Drinks
+  pass_type?: 'NORMAL' | 'GIFT' | 'INVITATION' | 'VIP';
+  invitation_status?: 'PENDING' | 'ACCEPTED' | 'DECLINED' | null;
+  drink_id?: string | null;
+  drink_qr_code?: string | null;
+  drink_qr_uuid?: string | null;
+  drink_status?: string | null;
+  available_drinks?: { id: string; name: string; price?: number; image_url?: string }[];
 };
 
 export const api = {
@@ -156,7 +164,7 @@ export const api = {
     // First, fetch the passes with their events
     const { data: passes, error } = await supabase
       .from('passes')
-      .select('*, events(title, date, location)')
+      .select('*, events(id, title, date, location)')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
       
@@ -165,26 +173,34 @@ export const api = {
       return [];
     }
 
-    // Map drink menus directly since drink_id is on passes
     if (passes.length > 0) {
       const menuIds = [...new Set(passes.map((p: any) => p.drink_id).filter(Boolean))];
-      if (menuIds.length > 0) {
-        const { data: menus } = await supabase
-          .from('drink_menus')
-          .select('*')
-          .in('id', menuIds);
-        
-        if (menus) {
-          const menusMap: Record<string, any> = {};
-          menus.forEach((m: any) => menusMap[m.id] = m);
-          
-          passes.forEach((pass: any) => {
-            if (pass.drink_id && menusMap[pass.drink_id]) {
-              pass.drink_menus = menusMap[pass.drink_id];
-            }
-          });
+      const eventIds = [...new Set(passes.map((p: any) => p.event_id).filter(Boolean))];
+
+      const [menusRes, eventDrinksRes] = await Promise.all([
+        menuIds.length > 0
+          ? supabase.from('drink_menus').select('*').in('id', menuIds)
+          : Promise.resolve({ data: [] }),
+        eventIds.length > 0
+          ? supabase.from('drink_menus').select('*').in('event_id', eventIds)
+          : Promise.resolve({ data: [] })
+      ]);
+
+      const menusMap: Record<string, any> = {};
+      (menusRes.data || []).forEach((m: any) => menusMap[m.id] = m);
+
+      const drinksByEvent: Record<string, any[]> = {};
+      (eventDrinksRes.data || []).forEach((d: any) => {
+        if (!drinksByEvent[d.event_id]) drinksByEvent[d.event_id] = [];
+        drinksByEvent[d.event_id].push(d);
+      });
+
+      passes.forEach((pass: any) => {
+        if (pass.drink_id && menusMap[pass.drink_id]) {
+          pass.drink_menus = menusMap[pass.drink_id];
         }
-      }
+        pass.available_drinks = drinksByEvent[pass.event_id] || [];
+      });
     }
     return passes as Pass[];
   },
@@ -625,5 +641,48 @@ export const api = {
       revenue,
       chartData
     };
+  },
+
+  // --- MANUAL PASS CREATION (Admin) ---
+  async createManualPass(data: {
+    userId: string;
+    eventId: string;
+    passType: 'NORMAL' | 'GIFT' | 'INVITATION' | 'VIP';
+    guestFirstName?: string;
+    guestLastName?: string;
+  }): Promise<{ success: boolean; pass: Pass; message?: string }> {
+    const res = await fetch('/api/admin/passes/manual', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error || 'Erreur lors de la création du pass');
+    return result;
+  },
+
+  // --- INVITATION FLOW (User) ---
+  async respondToInvitation(passId: string, action: 'accept' | 'decline'): Promise<{ success: boolean; pass: Pass; message?: string }> {
+    const res = await fetch('/api/passes/invitation', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ passId, action }),
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error || 'Erreur lors du traitement de l\'invitation');
+    return result;
+  },
+
+  // --- ASYNCHRONOUS DRINK SELECTION (User) ---
+  async selectPassDrink(passId: string, drinkId: string): Promise<{ success: boolean; pass: Pass; drink?: any; message?: string }> {
+    const res = await fetch('/api/passes/select-drink', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ passId, drinkId }),
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error || 'Erreur lors de la sélection de la boisson');
+    return result;
   }
 };
+

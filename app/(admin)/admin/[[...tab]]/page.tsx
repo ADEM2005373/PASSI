@@ -6,9 +6,10 @@ import { useTheme } from "next-themes";
 import { api, Pass, User, Event } from "@/lib/services/api";
 import { useAuth } from "@/lib/context/auth-context";
 import { Logo } from "@/components/Logo";
-import { Sun, Moon, LogOut, LayoutDashboard, CalendarDays, Users, CheckSquare, Plus, Trash2, Pencil, X, ExternalLink, Check, DollarSign, Download, User as UserIcon, Banknote, ShieldAlert, ShieldCheck, FileSpreadsheet, FileText, Tag } from "lucide-react";
+import { Sun, Moon, LogOut, LayoutDashboard, CalendarDays, Users, CheckSquare, Plus, Trash2, Pencil, X, ExternalLink, Check, DollarSign, Download, User as UserIcon, Banknote, ShieldAlert, ShieldCheck, FileSpreadsheet, FileText, Tag, Ticket } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { PassCreationSection } from "@/components/admin/PassCreationSection";
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -444,6 +445,7 @@ export default function AdminDashboard() {
   const navItems = [
     { id: 'dashboard', label: 'Tableau de bord', icon: <LayoutDashboard size={20} /> },
     { id: 'evenements',    label: 'Événements',       icon: <CalendarDays size={20} /> },
+    { id: 'passes-creation', label: 'Création de Passes', icon: <Ticket size={20} /> },
     { id: 'payment-points', label: 'Points de Paiement', icon: <Banknote size={20} /> },
     { id: 'utilisateurs',     label: 'Utilisateurs',      icon: <Users size={20} /> },
     { id: 'approbations',    label: 'Approbations',      icon: <CheckSquare size={20} /> },
@@ -451,18 +453,23 @@ export default function AdminDashboard() {
   ];
 
   useEffect(() => {
-    const pathParts = window.location.pathname.split('/');
-    const tabName = pathParts[2]; // /admin/[tabName]
-    if (tabName && navItems.some(n => n.id === tabName)) {
-      setActiveTab(tabName);
+    const path = window.location.pathname;
+    if (path === '/admin/passes/create' || path === '/admin/passes-creation') {
+      setActiveTab('passes-creation');
     } else {
-      setActiveTab('dashboard');
+      const pathParts = path.split('/');
+      const tabName = pathParts[2]; // /admin/[tabName]
+      if (tabName && navItems.some(n => n.id === tabName)) {
+        setActiveTab(tabName);
+      } else {
+        setActiveTab('dashboard');
+      }
     }
   }, []);
 
   const handleTabClick = (id: string) => {
     setActiveTab(id);
-    const newPath = id === 'dashboard' ? '/admin' : `/admin/${id}`;
+    const newPath = id === 'dashboard' ? '/admin' : (id === 'passes-creation' ? '/admin/passes/create' : `/admin/${id}`);
     window.history.pushState(null, '', newPath);
   };
 
@@ -849,6 +856,15 @@ export default function AdminDashboard() {
                 </div>
               </div>
             </div>
+          )}
+
+          {/* ── PASSES CREATION TAB ── */}
+          {activeTab === 'passes-creation' && (
+            <PassCreationSection 
+              users={profiles} 
+              events={events} 
+              onPassCreated={fetchData} 
+            />
           )}
 
           {/* ── STAFF TAB ── */}
