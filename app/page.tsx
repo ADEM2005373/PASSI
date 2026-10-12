@@ -1,19 +1,24 @@
 "use client"
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useTheme } from 'next-themes'
-import { ArrowRight, Moon, Sun, Ticket, ShieldCheck, Zap, Sparkles } from 'lucide-react'
+import { ArrowRight, Moon, Sun, Ticket, ShieldCheck, Zap, Sparkles, Compass } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { api } from '@/lib/services/api'
+import { api, Event } from '@/lib/services/api'
 import { Logo } from '@/components/Logo'
+import { SearchBarWithSuggestions } from '@/components/SearchBarWithSuggestions'
 
 export default function LandingPage() {
+  const router = useRouter()
   const { theme, setTheme, resolvedTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
+  const [events, setEvents] = useState<Event[]>([])
 
-  // Avoid hydration mismatch
+  // Avoid hydration mismatch & fetch active events for search
   useEffect(() => {
     setMounted(true)
+    api.getEvents().then(data => setEvents(data || [])).catch(() => {})
   }, [])
 
   return (
@@ -37,7 +42,10 @@ export default function LandingPage() {
                 {resolvedTheme === 'dark' ? <Sun size={18} className="md:w-5 md:h-5" /> : <Moon size={18} className="md:w-5 md:h-5" />}
               </button>
             )}
-            <Link href="/login" className="text-sm md:text-base font-bold text-passi-bleu dark:text-passi-creme hover:text-passi-corail dark:hover:text-passi-corail transition-colors">
+            <Link href="/catalogue" className="text-sm md:text-base font-bold text-passi-bleu dark:text-passi-creme hover:text-passi-corail transition-colors">
+              Catalogue
+            </Link>
+            <Link href="/login" className="text-sm md:text-base font-bold text-passi-bleu dark:text-passi-creme hover:text-passi-corail transition-colors">
               Connexion
             </Link>
             <Link href="/login" className="bg-passi-corail text-white px-6 py-2.5 rounded-full font-bold hover:bg-passi-corail/90 shadow-lg shadow-passi-corail/30 transition-all hover:scale-105 hidden sm:block">
@@ -61,9 +69,24 @@ export default function LandingPage() {
           <p className="text-xl md:text-2xl text-passi-text-sec font-medium max-w-2xl mx-auto lg:mx-0">
             Passi est le système ultime de billetterie intelligente. Rapide, sécurisé et conçu pour vous offrir la meilleure expérience événementielle.
           </p>
-          <div className="flex flex-col sm:flex-row items-center gap-4 justify-center lg:justify-start pt-4">
-            <Link href="/login" className="bg-passi-bleu dark:bg-white text-white dark:text-passi-bleu px-8 py-4 rounded-full font-extrabold text-lg flex items-center gap-2 hover:scale-105 transition-transform shadow-xl w-full sm:w-auto justify-center">
-              Commencer <ArrowRight size={20} />
+
+          {/* Fault-Tolerant Search Bar with Live Suggestions Dropdown */}
+          <div className="w-full max-w-xl mx-auto lg:mx-0 pt-2 text-left">
+            <SearchBarWithSuggestions
+              events={events}
+              placeholder="Rechercher une soirée, un concert, un lieu..."
+              autoRedirectOnSelect={true}
+              onChange={(query) => {
+                if (query.trim().length >= 2) {
+                  router.push(`/catalogue?q=${encodeURIComponent(query.trim())}`)
+                }
+              }}
+            />
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center gap-4 justify-center lg:justify-start pt-2">
+            <Link href="/catalogue" className="bg-passi-bleu dark:bg-white text-white dark:text-passi-bleu px-8 py-4 rounded-full font-extrabold text-lg flex items-center gap-2 hover:scale-105 transition-transform shadow-xl w-full sm:w-auto justify-center">
+              Explorer le Catalogue <ArrowRight size={20} />
             </Link>
             <Link href="#features" className="bg-white dark:bg-gray-800 text-passi-bleu dark:text-white border border-gray-200 dark:border-gray-700 px-8 py-4 rounded-full font-bold text-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors w-full sm:w-auto justify-center flex">
               Découvrir

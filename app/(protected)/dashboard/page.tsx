@@ -11,6 +11,8 @@ import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/lib/context/auth-context'
 import { CompleteProfileModal } from '@/components/CompleteProfileModal'
 import { PassCard } from '@/components/PassCard'
+import { SearchBarWithSuggestions } from '@/components/SearchBarWithSuggestions'
+import { searchEventsFaultTolerant } from '@/lib/utils/search'
 
 export default function UserDashboard() {
   const router = useRouter()
@@ -36,6 +38,17 @@ export default function UserDashboard() {
       const isDark = document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark'
       setIsDarkMode(isDark)
       if (isDark) document.documentElement.classList.add('dark')
+
+      // Support direct links like /dashboard?tab=catalog or /dashboard?q=soiree
+      const params = new URLSearchParams(window.location.search)
+      const tabParam = params.get('tab')
+      if (tabParam && ['explorer', 'catalog', 'reservations', 'news', 'profile'].includes(tabParam)) {
+        setActiveTab(tabParam as any)
+      }
+      const qParam = params.get('q')
+      if (qParam) {
+        setSearchQuery(qParam)
+      }
     }
   }, [])
 
@@ -139,14 +152,24 @@ export default function UserDashboard() {
   }
 
   const filteredEvents = useMemo(() => {
-    return events.filter(event => {
-      const matchQuery = event.title?.toLowerCase().includes(searchQuery.toLowerCase()) || false;
-      const matchLocation = searchLocation === '' || event.location?.toLowerCase().includes(searchLocation.toLowerCase());
-      const matchDate = searchDate === '' || event.date?.includes(searchDate);
-      // Rough matching for categories if event doesn't have a strict category field
-      const matchCategory = searchCategory === '' || event.title?.toLowerCase().includes(searchCategory.toLowerCase()) || event.description?.toLowerCase().includes(searchCategory.toLowerCase());
-      return matchQuery && matchLocation && matchDate && matchCategory;
-    })
+    // 1. Fault-tolerant fuzzy & space-omission matching
+    let baseEvents: any[] = events;
+    if (searchQuery.trim().length > 0) {
+      baseEvents = searchEventsFaultTolerant(events, searchQuery, {
+        threshold: 0.35,
+        includeLocationAndDesc: true,
+      }).map(res => res.event);
+    }
+
+    // 2. Strict / secondary filters (location, date, category)
+    return baseEvents.filter(event => {
+      const matchLocation = !searchLocation.trim() || (event.location && event.location.toLowerCase().includes(searchLocation.toLowerCase().trim()));
+      const matchDate = !searchDate.trim() || (event.date && event.date.includes(searchDate));
+      const matchCategory = !searchCategory.trim() || 
+        (event.title && event.title.toLowerCase().includes(searchCategory.toLowerCase())) || 
+        (event.description && event.description.toLowerCase().includes(searchCategory.toLowerCase()));
+      return matchLocation && matchDate && matchCategory;
+    });
   }, [events, searchQuery, searchLocation, searchDate, searchCategory])
 
   const handleLinkProvider = async (provider: 'google' | 'facebook' | 'instagram') => {
@@ -267,42 +290,21 @@ export default function UserDashboard() {
                 </h1>
               </div>
 
-              {/* Advanced Search Bar */}
-              <div className="bg-white dark:bg-passi-surface p-2 rounded-3xl md:rounded-full shadow-lg shadow-passi-bleu/5 mb-12 border border-gray-100 dark:border-slate-700 flex flex-col md:flex-row gap-2 md:gap-0">
-                <div className="flex items-center px-6 py-3 flex-1">
-                  <Search size={22} className="text-passi-corail mr-4" />
-                  <input 
-                    type="text" 
-                    placeholder="Rechercher une sortie, un artiste..." 
-                    className="w-full outline-none text-passi-bleu dark:text-white font-semibold placeholder-gray-400 bg-transparent"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
-                </div>
-                <div className="hidden md:block w-px bg-gray-200 my-3"></div>
-                <div className="flex items-center px-4 py-3 bg-gray-50 dark:bg-slate-800 rounded-full md:mx-2 group hover:bg-gray-100 dark:bg-slate-700 transition-colors cursor-text">
-                  <Calendar size={20} className="text-passi-turquoise mr-3 group-hover:scale-110 transition-transform" />
-                  <input 
-                    type="date" 
-                    className="bg-transparent outline-none text-sm text-passi-bleu dark:text-white font-medium w-32"
-                    value={searchDate}
-                    onChange={(e) => setSearchDate(e.target.value)}
-                  />
-                </div>
-                <div className="flex items-center px-4 py-3 bg-gray-50 dark:bg-slate-800 rounded-full md:mx-2 mb-2 md:mb-0 group hover:bg-gray-100 dark:bg-slate-700 transition-colors cursor-text">
-                  <MapPin size={20} className="text-passi-turquoise mr-3 group-hover:scale-110 transition-transform" />
-                  <input 
-                    type="text" 
-                    placeholder="Lieu"
-                    className="bg-transparent outline-none text-sm text-passi-bleu dark:text-white font-medium w-24"
-                    value={searchLocation}
-                    onChange={(e) => setSearchLocation(e.target.value)}
-                  />
-                </div>
-                <button className="bg-passi-corail text-white p-4 rounded-full flex justify-center items-center hover:scale-105 transition-transform shadow-md shadow-passi-corail/40 mx-2 md:mx-0 mb-2 md:mb-0">
-                  <Search size={22} />
-                </button>
+              {/* Advanced Fault-Tolerant Search Bar with Live Suggestions Dropdown */}
+              <div className="mb-12">
+                <SearchBarWithSuggestions
+                  events={events}
+                  value={searchQuery}
+                  onChange={setSearchQuery}
+                  showFilters={true}
+                  selectedDate={searchDate}
+                  onDateChange={setSearchDate}
+                  selectedLocation={searchLocation}
+                  onLocationChange={setSearchLocation}
+                  placeholder="Rechercher une sortie, une soirée, un artiste..."
+                />
               </div>
+
 
               {/* Categories */}
               {activeTab === 'explorer' && (
