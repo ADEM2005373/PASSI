@@ -612,17 +612,17 @@ export const api = {
       supabase.from('passes').select('entry_status, created_at, final_price')
     ]);
     
-    // Revenue calculation
-    const paidPasses = passes?.filter((p: any) => p.entry_status === 'activated' || p.entry_status === 'scanned') || [];
-    const revenue = paidPasses.reduce((acc: number, p: any) => acc + (Number(p.final_price) || 20), 0);
+    // Active passes (activated or scanned) & Revenue calculation
+    const activePasses = passes?.filter((p: any) => p.entry_status === 'activated' || p.entry_status === 'scanned') || [];
+    const revenue = activePasses.reduce((acc: number, p: any) => acc + (Number(p.final_price) || 0), 0);
 
-    // Calculate real chart data for the last 7 days
+    // Calculate real chart data for the last 7 days (active passes only)
     const chartData = [0, 0, 0, 0, 0, 0, 0];
-    if (passes) {
+    if (activePasses.length > 0) {
       const now = new Date();
       now.setHours(0, 0, 0, 0); // Start of today
 
-      passes.forEach((p: any) => {
+      activePasses.forEach((p: any) => {
         const passDate = new Date(p.created_at);
         passDate.setHours(0, 0, 0, 0);
         const diffTime = Math.abs(now.getTime() - passDate.getTime());
@@ -637,7 +637,7 @@ export const api = {
     return {
       totalUsers: userCount || 0,
       totalEvents: eventCount || 0,
-      totalPasses: passes?.length || 0,
+      totalPasses: activePasses.length,
       revenue,
       chartData
     };
