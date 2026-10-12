@@ -163,7 +163,7 @@ function LoginContent() {
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: supabaseProvider,
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${window.location.origin}/auth/callback?next=/dashboard`,
         queryParams: {
           prompt: 'select_account',
           ...(provider === "instagram" && { display: "popup" }),

@@ -1,128 +1,143 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import { createServerClient } from '@supabase/ssr'
+import { createClient as createSupabaseAdminClient } from '@supabase/supabase-js'
 
 /**
- * OAuth Callback Route Handler
+ * OAuth & Auth Callback Route Handler
  *
- * Supabase redirects here after a successful social login (Google / Facebook / Instagram).
- * Steps:
- *  1. Exchange the `code` from the URL for a Supabase session.
- *  2. Detect first-time logins and create the profile row in `public.profiles`.
- *  3. Extract the Instagram / Facebook username from OAuth metadata when available.
- *  4. Redirect the user to the correct dashboard based on their role.
+ * Résout le problème de double redirection OAuth :
+ * 1. Attache directement les cookies de session sur l'en-tête de la réponse NextResponse.redirect.
+ * 2. Vérifie immédiatement l'état du profil utilisateur (instagram_handle).
+ * 3. Aiguille sans intermédiaire : vers /onboarding si instagram_handle est vide, ou /dashboard / espace rôle.
  */
 export async function GET(request: NextRequest) {
-  const { searchParams, origin } = request.nextUrl
-  const code = searchParams.get('code')
-  const token_hash = searchParams.get('token_hash')
-  const type = searchParams.get('type')
-  const next = searchParams.get('next') ?? '/dashboard'
+  const requestUrl = new URL(request.url)
+  const code = requestUrl.searchParams.get('code')
+  const token_hash = requestUrl.searchParams.get('token_hash')
+  const type = requestUrl.searchParams.get('type')
+  const next = requestUrl.searchParams.get('next') ?? '/dashboard'
 
-  const supabase = await createClient()
+  // Si aucun paramètre d'échange n'est présent
+  if (!code && !token_hash) {
+    return NextResponse.redirect(new URL('/login?error=oauth_failed', request.url))
+  }
 
-  let sessionData: any
-  let sessionError: any
+  // Prépare une réponse par défaut (sera modifiée pour la redirection finale)
+  let response = NextResponse.redirect(new URL('/login?error=oauth_failed', request.url))
+
+  // Client Supabase SSR synchronisé avec les cookies de la requête et de la réponse
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll()
+        },
+        setAll(cookiesToSet) {
+          // Écrit les cookies sur la requête pour le contexte immédiat
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+          // Réinjecte les cookies sur la réponse HTTP pour le navigateur
+          cookiesToSet.forEach(({ name, value, options }) =>
+            response.cookies.set(name, value, options)
+          )
+        },
+      },
+    }
+  )
+
+  let authUser: any = null
 
   if (token_hash && type === 'recovery') {
-    // 1) Handle OTP flow
     const { data, error } = await supabase.auth.verifyOtp({ token_hash, type: 'recovery' })
-    sessionData = data
-    sessionError = error
+    if (error || !data?.user) {
+      console.error('[auth/callback] Verify OTP error:', error)
+      return NextResponse.redirect(new URL('/login?error=oauth_failed', request.url))
+    }
+    authUser = data.user
   } else if (code) {
-    // 2) Handle standard OAuth/PKCE flow
     const { data, error } = await supabase.auth.exchangeCodeForSession(code)
-    sessionData = data
-    sessionError = error
-  } else {
-    // Safety: no valid auth parameters
-    const { data: { user: currentUser } } = await supabase.auth.getUser()
-    const errorUrl = request.nextUrl.clone()
-    
-    if (currentUser) {
-      const { data: profile } = await supabase.from('profiles').select('role').eq('id', currentUser.id).maybeSingle()
-      if (profile?.role === 'admin') {
-        errorUrl.pathname = '/staff/login'
-        errorUrl.searchParams.set('error', 'oauth_failed')
-        return NextResponse.redirect(errorUrl)
-      }
+    if (error || !data?.user) {
+      console.error('[auth/callback] exchangeCodeForSession error:', error)
+      return NextResponse.redirect(new URL('/login?error=oauth_failed', request.url))
     }
-
-    errorUrl.pathname = '/login'
-    errorUrl.searchParams.set('error', 'oauth_failed')
-    return NextResponse.redirect(errorUrl)
+    authUser = data.user
   }
 
-  if (sessionError || !sessionData?.user) {
-    console.error('[auth/callback] Session exchange failed:', sessionError)
-    
-    // Check if they are already logged in (e.g., admin trying to link account)
-    const { data: { user: currentUser } } = await supabase.auth.getUser()
-    const errorUrl = request.nextUrl.clone()
-    
-    if (currentUser) {
-      const { data: profile } = await supabase.from('profiles').select('role').eq('id', currentUser.id).maybeSingle()
-      if (profile?.role === 'admin') {
-        errorUrl.pathname = '/staff/login'
-        errorUrl.searchParams.set('error', 'session_exchange_failed')
-        return NextResponse.redirect(errorUrl)
-      }
-    }
-
-    errorUrl.pathname = '/login'
-    errorUrl.searchParams.set('error', 'session_exchange_failed')
-    return NextResponse.redirect(errorUrl)
+  if (!authUser) {
+    return NextResponse.redirect(new URL('/login?error=oauth_failed', request.url))
   }
 
-  const authUser = sessionData.user
+  // Client admin pour garantir la création et la lecture immédiate du profil (évite RLS race condition)
+  const supabaseAdmin = createSupabaseAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
 
-  // ── Check whether this user already has a profile row ─────────────────────
-  const { data: existingProfile } = await supabase
+  // 1. Récupération ou création du profil
+  const { data: existingProfile } = await supabaseAdmin
     .from('profiles')
     .select('id, role, instagram_handle')
     .eq('id', authUser.id)
     .maybeSingle()
 
-  if (!existingProfile) {
-    // ── First-time login: create the profile ─────────────────────────────────
-    // Use service role to bypass RLS since the current server client might not have 
-    // the exchanged session fully propagated yet.
-    const supabaseAdmin = createSupabaseClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
+  let userProfile = existingProfile
 
-    const { error: insertError } = await supabaseAdmin.from('profiles').insert({
-      id: authUser.id,
-      email: authUser.email ?? '',
-      instagram_handle: null,
-      role: 'user',
-    })
+  if (!userProfile) {
+    // Premier login OAuth : création automatique du profil
+    const { data: newProfile, error: insertError } = await supabaseAdmin
+      .from('profiles')
+      .insert({
+        id: authUser.id,
+        email: authUser.email ?? '',
+        role: 'user',
+        instagram_handle: null,
+      })
+      .select('id, role, instagram_handle')
+      .single()
 
     if (insertError) {
-      // Profile creation failed — could be RLS or duplicate. Log but continue.
       console.error('[auth/callback] Profile insert error:', insertError)
+    } else {
+      userProfile = newProfile
     }
-
-    // New users always go to dashboard where the modal will appear if needed
-    const finalPath = next === '/update-password' ? next : '/dashboard'
-    return NextResponse.redirect(`${origin}${finalPath}`)
   }
 
-  // ── Returning user: route by role ─────────────────────────────────────────
-  const role = existingProfile.role ?? 'user'
-  let finalPath = next
+  // 2. Détermination de la destination finale
+  let redirectPath = next
 
-  // Priority to specific flows like password update
   if (next === '/update-password') {
-    finalPath = next
-  } else if (role === 'admin') {
-    finalPath = '/admin'
-  } else if (role === 'security') {
-    finalPath = '/scanner/security'
-  } else if (role === 'barman') {
-    finalPath = '/scanner/barman'
+    redirectPath = '/update-password'
+  } else {
+    const role = userProfile?.role ?? 'user'
+
+    if (role === 'admin') {
+      redirectPath = '/admin'
+    } else if (role === 'security') {
+      redirectPath = '/scanner/security'
+    } else if (role === 'barman') {
+      redirectPath = '/scanner/barman'
+    } else {
+      // Pour les utilisateurs réguliers : vérification Instagram
+      const hasInstagram = userProfile?.instagram_handle && userProfile.instagram_handle.trim().length > 0
+      if (!hasInstagram) {
+        redirectPath = '/onboarding'
+      } else {
+        redirectPath = '/dashboard'
+      }
+    }
   }
 
-  return NextResponse.redirect(`${origin}${finalPath}`)
+  // 3. Construction de la réponse finale de redirection AVEC transfert exact de tous les cookies de session
+  const targetUrl = new URL(redirectPath, requestUrl.origin)
+  const finalResponse = NextResponse.redirect(targetUrl)
+
+  // Copie tous les cookies de session Supabase enregistrés sur `response` vers `finalResponse`
+  response.cookies.getAll().forEach((cookie) => {
+    finalResponse.cookies.set(cookie.name, cookie.value, {
+      ...cookie,
+    })
+  })
+
+  return finalResponse
 }

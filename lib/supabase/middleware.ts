@@ -33,17 +33,23 @@ export async function updateSession(request: NextRequest) {
 
   // Protect routes and check roles
   const url = request.nextUrl.clone()
+  const path = request.nextUrl.pathname
+
+  // Allow auth callbacks to process without any interference
+  if (path.startsWith('/auth/callback')) {
+    return supabaseResponse
+  }
+
   if (
     !user &&
-    !request.nextUrl.pathname.startsWith('/login') &&
-    !request.nextUrl.pathname.startsWith('/staff/login') &&
-    !request.nextUrl.pathname.startsWith('/register') &&
-    !request.nextUrl.pathname.startsWith('/forgot-password') &&
-    !request.nextUrl.pathname.startsWith('/update-password') &&
-    !request.nextUrl.pathname.startsWith('/auth/callback') &&
-    request.nextUrl.pathname !== '/'
+    !path.startsWith('/login') &&
+    !path.startsWith('/staff/login') &&
+    !path.startsWith('/register') &&
+    !path.startsWith('/forgot-password') &&
+    !path.startsWith('/update-password') &&
+    path !== '/'
   ) {
-    if (request.nextUrl.pathname.startsWith('/api')) {
+    if (path.startsWith('/api')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     url.pathname = '/login'
@@ -51,12 +57,12 @@ export async function updateSession(request: NextRequest) {
   }
 
   if (user) {
-    // Fetch user profile to get the role
+    // Fetch user profile to get the role and onboarding status
     const { data: profile } = await supabase
       .from('profiles')
-      .select('role')
+      .select('role, instagram_handle')
       .eq('id', user.id)
-      .single()
+      .maybeSingle()
 
     let role = profile?.role || 'user'
     
@@ -65,13 +71,6 @@ export async function updateSession(request: NextRequest) {
       if (override && ['admin', 'user', 'barman', 'security'].includes(override)) {
         role = override;
       }
-    }
-
-    const path = request.nextUrl.pathname
-
-    // Allow auth callbacks to process
-    if (path.startsWith('/auth/callback')) {
-      return supabaseResponse
     }
 
     // 1. Role-specific home pages
@@ -83,15 +82,32 @@ export async function updateSession(request: NextRequest) {
     }
     const userHome = roleHomes[role] || '/dashboard'
 
-    // 2. If logged in and hitting public/login pages, force them to their specific domain
-    if (path === '/' || path.startsWith('/login') || path.startsWith('/staff/login') || path.startsWith('/register')) {
-      url.pathname = userHome
+    // 2. Onboarding check for standard users
+    const hasInstagram = profile?.instagram_handle && profile.instagram_handle.trim().length > 0
+    if (role === 'user' && !hasInstagram && path !== '/onboarding' && !path.startsWith('/api') && path !== '/update-password') {
+      url.pathname = '/onboarding'
       return NextResponse.redirect(url)
     }
 
-    // 3. Strict Domain Isolation (Pages)
+    // 3. If profile is completed and user tries to hit /onboarding, send to dashboard
+    if (path === '/onboarding' && hasInstagram) {
+      url.pathname = '/dashboard'
+      return NextResponse.redirect(url)
+    }
+
+    // 4. If logged in and hitting public/login pages, force them to their specific domain
+    if (path === '/' || path.startsWith('/login') || path.startsWith('/staff/login') || path.startsWith('/register')) {
+      if (role === 'user' && !hasInstagram) {
+        url.pathname = '/onboarding'
+      } else {
+        url.pathname = userHome
+      }
+      return NextResponse.redirect(url)
+    }
+
+    // 5. Strict Domain Isolation (Pages)
     if (!path.startsWith('/api')) {
-      if (role === 'admin' && (path.startsWith('/dashboard') || path.startsWith('/events') || path.startsWith('/scanner'))) {
+      if (role === 'admin' && (path.startsWith('/dashboard') || path.startsWith('/events') || path.startsWith('/scanner') || path === '/onboarding')) {
         url.pathname = userHome
         return NextResponse.redirect(url)
       }
