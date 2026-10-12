@@ -479,6 +479,15 @@ export default function UserDashboard() {
                                 "{pass.rejection_reason}"
                               </div>
                             )}
+                            {(() => {
+                              const updatedTime = new Date(pass.updated_at || pass.created_at).getTime();
+                              const remainingHours = Math.max(1, Math.ceil((48 * 3600 * 1000 - (Date.now() - updatedTime)) / (3600 * 1000)));
+                              return (
+                                <p className="text-xs text-red-500/80 mt-4 font-semibold flex items-center gap-1.5">
+                                  <span>⏳ Ce pass sera automatiquement et définitivement supprimé dans {remainingHours}h</span>
+                                </p>
+                              );
+                            })()}
                           </div>
                         ) : (
                           <PassCard pass={pass} onUpdate={() => fetchUserAndPasses(false)} />

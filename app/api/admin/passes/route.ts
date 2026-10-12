@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { requireRole } from '@/lib/supabase/api-security';
+import { approvePhase1PassAction, rejectPassAction } from '@/lib/actions/pass-lifecycle';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -42,17 +43,8 @@ export async function PATCH(req: NextRequest) {
     }
 
     if (action === 'approve') {
-      // Step 1: Approve -> Awaiting Payment
-      const { error } = await supabaseAdmin
-        .from('passes')
-        .update({ entry_status: 'awaiting_payment', updated_at: new Date().toISOString() })
-        .eq('id', passId);
-
-      if (error) {
-        console.error("Database error in passes PATCH approve:", error);
-        return NextResponse.json({ error: "Impossible de valider le pass" }, { status: 500 });
-      }
-      return NextResponse.json({ success: true, status: 'awaiting_payment' });
+      const result = await approvePhase1PassAction(passId);
+      return NextResponse.json(result);
 
     } else if (action === 'mark_paid') {
       // Step 2: Mark Paid -> Activated & Generate QR
@@ -82,21 +74,8 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ success: true, status: 'activated' });
 
     } else if (action === 'reject') {
-      // Soft delete / Reject
-      const { error } = await supabaseAdmin
-        .from('passes')
-        .update({ 
-          entry_status: 'rejected',
-          rejection_reason: rejectionReason ? String(rejectionReason).slice(0, 500) : null,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', passId);
-
-      if (error) {
-        console.error("Database error in passes PATCH reject:", error);
-        return NextResponse.json({ error: "Impossible de rejeter le pass" }, { status: 500 });
-      }
-      return NextResponse.json({ success: true, status: 'rejected' });
+      const result = await rejectPassAction(passId, rejectionReason);
+      return NextResponse.json(result);
     }
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });

@@ -173,9 +173,19 @@ export const api = {
       return [];
     }
 
-    if (passes.length > 0) {
-      const menuIds = [...new Set(passes.map((p: any) => p.drink_id).filter(Boolean))];
-      const eventIds = [...new Set(passes.map((p: any) => p.event_id).filter(Boolean))];
+    // 48-Hour Retention Filter (Soft-hide rejected passes older than 48 hours)
+    const now = Date.now();
+    const validPasses = passes.filter((p: any) => {
+      if (p.entry_status === 'rejected') {
+        const updatedAt = new Date(p.updated_at || p.created_at).getTime();
+        return (now - updatedAt) <= (48 * 60 * 60 * 1000);
+      }
+      return true;
+    });
+
+    if (validPasses.length > 0) {
+      const menuIds = [...new Set(validPasses.map((p: any) => p.drink_id).filter(Boolean))];
+      const eventIds = [...new Set(validPasses.map((p: any) => p.event_id).filter(Boolean))];
 
       const [menusRes, eventDrinksRes] = await Promise.all([
         menuIds.length > 0
@@ -195,14 +205,14 @@ export const api = {
         drinksByEvent[d.event_id].push(d);
       });
 
-      passes.forEach((pass: any) => {
+      validPasses.forEach((pass: any) => {
         if (pass.drink_id && menusMap[pass.drink_id]) {
           pass.drink_menus = menusMap[pass.drink_id];
         }
         pass.available_drinks = drinksByEvent[pass.event_id] || [];
       });
     }
-    return passes as Pass[];
+    return validPasses as Pass[];
   },
 
   // --- ADMIN (Phase 2 & 3) ---
