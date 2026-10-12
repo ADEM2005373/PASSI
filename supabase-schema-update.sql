@@ -14,7 +14,7 @@ ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('u
 -- ALTER TABLE public.passes ADD CONSTRAINT passes_entry_status_check 
 -- CHECK (entry_status IN ('pending', 'awaiting_payment', 'activated', 'scanned', 'rejected'));
 
--- 3. (Optional) Prevent deletion or updates on PAID passes at the database level via a trigger
+-- 3. Prevent unauthorized deletion or rollback on PAID passes via trigger
 CREATE OR REPLACE FUNCTION prevent_paid_pass_modification()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -26,16 +26,32 @@ BEGIN
         RETURN OLD;
     END IF;
 
-    -- If trying to modify a finalized pass (unless it's just scanning it)
+    -- If trying to modify a pass
     IF TG_OP = 'UPDATE' THEN
-        -- Allow transition from activated to scanned
-        IF OLD.entry_status = 'activated' AND NEW.entry_status = 'scanned' THEN
+        -- If the pass was already finalized/activated or scanned
+        IF OLD.entry_status IN ('activated', 'scanned') THEN
+            -- Prevent modifying critical ticket properties (user_id, event_id, price)
+            IF (OLD.user_id <> NEW.user_id) 
+               OR (OLD.event_id <> NEW.event_id) 
+               OR (OLD.final_price <> NEW.final_price) THEN
+                RAISE EXCEPTION 'Finalized and paid passes are immutable and cannot be modified or rejected.';
+            END IF;
+
+            -- Prevent rolling back entry status from activated to pending or rejected
+            IF OLD.entry_status = 'activated' AND NEW.entry_status NOT IN ('activated', 'scanned') THEN
+                RAISE EXCEPTION 'Finalized and paid passes are immutable and cannot be modified or rejected.';
+            END IF;
+
+            -- Prevent rolling back from scanned
+            IF OLD.entry_status = 'scanned' AND NEW.entry_status <> 'scanned' THEN
+                RAISE EXCEPTION 'Finalized and paid passes are immutable and cannot be modified or rejected.';
+            END IF;
+
+            -- ALLOW updating drink fields (drink_id, drink_status, drink_qr_uuid, drink_qr_code, updated_at)
+            -- and entry scanning (activated -> scanned)
             RETURN NEW;
         END IF;
 
-        IF OLD.entry_status IN ('activated', 'scanned') THEN
-            RAISE EXCEPTION 'Finalized and paid passes are immutable and cannot be modified or rejected.';
-        END IF;
         RETURN NEW;
     END IF;
     

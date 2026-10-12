@@ -71,5 +71,57 @@ CREATE POLICY "Users can update own passes" ON passes
 FOR UPDATE USING (auth.uid() = user_id)
 WITH CHECK (auth.uid() = user_id);
 
+-- 4. Fix Immutability Trigger to allow Drink Selection & Drink Scanning on Activated / VIP / Paid Passes
+CREATE OR REPLACE FUNCTION prevent_paid_pass_modification()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- If trying to delete a finalized pass
+    IF TG_OP = 'DELETE' THEN
+        IF OLD.entry_status IN ('activated', 'scanned') THEN
+            RAISE EXCEPTION 'Finalized and paid passes are immutable and cannot be deleted.';
+        END IF;
+        RETURN OLD;
+    END IF;
+
+    -- If trying to modify a pass
+    IF TG_OP = 'UPDATE' THEN
+        -- If the pass was already finalized/activated or scanned
+        IF OLD.entry_status IN ('activated', 'scanned') THEN
+            -- Prevent modifying critical ticket properties (user_id, event_id, price)
+            IF (OLD.user_id <> NEW.user_id) 
+               OR (OLD.event_id <> NEW.event_id) 
+               OR (OLD.final_price <> NEW.final_price) THEN
+                RAISE EXCEPTION 'Finalized and paid passes are immutable and cannot be modified or rejected.';
+            END IF;
+
+            -- Prevent rolling back entry status from activated to pending or rejected
+            IF OLD.entry_status = 'activated' AND NEW.entry_status NOT IN ('activated', 'scanned') THEN
+                RAISE EXCEPTION 'Finalized and paid passes are immutable and cannot be modified or rejected.';
+            END IF;
+
+            -- Prevent rolling back from scanned
+            IF OLD.entry_status = 'scanned' AND NEW.entry_status <> 'scanned' THEN
+                RAISE EXCEPTION 'Finalized and paid passes are immutable and cannot be modified or rejected.';
+            END IF;
+
+            -- ALLOW updating drink fields (drink_id, drink_status, drink_qr_uuid, drink_qr_code, updated_at)
+            -- and entry scanning (activated -> scanned)
+            RETURN NEW;
+        END IF;
+
+        RETURN NEW;
+    END IF;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Re-attach trigger
+DROP TRIGGER IF EXISTS enforce_pass_immutability ON public.passes;
+CREATE TRIGGER enforce_pass_immutability
+BEFORE UPDATE OR DELETE ON public.passes
+FOR EACH ROW
+EXECUTE FUNCTION prevent_paid_pass_modification();
+
 -- Refresh schema cache
 NOTIFY pgrst, 'reload schema';
