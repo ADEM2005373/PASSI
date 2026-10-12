@@ -46,11 +46,37 @@ export async function approvePhase1PassAction(passId: string) {
   }
 
   // 3. Fetch user profile for email delivery
-  const { data: userProfile } = await supabaseAdmin
-    .from('profiles')
-    .select('email, full_name')
-    .eq('id', pass.user_id)
-    .single();
+  let recipientEmail: string | undefined;
+  let recipientName = `${pass.guest_first_name || ''} ${pass.guest_last_name || ''}`.trim();
+
+  if (pass.user_id) {
+    const { data: userProfile } = await supabaseAdmin
+      .from('profiles')
+      .select('email, full_name')
+      .eq('id', pass.user_id)
+      .maybeSingle();
+
+    if (userProfile?.email) {
+      recipientEmail = userProfile.email;
+    }
+    if (userProfile?.full_name) {
+      recipientName = userProfile.full_name;
+    }
+
+    if (!recipientEmail) {
+      try {
+        const { data: authData } = await supabaseAdmin.auth.admin.getUserById(pass.user_id);
+        if (authData?.user?.email) {
+          recipientEmail = authData.user.email;
+          if (!recipientName && authData.user.user_metadata?.full_name) {
+            recipientName = authData.user.user_metadata.full_name;
+          }
+        }
+      } catch (authErr) {
+        console.warn('[approvePhase1PassAction] Erreur récupération email auth.admin:', authErr);
+      }
+    }
+  }
 
   // 4. Query active Payment Points: WHERE role = 'PAYMENT_POINT' AND is_suspended = false
   const { data: paymentPoints } = await supabaseAdmin
@@ -60,8 +86,6 @@ export async function approvePhase1PassAction(passId: string) {
     .eq('is_suspended', false);
 
   const eventTitle = (pass.events as any)?.title || 'Événement Passi';
-  const recipientEmail = userProfile?.email;
-  const recipientName = userProfile?.full_name || `${pass.guest_first_name} ${pass.guest_last_name}`.trim();
 
   // 5. Build dynamic active Payment Points HTML list
   let paymentPointsHtml = '';
@@ -96,7 +120,7 @@ export async function approvePhase1PassAction(passId: string) {
     `;
   }
 
-  // 6. Send "Payment Required" email
+  // 6. Send "Payment Required" email (await ensures serverless execution doesn't terminate prematurely)
   if (recipientEmail) {
     const htmlBody = buildPassiEmailTemplate({
       headline: 'Phase 1 Validée',
@@ -118,14 +142,19 @@ export async function approvePhase1PassAction(passId: string) {
       `,
     });
 
-    // Send email without blocking the response
-    sendTransactionalEmail({
-      to: recipientEmail,
-      subject: 'Félicitations ! Votre Pass est pré-approuvé',
-      htmlBody,
-    }).catch(err => {
+    try {
+      console.log(`[approvePhase1PassAction] Envoi email de pré-approbation à ${recipientEmail}...`);
+      const emailResult = await sendTransactionalEmail({
+        to: recipientEmail,
+        subject: 'Félicitations ! Votre Pass est pré-approuvé',
+        htmlBody,
+      });
+      console.log('[approvePhase1PassAction] Résultat envoi email:', emailResult);
+    } catch (err) {
       console.error('[approvePhase1PassAction] Erreur envoi email:', err);
-    });
+    }
+  } else {
+    console.warn(`[approvePhase1PassAction] Aucun email trouvé pour l'utilisateur ${pass.user_id}`);
   }
 
   return { success: true, status: 'awaiting_payment' };
@@ -171,18 +200,42 @@ export async function rejectPassAction(passId: string, rejectionReason?: string)
     throw new Error('Erreur lors du rejet du pass: ' + updateError.message);
   }
 
-  // 3. Fetch user profile for email delivery
-  const { data: userProfile } = await supabaseAdmin
-    .from('profiles')
-    .select('email, full_name')
-    .eq('id', pass.user_id)
-    .single();
+  // 3. Fetch user profile for email delivery with auth.admin fallback
+  let recipientEmail: string | undefined;
+  let recipientName = `${pass.guest_first_name || ''} ${pass.guest_last_name || ''}`.trim();
+
+  if (pass.user_id) {
+    const { data: userProfile } = await supabaseAdmin
+      .from('profiles')
+      .select('email, full_name')
+      .eq('id', pass.user_id)
+      .maybeSingle();
+
+    if (userProfile?.email) {
+      recipientEmail = userProfile.email;
+    }
+    if (userProfile?.full_name) {
+      recipientName = userProfile.full_name;
+    }
+
+    if (!recipientEmail) {
+      try {
+        const { data: authData } = await supabaseAdmin.auth.admin.getUserById(pass.user_id);
+        if (authData?.user?.email) {
+          recipientEmail = authData.user.email;
+          if (!recipientName && authData.user.user_metadata?.full_name) {
+            recipientName = authData.user.user_metadata.full_name;
+          }
+        }
+      } catch (authErr) {
+        console.warn('[rejectPassAction] Erreur récupération email auth.admin:', authErr);
+      }
+    }
+  }
 
   const eventTitle = (pass.events as any)?.title || 'Événement Passi';
-  const recipientEmail = userProfile?.email;
-  const recipientName = userProfile?.full_name || `${pass.guest_first_name} ${pass.guest_last_name}`.trim();
 
-  // 4. Send "Pass Rejected" email with 48h notice
+  // 4. Send "Pass Rejected" email with 48h notice (awaited to prevent serverless execution freeze)
   if (recipientEmail) {
     const reasonBlock = cleanReason
       ? `
@@ -218,13 +271,19 @@ export async function rejectPassAction(passId: string, rejectionReason?: string)
       `,
     });
 
-    sendTransactionalEmail({
-      to: recipientEmail,
-      subject: 'Mise à jour de votre demande de Pass - Passi',
-      htmlBody,
-    }).catch(err => {
+    try {
+      console.log(`[rejectPassAction] Envoi email de rejet à ${recipientEmail}...`);
+      const emailResult = await sendTransactionalEmail({
+        to: recipientEmail,
+        subject: 'Mise à jour de votre demande de Pass - Passi',
+        htmlBody,
+      });
+      console.log('[rejectPassAction] Résultat envoi email:', emailResult);
+    } catch (err) {
       console.error('[rejectPassAction] Erreur envoi email:', err);
-    });
+    }
+  } else {
+    console.warn(`[rejectPassAction] Aucun email trouvé pour l'utilisateur ${pass.user_id}`);
   }
 
   return { success: true, status: 'rejected' };

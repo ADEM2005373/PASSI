@@ -27,7 +27,7 @@ export async function PATCH(req: NextRequest) {
     // Backend Validation Guards
     const { data: existingPass, error: fetchError } = await supabaseAdmin
       .from('passes')
-      .select('entry_status, drink_id')
+      .select('entry_status, drink_id, entry_qr_uuid, drink_qr_uuid')
       .eq('id', passId)
       .single();
 
@@ -48,7 +48,7 @@ export async function PATCH(req: NextRequest) {
 
     } else if (action === 'mark_paid') {
       // Step 2: Mark Paid -> Activated & Generate QR
-      const qrUuid = crypto.randomUUID();
+      const qrUuid = existingPass.entry_qr_uuid || crypto.randomUUID();
       
       const updateData: any = { 
         entry_status: 'activated',
@@ -57,8 +57,10 @@ export async function PATCH(req: NextRequest) {
       };
       
       if (existingPass.drink_id) {
+        const drinkQr = existingPass.drink_qr_uuid || crypto.randomUUID();
         updateData.drink_status = 'activated';
-        updateData.drink_qr_uuid = crypto.randomUUID();
+        updateData.drink_qr_uuid = drinkQr;
+        updateData.drink_qr_code = drinkQr;
       }
 
       const { error } = await supabaseAdmin

@@ -11,12 +11,15 @@ export interface SendEmailOptions {
  * Creates and caches the Gmail SMTP transporter
  */
 function getTransporter() {
-  const user = process.env.SMTP_EMAIL;
-  const pass = process.env.SMTP_APP_PASSWORD;
+  const user = process.env.SMTP_EMAIL?.trim();
+  const rawPass = process.env.SMTP_APP_PASSWORD?.trim();
 
-  if (!user || !pass) {
+  if (!user || !rawPass) {
     return null;
   }
+
+  // Remove any spaces from Google App Password (e.g., "abcd efgh ijkl mnop" -> "abcdefghijklmnop")
+  const pass = rawPass.replace(/\s+/g, '');
 
   return nodemailer.createTransport({
     host: 'smtp.gmail.com',
@@ -26,6 +29,9 @@ function getTransporter() {
       user,
       pass,
     },
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
   });
 }
 
@@ -40,16 +46,16 @@ export async function sendTransactionalEmail({
   textBody,
 }: SendEmailOptions): Promise<{ success: boolean; messageId?: string; error?: string }> {
   try {
-    const user = process.env.SMTP_EMAIL;
-    const pass = process.env.SMTP_APP_PASSWORD;
+    const user = process.env.SMTP_EMAIL?.trim();
+    const pass = process.env.SMTP_APP_PASSWORD?.trim();
 
     if (!user || !pass) {
       console.warn(
-        `[Mailer] ⚠️ E-mail non envoyé à ${to} : SMTP_EMAIL ou SMTP_APP_PASSWORD manquant dans .env.local.`
+        `[Mailer] ⚠️ E-mail non envoyé à ${to} : SMTP_EMAIL ou SMTP_APP_PASSWORD manquant dans les variables d'environnement.`
       );
       return { 
         success: false, 
-        error: 'SMTP_EMAIL ou SMTP_APP_PASSWORD non configuré dans .env.local' 
+        error: 'SMTP_EMAIL ou SMTP_APP_PASSWORD non configuré dans les variables d\'environnement' 
       };
     }
 

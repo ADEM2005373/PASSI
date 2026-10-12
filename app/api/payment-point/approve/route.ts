@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     // 1. Fetch the pass to verify its existence and status
     const { data: pass, error: fetchError } = await supabaseAdmin
       .from('passes')
-      .select('id, entry_status, event_id, user_id, final_price, entry_qr_uuid')
+      .select('id, entry_status, event_id, user_id, final_price, entry_qr_uuid, drink_id, drink_qr_uuid, drink_status')
       .eq('id', passId)
       .single();
 
@@ -40,18 +40,28 @@ export async function POST(req: NextRequest) {
     const entryQr = pass.entry_qr_uuid || crypto.randomUUID();
     const now = new Date().toISOString();
 
+    const updatePayload: any = {
+      entry_status: 'activated',
+      payment_point_id: user.id,
+      payment_approved_at: now,
+      entry_qr_uuid: entryQr,
+      updated_at: now,
+    };
+
+    // If the pass has an associated drink, activate it and generate drink QR code
+    if (pass.drink_id) {
+      const drinkQr = pass.drink_qr_uuid || crypto.randomUUID();
+      updatePayload.drink_status = 'activated';
+      updatePayload.drink_qr_uuid = drinkQr;
+      updatePayload.drink_qr_code = drinkQr;
+    }
+
     // 3. Update the pass to activated with payment approval metadata
     const { data: updatedPass, error: updateError } = await supabaseAdmin
       .from('passes')
-      .update({
-        entry_status: 'activated',
-        payment_point_id: user.id,
-        payment_approved_at: now,
-        entry_qr_uuid: entryQr,
-        updated_at: now,
-      })
+      .update(updatePayload)
       .eq('id', passId)
-      .select('id, entry_status, final_price, payment_point_id, payment_approved_at')
+      .select('id, entry_status, final_price, payment_point_id, payment_approved_at, drink_id, drink_status, drink_qr_uuid, drink_qr_code')
       .single();
 
     if (updateError) {

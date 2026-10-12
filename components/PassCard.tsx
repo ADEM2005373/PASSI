@@ -41,6 +41,32 @@ export function PassCard({ pass, onUpdate }: PassCardProps) {
     setLocalPass(pass);
   }, [pass]);
 
+  // Auto-heal: If pass is activated, has drink_id, but no drink QR code generated yet, auto-generate it
+  useEffect(() => {
+    if (
+      localPass.entry_status === "activated" &&
+      localPass.drink_id &&
+      !localPass.drink_qr_uuid &&
+      !localPass.drink_qr_code &&
+      !isSubmittingDrink
+    ) {
+      setIsSubmittingDrink(true);
+      api.selectPassDrink(localPass.id, localPass.drink_id)
+        .then((res) => {
+          if (res.pass) {
+            setLocalPass(res.pass);
+            if (onUpdate) onUpdate(res.pass);
+          }
+        })
+        .catch((err) => {
+          console.warn("Auto-healing drink QR code failed:", err);
+        })
+        .finally(() => {
+          setIsSubmittingDrink(false);
+        });
+    }
+  }, [localPass.id, localPass.entry_status, localPass.drink_id, localPass.drink_qr_uuid, localPass.drink_qr_code]);
+
   const passType = (localPass.pass_type || "NORMAL").toUpperCase();
   const isVip = passType === "VIP";
   const isGift = passType === "GIFT";
@@ -77,23 +103,28 @@ export function PassCard({ pass, onUpdate }: PassCardProps) {
     }
   };
 
-  // Handle drink selection submission
-  const handleSelectDrink = async () => {
-    if (!selectedDrinkId) return;
+  // Handle drink selection submission with explicit drink ID
+  const handleSelectDrinkWithId = async (drinkId: string) => {
     setIsSubmittingDrink(true);
     setDrinkError(null);
     try {
-      const res = await api.selectPassDrink(localPass.id, selectedDrinkId);
+      const res = await api.selectPassDrink(localPass.id, drinkId);
       if (res.pass) {
         setLocalPass(res.pass);
         if (onUpdate) onUpdate(res.pass);
       }
     } catch (err: any) {
       console.error("Select drink error:", err);
-      setDrinkError(err.message || "Erreur lors de la sélection");
+      setDrinkError(err.message || "Erreur lors de la génération");
     } finally {
       setIsSubmittingDrink(false);
     }
+  };
+
+  // Handle drink selection submission from form
+  const handleSelectDrink = async () => {
+    if (!selectedDrinkId) return;
+    await handleSelectDrinkWithId(selectedDrinkId);
   };
 
   const drinkQrValue = localPass.drink_qr_code || localPass.drink_qr_uuid;
@@ -329,6 +360,40 @@ export function PassCard({ pass, onUpdate }: PassCardProps) {
                       Présentez ce QR Code directement au barman
                     </p>
                   </>
+                ) : localPass.drink_id ? (
+                  /* Pass ALREADY has a drink assigned (e.g. normal pass booked with a drink) */
+                  <div className="w-full flex flex-col items-center text-center p-3">
+                    <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mb-3">
+                      <Wine size={26} />
+                    </div>
+                    <h3 className="text-lg font-extrabold text-white mb-1">
+                      {localPass.drink_menus?.name || "Boisson réservée"}
+                    </h3>
+                    <p className="text-xs text-neutral-400 mb-4 max-w-xs leading-relaxed">
+                      {localPass.entry_status === "activated"
+                        ? "Votre consommation a été confirmée avec votre pass. Chargement de votre QR Code..."
+                        : "Votre QR Code de consommation sera débloqué dès la validation de votre règlement."}
+                    </p>
+                    {localPass.entry_status === "activated" && (
+                      <button
+                        onClick={() => handleSelectDrinkWithId(localPass.drink_id!)}
+                        disabled={isSubmittingDrink}
+                        className="py-2.5 px-4 rounded-xl font-bold text-xs bg-amber-500 hover:bg-amber-400 text-neutral-950 shadow-lg shadow-amber-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                      >
+                        {isSubmittingDrink ? (
+                          <>
+                            <Loader2 size={16} className="animate-spin" />
+                            <span>Génération du QR Code...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Check size={16} />
+                            <span>Afficher mon QR Code Boisson</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
                 ) : (
                   /* ASYNCHRONOUS DRINK SELECTION FORM */
                   <div className="w-full flex flex-col items-center text-center p-1">
