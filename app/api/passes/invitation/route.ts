@@ -36,8 +36,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Pass introuvable.' }, { status: 404 });
     }
 
-    // 2. Ownership check
-    if (pass.user_id !== user.id) {
+    // 2. Ownership check (Allow owner OR admin in simulation/management mode)
+    const { data: userProfile } = await supabaseAdmin
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    const isAdmin = userProfile?.role === 'admin';
+    if (!isAdmin && pass.user_id !== user.id) {
       return NextResponse.json({ error: 'Accès non autorisé à ce pass.' }, { status: 403 });
     }
 
