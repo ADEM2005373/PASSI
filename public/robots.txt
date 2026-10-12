@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /scanner
+Disallow: /api/
+
+Sitemap: https://passi-xi.vercel.app/sitemap.xml

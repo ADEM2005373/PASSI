@@ -12,35 +12,46 @@ export async function POST(req: NextRequest) {
   if (authError) return authError;
 
   try {
-    const { title, date, location, pre_orders_enabled, max_passes_per_user, image_url, description, dress_code, drinks } = await req.json();
+    const body = await req.json();
+    const { title, date, location, pre_orders_enabled, max_passes_per_user, image_url, description, dress_code, drinks } = body || {};
+
+    if (!title || typeof title !== 'string' || !date || typeof date !== 'string' || !location || typeof location !== 'string') {
+      return NextResponse.json({ error: 'Champs obligatoires manquants ou invalides (title, date, location)' }, { status: 400 });
+    }
 
     const { data: event, error } = await supabaseAdmin.from('events').insert({ 
-      title, 
+      title: String(title).slice(0, 200), 
       date, 
-      location, 
-      pre_orders_enabled, 
-      max_passes_per_user,
-      image_url,
-      description,
-      dress_code
+      location: String(location).slice(0, 200), 
+      pre_orders_enabled: Boolean(pre_orders_enabled), 
+      max_passes_per_user: Number(max_passes_per_user) || 1,
+      image_url: image_url ? String(image_url).slice(0, 500) : null,
+      description: description ? String(description).slice(0, 2000) : null,
+      dress_code: dress_code ? String(dress_code).slice(0, 200) : null
     }).select().single();
 
-    if (error) throw error;
+    if (error) {
+      console.error("Database error in events POST:", error);
+      return NextResponse.json({ error: "Impossible de créer l'événement" }, { status: 500 });
+    }
     
     // Insert drinks if provided
-    if (drinks && drinks.length > 0 && event) {
+    if (drinks && Array.isArray(drinks) && drinks.length > 0 && event) {
       const drinksToInsert = drinks.map((drink: any) => ({
         event_id: event.id,
-        name: drink.name
-      }));
-      const { error: drinksError } = await supabaseAdmin.from('drink_menus').insert(drinksToInsert);
-      if (drinksError) console.error("Error inserting drinks:", drinksError);
+        name: String(drink.name || '').slice(0, 100)
+      })).filter((d: any) => d.name.length > 0);
+      if (drinksToInsert.length > 0) {
+        const { error: drinksError } = await supabaseAdmin.from('drink_menus').insert(drinksToInsert);
+        if (drinksError) console.error("Error inserting drinks:", drinksError);
+      }
     }
 
     return NextResponse.json({ success: true, event });
 
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("Server error in events POST:", error);
+    return NextResponse.json({ error: "Une erreur interne est survenue" }, { status: 500 });
   }
 }
 
@@ -49,37 +60,47 @@ export async function PUT(req: NextRequest) {
   if (authError) return authError;
 
   try {
-    const { id, title, date, location, pre_orders_enabled, max_passes_per_user, image_url, description, dress_code, drinks } = await req.json();
+    const body = await req.json();
+    const { id, title, date, location, pre_orders_enabled, max_passes_per_user, image_url, description, dress_code, drinks } = body || {};
 
-    if (!id) throw new Error("Missing event id");
+    if (!id || typeof id !== 'string') {
+      return NextResponse.json({ error: "Identifiant d'événement manquant ou invalide" }, { status: 400 });
+    }
 
-    const { data: event, error } = await supabaseAdmin.from('events').update({ 
-      title, 
-      date, 
-      location, 
-      pre_orders_enabled, 
-      max_passes_per_user,
-      image_url,
-      description,
-      dress_code
-    }).eq('id', id).select().single();
+    const updatePayload: Record<string, any> = {};
+    if (title !== undefined) updatePayload.title = String(title).slice(0, 200);
+    if (date !== undefined) updatePayload.date = date;
+    if (location !== undefined) updatePayload.location = String(location).slice(0, 200);
+    if (pre_orders_enabled !== undefined) updatePayload.pre_orders_enabled = Boolean(pre_orders_enabled);
+    if (max_passes_per_user !== undefined) updatePayload.max_passes_per_user = Number(max_passes_per_user) || 1;
+    if (image_url !== undefined) updatePayload.image_url = image_url ? String(image_url).slice(0, 500) : null;
+    if (description !== undefined) updatePayload.description = description ? String(description).slice(0, 2000) : null;
+    if (dress_code !== undefined) updatePayload.dress_code = dress_code ? String(dress_code).slice(0, 200) : null;
 
-    if (error) throw error;
+    const { data: event, error } = await supabaseAdmin.from('events').update(updatePayload).eq('id', id).select().single();
+
+    if (error) {
+      console.error("Database error in events PUT:", error);
+      return NextResponse.json({ error: "Impossible de mettre à jour l'événement" }, { status: 500 });
+    }
     
     // For simplicity with drinks, just delete old ones and insert new ones
     await supabaseAdmin.from('drink_menus').delete().eq('event_id', id);
-    if (drinks && drinks.length > 0) {
+    if (drinks && Array.isArray(drinks) && drinks.length > 0) {
       const drinksToInsert = drinks.map((drink: any) => ({
         event_id: id,
-        name: drink.name
-      }));
-      const { error: drinksError } = await supabaseAdmin.from('drink_menus').insert(drinksToInsert);
-      if (drinksError) console.error("Error updating drinks:", drinksError);
+        name: String(drink.name || '').slice(0, 100)
+      })).filter((d: any) => d.name.length > 0);
+      if (drinksToInsert.length > 0) {
+        const { error: drinksError } = await supabaseAdmin.from('drink_menus').insert(drinksToInsert);
+        if (drinksError) console.error("Error updating drinks:", drinksError);
+      }
     }
 
     return NextResponse.json({ success: true, event });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("Server error in events PUT:", error);
+    return NextResponse.json({ error: "Une erreur interne est survenue" }, { status: 500 });
   }
 }
 
@@ -90,7 +111,9 @@ export async function DELETE(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const eventId = searchParams.get('eventId');
-    if (!eventId) throw new Error("Missing eventId");
+    if (!eventId) {
+      return NextResponse.json({ error: "Identifiant eventId manquant" }, { status: 400 });
+    }
 
     // 1. Find all passes for this event
     const { data: eventPasses } = await supabaseAdmin
@@ -111,10 +134,14 @@ export async function DELETE(req: NextRequest) {
     
     // 3. Delete the event
     const { error } = await supabaseAdmin.from('events').delete().eq('id', eventId);
-    if (error) throw error;
+    if (error) {
+      console.error("Database error in events DELETE:", error);
+      return NextResponse.json({ error: "Impossible de supprimer l'événement" }, { status: 500 });
+    }
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("Server error in events DELETE:", error);
+    return NextResponse.json({ error: "Une erreur interne est survenue" }, { status: 500 });
   }
 }

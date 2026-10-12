@@ -12,10 +12,15 @@ export async function PATCH(req: NextRequest) {
   if (authError) return authError;
 
   try {
-    const { passId, action, rejectionReason } = await req.json();
+    const body = await req.json();
+    const { passId, action, rejectionReason } = body || {};
 
-    if (!passId || !action) {
-      return NextResponse.json({ error: 'Pass ID and action are required' }, { status: 400 });
+    if (!passId || typeof passId !== 'string' || !action || typeof action !== 'string') {
+      return NextResponse.json({ error: 'Pass ID and valid action are required' }, { status: 400 });
+    }
+
+    if (!['approve', 'mark_paid', 'reject'].includes(action)) {
+      return NextResponse.json({ error: 'Action non autorisée' }, { status: 400 });
     }
 
     // Backend Validation Guards
@@ -43,7 +48,10 @@ export async function PATCH(req: NextRequest) {
         .update({ entry_status: 'awaiting_payment', updated_at: new Date().toISOString() })
         .eq('id', passId);
 
-      if (error) throw error;
+      if (error) {
+        console.error("Database error in passes PATCH approve:", error);
+        return NextResponse.json({ error: "Impossible de valider le pass" }, { status: 500 });
+      }
       return NextResponse.json({ success: true, status: 'awaiting_payment' });
 
     } else if (action === 'mark_paid') {
@@ -66,7 +74,10 @@ export async function PATCH(req: NextRequest) {
         .update(updateData)
         .eq('id', passId);
 
-      if (error) throw error;
+      if (error) {
+        console.error("Database error in passes PATCH mark_paid:", error);
+        return NextResponse.json({ error: "Impossible d'activer le pass" }, { status: 500 });
+      }
       
       return NextResponse.json({ success: true, status: 'activated' });
 
@@ -76,18 +87,22 @@ export async function PATCH(req: NextRequest) {
         .from('passes')
         .update({ 
           entry_status: 'rejected',
-          rejection_reason: rejectionReason || null,
+          rejection_reason: rejectionReason ? String(rejectionReason).slice(0, 500) : null,
           updated_at: new Date().toISOString()
         })
         .eq('id', passId);
 
-      if (error) throw error;
+      if (error) {
+        console.error("Database error in passes PATCH reject:", error);
+        return NextResponse.json({ error: "Impossible de rejeter le pass" }, { status: 500 });
+      }
       return NextResponse.json({ success: true, status: 'rejected' });
     }
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
 
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("Server error in passes PATCH:", error);
+    return NextResponse.json({ error: "Une erreur interne est survenue" }, { status: 500 });
   }
 }

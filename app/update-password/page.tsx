@@ -117,6 +117,7 @@ export default function UpdatePasswordPage() {
               <input
                 type="password"
                 placeholder="Nouveau mot de passe"
+                aria-label="Nouveau mot de passe"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -128,6 +129,7 @@ export default function UpdatePasswordPage() {
               <input
                 type="password"
                 placeholder="Confirmez le mot de passe"
+                aria-label="Confirmez le nouveau mot de passe"
                 required
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}

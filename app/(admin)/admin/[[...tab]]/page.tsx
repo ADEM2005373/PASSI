@@ -510,12 +510,12 @@ export default function AdminDashboard() {
                   ].map(f => (
                     <div key={f.label}>
                       <label className="label">{f.label}</label>
-                      <input type={f.type} required={f.required} value={f.val} placeholder={f.placeholder || ''} onChange={e => f.set(e.target.value)} className="input" />
+                      <input type={f.type} aria-label={f.label} required={f.required} value={f.val} placeholder={f.placeholder || ''} onChange={e => f.set(e.target.value)} className="input" />
                     </div>
                   ))}
                   <div>
                     <label className="label">Max passes / utilisateur</label>
-                    <input type="number" min="1" max="10" required value={newMax} onChange={e => setNewMax(parseInt(e.target.value))} className="input" />
+                    <input type="number" aria-label="Max passes par utilisateur" min="1" max="10" required value={newMax} onChange={e => setNewMax(parseInt(e.target.value))} className="input" />
                   </div>
                   <div>
                     <label className="label">Description / Détails</label>

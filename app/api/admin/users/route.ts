@@ -19,41 +19,51 @@ export async function POST(req: NextRequest) {
   if (authError) return authError;
 
   try {
-    const { email, password, instagramHandle, role } = await req.json();
+    const body = await req.json();
+    const { email, password, instagramHandle, role } = body || {};
 
-    if (!email || !password || !role) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    if (!email || typeof email !== 'string' || !password || typeof password !== 'string' || !role || typeof role !== 'string') {
+      return NextResponse.json({ error: 'Champs requis manquants ou invalides (email, password, role)' }, { status: 400 });
+    }
+
+    if (!['admin', 'user', 'security', 'barman'].includes(role)) {
+      return NextResponse.json({ error: 'Rôle invalide' }, { status: 400 });
     }
 
     // 1. Create Auth User
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
+    const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.createUser({
+      email: String(email).trim().toLowerCase(),
+      password: String(password),
       email_confirm: true,
     });
 
-    if (authError) throw authError;
+    if (authErr) {
+      console.error("Auth creation error in users POST:", authErr);
+      return NextResponse.json({ error: "Impossible de créer le compte utilisateur" }, { status: 400 });
+    }
     const userId = authData.user.id;
 
     // 2. Insert Profile
     const { error: profileError } = await supabaseAdmin.from('profiles').insert([
       {
         id: userId,
-        email,
+        email: String(email).trim().toLowerCase(),
         role,
-        instagram_handle: instagramHandle || '',
+        instagram_handle: instagramHandle ? String(instagramHandle).slice(0, 50) : '',
       },
     ]);
 
     if (profileError) {
+      console.error("Profile creation error in users POST:", profileError);
       // Rollback if profile creation fails
       await supabaseAdmin.auth.admin.deleteUser(userId);
-      throw profileError;
+      return NextResponse.json({ error: "Impossible de créer le profil utilisateur" }, { status: 500 });
     }
 
     return NextResponse.json({ success: true, userId });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("Server error in users POST:", error);
+    return NextResponse.json({ error: "Une erreur interne est survenue" }, { status: 500 });
   }
 }
 
@@ -65,7 +75,7 @@ export async function DELETE(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get('userId');
 
-    if (!userId) {
+    if (!userId || typeof userId !== 'string') {
       return NextResponse.json({ error: 'User ID required' }, { status: 400 });
     }
 
@@ -92,15 +102,22 @@ export async function DELETE(req: NextRequest) {
       .delete()
       .eq('id', userId);
 
-    if (profileError) throw profileError;
+    if (profileError) {
+      console.error("Profile deletion error in users DELETE:", profileError);
+      return NextResponse.json({ error: "Impossible de supprimer le profil" }, { status: 500 });
+    }
 
     // 4. Delete the auth user
-    const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(userId);
-    if (authError) throw authError;
+    const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
+    if (authDeleteError) {
+      console.error("Auth deletion error in users DELETE:", authDeleteError);
+      return NextResponse.json({ error: "Impossible de supprimer le compte d'authentification" }, { status: 500 });
+    }
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("Server error in users DELETE:", error);
+    return NextResponse.json({ error: "Une erreur interne est survenue" }, { status: 500 });
   }
 }
 
@@ -109,26 +126,30 @@ export async function PATCH(req: NextRequest) {
   if (authError) return authError;
 
   try {
-    const { userId, role, email, password, instagramHandle } = await req.json();
+    const body = await req.json();
+    const { userId, role, email, password, instagramHandle } = body || {};
 
-    if (!userId) {
+    if (!userId || typeof userId !== 'string') {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
 
     // 1. Update Auth User if email or password are provided
     if (email || password) {
       const { error: authUpdateError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
-        ...(email && { email }),
-        ...(password && { password }),
+        ...(email && { email: String(email).trim().toLowerCase() }),
+        ...(password && { password: String(password) }),
       });
-      if (authUpdateError) throw authUpdateError;
+      if (authUpdateError) {
+        console.error("Auth update error in users PATCH:", authUpdateError);
+        return NextResponse.json({ error: "Impossible de modifier les identifiants" }, { status: 400 });
+      }
     }
 
     // 2. Update Profile
     const profileUpdates: any = {};
-    if (role) profileUpdates.role = role;
-    if (email) profileUpdates.email = email;
-    if (instagramHandle !== undefined) profileUpdates.instagram_handle = instagramHandle;
+    if (role && ['admin', 'user', 'security', 'barman'].includes(role)) profileUpdates.role = role;
+    if (email) profileUpdates.email = String(email).trim().toLowerCase();
+    if (instagramHandle !== undefined) profileUpdates.instagram_handle = String(instagramHandle).slice(0, 50);
 
     if (Object.keys(profileUpdates).length > 0) {
       const { error } = await supabaseAdmin
@@ -136,11 +157,15 @@ export async function PATCH(req: NextRequest) {
         .update(profileUpdates)
         .eq('id', userId);
 
-      if (error) throw error;
+      if (error) {
+        console.error("Profile update error in users PATCH:", error);
+        return NextResponse.json({ error: "Impossible de modifier le profil" }, { status: 500 });
+      }
     }
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("Server error in users PATCH:", error);
+    return NextResponse.json({ error: "Une erreur interne est survenue" }, { status: 500 });
   }
 }

@@ -4,10 +4,15 @@ import { requireRole } from '@/lib/supabase/api-security';
 
 export async function POST(request: Request) {
   try {
-    const { qrUuid, type, eventId } = await request.json();
+    const body = await request.json();
+    const { qrUuid, type, eventId } = body || {};
 
-    if (!qrUuid || !type) {
+    if (!qrUuid || typeof qrUuid !== 'string' || !type || typeof type !== 'string') {
       return NextResponse.json({ success: false, message: "DENIED: Missing payload" }, { status: 400 });
+    }
+
+    if (!['entry', 'drink'].includes(type)) {
+      return NextResponse.json({ success: false, message: "DENIED: Invalid Type" }, { status: 400 });
     }
 
     const { error: authError, role } = await requireRole(['admin', 'security', 'barman']);

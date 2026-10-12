@@ -1,0 +1,12 @@
+[extend]
+# Extend default Gitleaks configurations
+
+title = "Passi Gitleaks Config"
+
+[allowlist]
+description = "Global allowlists"
+paths = [
+  '''\.env\.example$''',
+  '''package-lock\.json$''',
+  '''node_modules/'''
+]

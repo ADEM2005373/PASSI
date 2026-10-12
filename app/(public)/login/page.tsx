@@ -338,6 +338,7 @@ function LoginContent() {
               <input
                 type="email"
                 placeholder="Email"
+                aria-label="Adresse email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -348,6 +349,7 @@ function LoginContent() {
               <input
                 type="password"
                 placeholder="Mot de passe"
+                aria-label="Mot de passe"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
