@@ -57,18 +57,30 @@ export async function updateSession(request: NextRequest) {
   }
 
   if (user) {
-    // Fetch user profile to get the role and onboarding status
+    // Fetch user profile to get the role, onboarding status, and suspension status
     const { data: profile } = await supabase
       .from('profiles')
-      .select('role, instagram_handle')
+      .select('role, instagram_handle, is_suspended')
       .eq('id', user.id)
       .maybeSingle()
 
-    let role = profile?.role || 'user'
+    // 0. Immediate suspension lockout
+    if (profile?.is_suspended) {
+      if (path.startsWith('/api')) {
+        return NextResponse.json({ error: 'Account is suspended' }, { status: 403 })
+      }
+      // Clear cookies and force signout
+      await supabase.auth.signOut()
+      url.pathname = '/login'
+      url.searchParams.set('error', 'account_suspended')
+      return NextResponse.redirect(url)
+    }
+
+    let role = (profile?.role || 'user').toLowerCase()
     
     if (role === 'admin') {
-      const override = request.cookies.get('passi_impersonate_role')?.value;
-      if (override && ['admin', 'user', 'barman', 'security'].includes(override)) {
+      const override = request.cookies.get('passi_impersonate_role')?.value?.toLowerCase();
+      if (override && ['admin', 'user', 'barman', 'security', 'payment_point'].includes(override)) {
         role = override;
       }
     }
@@ -78,6 +90,7 @@ export async function updateSession(request: NextRequest) {
       'admin': '/admin',
       'security': '/scanner/security',
       'barman': '/scanner/barman',
+      'payment_point': '/payment-point/dashboard',
       'user': '/dashboard'
     }
     const userHome = roleHomes[role] || '/dashboard'
@@ -119,17 +132,28 @@ export async function updateSession(request: NextRequest) {
         url.pathname = userHome
         return NextResponse.redirect(url)
       }
-      if (role === 'user' && (path.startsWith('/admin') || path.startsWith('/scanner') || path.startsWith('/staff'))) {
+      if (role === 'payment_point' && !path.startsWith('/payment-point')) {
+        url.pathname = userHome
+        return NextResponse.redirect(url)
+      }
+      if (role === 'user' && (path.startsWith('/admin') || path.startsWith('/scanner') || path.startsWith('/staff') || path.startsWith('/payment-point'))) {
+        url.pathname = userHome
+        return NextResponse.redirect(url)
+      }
+      if (role !== 'payment_point' && role !== 'admin' && path.startsWith('/payment-point')) {
         url.pathname = userHome
         return NextResponse.redirect(url)
       }
     } else {
-      // 4. Strict Domain Isolation (API)
+      // 6. Strict Domain Isolation (API)
       if (path.startsWith('/api/admin') && role !== 'admin') {
         return NextResponse.json({ error: 'Unauthorized: Admin Only' }, { status: 403 })
       }
       if (path.startsWith('/api/scan') && role !== 'security' && role !== 'barman' && role !== 'admin') {
         return NextResponse.json({ error: 'Unauthorized: Scanner Only' }, { status: 403 })
+      }
+      if (path.startsWith('/api/payment-point') && role !== 'payment_point' && role !== 'admin') {
+        return NextResponse.json({ error: 'Unauthorized: Payment Point Only' }, { status: 403 })
       }
     }
   }

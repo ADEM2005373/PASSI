@@ -18,6 +18,7 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
   const [userPasses, setUserPasses] = useState<Pass[]>([]);
   const [numPasses, setNumPasses] = useState(1);
   const [guests, setGuests] = useState([{ firstName: "", lastName: "", drinkId: "" }]);
+  const [promoCode, setPromoCode] = useState("");
   const [isBooking, setIsBooking] = useState(false);
 
   useEffect(() => { setMounted(true); }, []);
@@ -60,16 +61,17 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
     if (!event || !user) return;
     setIsBooking(true);
     const formattedGuests = guests.map(g => ({ ...g, drinkId: g.drinkId || undefined }));
-    await api.bookPasses(event.id, user.id, formattedGuests);
+    await api.bookPasses(event.id, user.id, formattedGuests, promoCode.trim() || undefined);
     await fetchPasses(user.id, event.id);
     setIsBooking(false);
     setNumPasses(1);
+    setPromoCode("");
     setGuests([{ firstName: "", lastName: "", drinkId: "" }]);
   };
 
   const statusInfo: Record<string, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
     pending:          { label: 'En attente',     color: 'text-amber-500',       bg: 'bg-amber-500/10',       icon: <Clock size={16}/> },
-    awaiting_payment: { label: 'Att. paiement', color: 'text-blue-500',        bg: 'bg-blue-500/10',        icon: <AlertCircle size={16}/> },
+    awaiting_payment: { label: 'À payer au guichet', color: 'text-amber-400', bg: 'bg-amber-500/10', icon: <AlertCircle size={16}/> },
     activated:        { label: 'Activé ✓',      color: 'text-passi-turquoise', bg: 'bg-passi-turquoise/10', icon: <CheckCircle size={16}/> },
     scanned:          { label: 'Utilisé',        color: 'text-gray-500',        bg: 'bg-gray-500/10',        icon: <CheckCircle size={16}/> },
   };
@@ -129,6 +131,12 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
                 <MapPin size={16} className="text-passi-corail"/>
                 {event.location}
               </span>
+              {event.base_price !== undefined && (
+                <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                  <Ticket size={14} className="text-amber-400"/>
+                  {event.base_price} DT / pass
+                </span>
+              )}
               {event.dress_code && (
                 <span className="flex items-center gap-2 text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>
                   <Shirt size={16} className="text-purple-500"/>
@@ -158,19 +166,40 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
             <div className="space-y-4">
               {userPasses.map(pass => {
                 const si = statusInfo[pass.entry_status] || { label: pass.entry_status, color: 'text-gray-500', bg: 'bg-gray-500/10', icon: null };
+                const passPrice = pass.final_price ?? event.base_price ?? 0;
                 return (
                   <div key={pass.id} className="p-5 rounded-2xl" style={{ backgroundColor: 'var(--bg-input)', border: '1.5px solid var(--border)' }}>
                     <div className="flex flex-wrap justify-between items-start gap-4">
                       <div>
-                        <p className="text-lg font-extrabold" style={{ color: 'var(--text-primary)' }}>{pass.guest_first_name} {pass.guest_last_name}</p>
-                        <span className={`badge mt-2 flex items-center gap-1.5 w-fit ${si.bg} ${si.color}`}>
-                          {si.icon} {si.label}
-                        </span>
+                        <div className="flex items-center gap-2.5">
+                          <p className="text-lg font-extrabold" style={{ color: 'var(--text-primary)' }}>{pass.guest_first_name} {pass.guest_last_name}</p>
+                          <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-amber-500/15 text-amber-400 border border-amber-500/25">
+                            {passPrice} DT
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className={`badge flex items-center gap-1.5 w-fit ${si.bg} ${si.color}`}>
+                            {si.icon} {si.label}
+                          </span>
+                          {pass.promo_used && (
+                            <span className="px-2 py-0.5 rounded-md text-[11px] font-mono font-semibold bg-neutral-800 text-neutral-300 border border-neutral-700">
+                              Promo: {pass.promo_used}
+                            </span>
+                          )}
+                        </div>
                         {pass.entry_status === 'pending' && (
-                          <p className="text-xs mt-2 font-medium text-amber-500">En attente d'approbation par l'admin...</p>
+                          <p className="text-xs mt-2 font-medium text-amber-500">En attente d'approbation par les organisateurs...</p>
                         )}
                         {pass.entry_status === 'awaiting_payment' && (
-                          <p className="text-xs mt-2 font-medium text-blue-500">Approuvé ! En attente de confirmation du paiement.</p>
+                          <div className="mt-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 space-y-1">
+                            <p className="font-bold flex items-center gap-1.5">
+                              <AlertCircle size={14} className="text-amber-400" />
+                              Règlement au Point de Paiement
+                            </p>
+                            <p className="text-neutral-300">
+                              Veuillez présenter votre nom ou Pass ID <strong>#{pass.id.slice(0, 8)}</strong> à l'un de nos guichets agréés et régler <strong>{passPrice} DT</strong> en espèces pour activer votre QR code d'accès.
+                            </p>
+                          </div>
                         )}
                       </div>
 
@@ -263,6 +292,55 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
                 </div>
               ))}
 
+              {/* Promo Code Input */}
+              <div className="p-5 rounded-2xl" style={{ backgroundColor: 'var(--bg-input)', border: '1.5px solid var(--border)' }}>
+                <label className="label flex items-center justify-between">
+                  <span>Code Promo (optionnel)</span>
+                  {promoCode.trim() && (() => {
+                    const matched = event.promo_codes?.find(p => p.code?.toUpperCase() === promoCode.trim().toUpperCase());
+                    return matched ? (
+                      <span className="text-xs font-bold text-emerald-400">✓ Réduction de {matched.discount_amount} DT / pass appliquée !</span>
+                    ) : (
+                      <span className="text-xs font-semibold text-neutral-400">Code non reconnu</span>
+                    );
+                  })()}
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: STUDENT2026"
+                  value={promoCode}
+                  onChange={e => setPromoCode(e.target.value.toUpperCase())}
+                  className="input font-mono uppercase text-sm"
+                />
+
+                {/* Price Calculation Summary */}
+                {(() => {
+                  const base = event.base_price ?? 0;
+                  const matched = event.promo_codes?.find(p => p.code?.toUpperCase() === promoCode.trim().toUpperCase());
+                  const discount = matched ? matched.discount_amount : 0;
+                  const finalUnit = Math.max(0, base - discount);
+                  const total = finalUnit * numPasses;
+                  return (
+                    <div className="mt-4 pt-3 border-t border-neutral-800 space-y-1.5 text-xs">
+                      <div className="flex justify-between text-neutral-400">
+                        <span>Prix unitaire de base :</span>
+                        <span>{base} DT</span>
+                      </div>
+                      {discount > 0 && (
+                        <div className="flex justify-between text-emerald-400 font-semibold">
+                          <span>Réduction promo ({matched?.code}) :</span>
+                          <span>-{discount} DT / pass</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-sm font-bold text-white pt-2 border-t border-neutral-800/60">
+                        <span>Total à régler au Point de Paiement :</span>
+                        <span className="text-amber-400 font-black text-base">{total} DT</span>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
               <button type="submit" disabled={isBooking} className="btn-primary w-full flex items-center justify-center gap-2">
                 {isBooking ? (
                   <>
@@ -270,7 +348,12 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
                     Envoi en cours...
                   </>
                 ) : (
-                  <><Ticket size={18}/> Rejoindre la liste d'attente</>
+                  <><Ticket size={18}/> Confirmer la réservation ({(() => {
+                    const base = event.base_price ?? 0;
+                    const matched = event.promo_codes?.find(p => p.code?.toUpperCase() === promoCode.trim().toUpperCase());
+                    const discount = matched ? matched.discount_amount : 0;
+                    return Math.max(0, base - discount) * numPasses;
+                  })()} DT)</>
                 )}
               </button>
             </form>

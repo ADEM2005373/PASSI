@@ -20,13 +20,14 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { email, password, instagramHandle, role } = body || {};
+    const { email, password, instagramHandle, role, is_suspended } = body || {};
 
     if (!email || typeof email !== 'string' || !password || typeof password !== 'string' || !role || typeof role !== 'string') {
       return NextResponse.json({ error: 'Champs requis manquants ou invalides (email, password, role)' }, { status: 400 });
     }
 
-    if (!['admin', 'user', 'security', 'barman'].includes(role)) {
+    const normalizedRole = role.toLowerCase();
+    if (!['admin', 'user', 'security', 'barman', 'payment_point'].includes(normalizedRole)) {
       return NextResponse.json({ error: 'Rôle invalide' }, { status: 400 });
     }
 
@@ -48,8 +49,9 @@ export async function POST(req: NextRequest) {
       {
         id: userId,
         email: String(email).trim().toLowerCase(),
-        role,
+        role: normalizedRole,
         instagram_handle: instagramHandle ? String(instagramHandle).slice(0, 50) : '',
+        is_suspended: Boolean(is_suspended),
       },
     ]);
 
@@ -127,7 +129,7 @@ export async function PATCH(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { userId, role, email, password, instagramHandle } = body || {};
+    const { userId, role, email, password, instagramHandle, is_suspended } = body || {};
 
     if (!userId || typeof userId !== 'string') {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
@@ -147,9 +149,15 @@ export async function PATCH(req: NextRequest) {
 
     // 2. Update Profile
     const profileUpdates: any = {};
-    if (role && ['admin', 'user', 'security', 'barman'].includes(role)) profileUpdates.role = role;
+    if (role) {
+      const normRole = role.toLowerCase();
+      if (['admin', 'user', 'security', 'barman', 'payment_point'].includes(normRole)) {
+        profileUpdates.role = normRole;
+      }
+    }
     if (email) profileUpdates.email = String(email).trim().toLowerCase();
     if (instagramHandle !== undefined) profileUpdates.instagram_handle = String(instagramHandle).slice(0, 50);
+    if (is_suspended !== undefined) profileUpdates.is_suspended = Boolean(is_suspended);
 
     if (Object.keys(profileUpdates).length > 0) {
       const { error } = await supabaseAdmin

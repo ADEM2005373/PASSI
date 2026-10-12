@@ -4,10 +4,16 @@ export type User = {
   id: string;
   email: string;
   instagram_handle: string;
-  role: 'admin' | 'user' | 'security' | 'barman';
+  role: 'admin' | 'user' | 'security' | 'barman' | 'PAYMENT_POINT';
+  is_suspended?: boolean;
   original_role?: string;
   full_name?: string;
   created_at?: string;
+};
+
+export type PromoCode = {
+  code: string;
+  discount_amount: number;
 };
 
 export type Event = {
@@ -17,6 +23,8 @@ export type Event = {
   location: string;
   pre_orders_enabled: boolean;
   max_passes_per_user: number;
+  base_price?: number;
+  promo_codes?: PromoCode[];
   image_url?: string;
   description?: string;
   dress_code?: string;
@@ -32,10 +40,14 @@ export type Pass = {
   entry_qr_uuid: string | null;
   entry_status: 'pending' | 'awaiting_payment' | 'activated' | 'scanned' | 'rejected';
   rejection_reason?: string | null;
+  final_price?: number;
+  promo_used?: string | null;
+  payment_point_id?: string | null;
+  payment_approved_at?: string | null;
   updated_at?: string;
   instagram_handle?: string;
   drink_menus?: { name: string } | null;
-  events?: { title: string } | null;
+  events?: { title: string, base_price?: number } | null;
 };
 
 export const api = {
@@ -105,22 +117,35 @@ export const api = {
   async bookPasses(
     eventId: string, 
     userId: string, 
-    guests: { firstName: string, lastName: string, drinkId?: string }[]
+    guests: { firstName: string, lastName: string, drinkId?: string }[],
+    promoCode?: string
   ): Promise<void> {
     const supabase = createClient();
     
-    // Instead of raw inserts, use the RPC to bypass PostgREST cache issues entirely
     for (const guest of guests) {
-      const { error } = await supabase.rpc('create_pass', {
+      const { data, error } = await supabase.rpc('create_pass_with_pricing', {
         p_user_id: userId,
         p_event_id: eventId,
         p_guest_first_name: guest.firstName,
         p_guest_last_name: guest.lastName,
-        p_drink_id: guest.drinkId || null
+        p_drink_id: guest.drinkId || null,
+        p_promo_code: promoCode ? promoCode.trim() : null
       });
+
       if (error) {
-        console.error("Failed to book pass via RPC:", error);
-        alert("Erreur de réservation: " + error.message);
+        console.warn("create_pass_with_pricing RPC failed, falling back to create_pass:", error);
+        // Fallback to legacy create_pass RPC if migration not yet applied
+        const { error: fallbackError } = await supabase.rpc('create_pass', {
+          p_user_id: userId,
+          p_event_id: eventId,
+          p_guest_first_name: guest.firstName,
+          p_guest_last_name: guest.lastName,
+          p_drink_id: guest.drinkId || null
+        });
+        if (fallbackError) {
+          console.error("Failed to book pass via RPC:", fallbackError);
+          alert("Erreur de réservation: " + fallbackError.message);
+        }
       }
     }
   },
@@ -245,20 +270,70 @@ export const api = {
   },
 
   // --- MISSING ADMIN FEATURES (Events, Staff) ---
-  async createEvent(title: string, date: string, location: string, pre_orders_enabled: boolean, max_passes_per_user: number, image_url: string, description?: string, dress_code?: string, drinks?: {name: string}[]): Promise<void> {
+  async createEvent(
+    title: string, 
+    date: string, 
+    location: string, 
+    pre_orders_enabled: boolean, 
+    max_passes_per_user: number, 
+    image_url: string, 
+    description?: string, 
+    dress_code?: string, 
+    drinks?: {name: string}[],
+    base_price?: number,
+    promo_codes?: PromoCode[]
+  ): Promise<void> {
     const res = await fetch('/api/admin/events', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, date, location, pre_orders_enabled, max_passes_per_user, image_url, description, dress_code, drinks }),
+      body: JSON.stringify({ 
+        title, 
+        date, 
+        location, 
+        pre_orders_enabled, 
+        max_passes_per_user, 
+        image_url, 
+        description, 
+        dress_code, 
+        drinks,
+        base_price: base_price ?? 0,
+        promo_codes: promo_codes ?? []
+      }),
     });
     if (!res.ok) throw new Error("Failed to create event");
   },
 
-  async updateEvent(id: string, title: string, date: string, location: string, pre_orders_enabled: boolean, max_passes_per_user: number, image_url: string, description?: string, dress_code?: string, drinks?: {name: string}[]): Promise<void> {
+  async updateEvent(
+    id: string, 
+    title: string, 
+    date: string, 
+    location: string, 
+    pre_orders_enabled: boolean, 
+    max_passes_per_user: number, 
+    image_url: string, 
+    description?: string, 
+    dress_code?: string, 
+    drinks?: {name: string}[],
+    base_price?: number,
+    promo_codes?: PromoCode[]
+  ): Promise<void> {
     const res = await fetch('/api/admin/events', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, title, date, location, pre_orders_enabled, max_passes_per_user, image_url, description, dress_code, drinks }),
+      body: JSON.stringify({ 
+        id, 
+        title, 
+        date, 
+        location, 
+        pre_orders_enabled, 
+        max_passes_per_user, 
+        image_url, 
+        description, 
+        dress_code, 
+        drinks,
+        base_price: base_price ?? 0,
+        promo_codes: promo_codes ?? []
+      }),
     });
     if (!res.ok) throw new Error("Failed to update event");
   },
@@ -328,17 +403,202 @@ export const api = {
     }
   },
 
+  async toggleUserSuspension(userId: string, is_suspended: boolean): Promise<void> {
+    const res = await fetch('/api/admin/users', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, is_suspended }),
+    });
+    if (!res.ok) {
+      const { error } = await res.json();
+      throw new Error(error || 'Failed to update suspension status');
+    }
+  },
+
+  async getPaymentPointPasses(eventId?: string): Promise<Pass[]> {
+    const supabase = createClient();
+    let query = supabase
+      .from('passes')
+      .select('*, events(title, base_price), drink_menus(name)')
+      .in('entry_status', ['awaiting_payment', 'pending'])
+      .order('created_at', { ascending: false });
+
+    if (eventId) {
+      query = query.eq('event_id', eventId);
+    }
+
+    const { data: passesData, error } = await query;
+    if (error || !passesData) return [];
+
+    // Fetch user profiles to display user identity
+    const userIds = Array.from(new Set(passesData.map((p: any) => p.user_id).filter(Boolean)));
+    let profilesMap: Record<string, { email?: string; instagram_handle?: string }> = {};
+
+    if (userIds.length > 0) {
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, email, instagram_handle')
+        .in('id', userIds);
+      if (profiles) {
+        profiles.forEach((pr: any) => {
+          profilesMap[pr.id] = pr;
+        });
+      }
+    }
+
+    return passesData.map((pass: any) => {
+      const userProf = profilesMap[pass.user_id];
+      return {
+        ...pass,
+        instagram_handle: userProf?.instagram_handle || '@inconnu',
+        user_email: userProf?.email || '',
+      };
+    });
+  },
+
+  async approvePaymentPointPass(passId: string): Promise<void> {
+    const res = await fetch('/api/payment-point/approve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ passId }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'Impossible de valider le paiement');
+    }
+  },
+
+  async getPaymentPointFinancialStats(options?: { eventId?: string; date?: string }): Promise<{
+    workers: Array<{
+      id: string;
+      email: string;
+      totalPasses: number;
+      totalCollected: number;
+      passes: Array<{
+        id: string;
+        eventTitle: string;
+        finalPrice: number;
+        approvedAt: string;
+        userEmail?: string;
+        instagramHandle?: string;
+      }>;
+    }>;
+    dailyBreakdown: Array<{
+      date: string;
+      totalPasses: number;
+      totalCollected: number;
+    }>;
+    overallTotalPasses: number;
+    overallTotalCollected: number;
+  }> {
+    const supabase = createClient();
+    let query = supabase
+      .from('passes')
+      .select('id, event_id, user_id, final_price, payment_point_id, payment_approved_at, events(title)')
+      .not('payment_point_id', 'is', null)
+      .in('entry_status', ['activated', 'scanned', 'PAID', 'paid'])
+      .order('payment_approved_at', { ascending: false });
+
+    if (options?.eventId) {
+      query = query.eq('event_id', options.eventId);
+    }
+
+    const { data: passesData, error } = await query;
+    if (error || !passesData) {
+      return { workers: [], dailyBreakdown: [], overallTotalPasses: 0, overallTotalCollected: 0 };
+    }
+
+    // Filter by date if specified (YYYY-MM-DD)
+    const filteredPasses = options?.date
+      ? passesData.filter((p: any) => p.payment_approved_at && p.payment_approved_at.startsWith(options.date!))
+      : passesData;
+
+    // Get profiles for workers and pass owners
+    const { data: allProfiles } = await supabase.from('profiles').select('id, email, instagram_handle, role');
+    const profilesMap = new Map<string, any>((allProfiles || []).map((p: any) => [p.id, p]));
+
+    const workerMap = new Map<string, {
+      id: string;
+      email: string;
+      totalPasses: number;
+      totalCollected: number;
+      passes: Array<{
+        id: string;
+        eventTitle: string;
+        finalPrice: number;
+        approvedAt: string;
+        userEmail?: string;
+        instagramHandle?: string;
+      }>;
+    }>();
+
+    const dailyMap = new Map<string, { date: string; totalPasses: number; totalCollected: number }>();
+    let overallTotalPasses = 0;
+    let overallTotalCollected = 0;
+
+    for (const pass of filteredPasses) {
+      const workerId = pass.payment_point_id;
+      const workerProfile = profilesMap.get(workerId);
+      const workerEmail = workerProfile?.email || `Worker ${workerId.slice(0, 6)}`;
+      const price = Number(pass.final_price) || 0;
+      const passOwner = profilesMap.get(pass.user_id);
+
+      overallTotalPasses += 1;
+      overallTotalCollected += price;
+
+      // Worker grouping
+      if (!workerMap.has(workerId)) {
+        workerMap.set(workerId, {
+          id: workerId,
+          email: workerEmail,
+          totalPasses: 0,
+          totalCollected: 0,
+          passes: [],
+        });
+      }
+      const workerEntry = workerMap.get(workerId)!;
+      workerEntry.totalPasses += 1;
+      workerEntry.totalCollected += price;
+      workerEntry.passes.push({
+        id: pass.id,
+        eventTitle: pass.events?.title || 'Événement',
+        finalPrice: price,
+        approvedAt: pass.payment_approved_at || '',
+        userEmail: passOwner?.email || '',
+        instagramHandle: passOwner?.instagram_handle || '',
+      });
+
+      // Daily breakdown
+      if (pass.payment_approved_at) {
+        const day = pass.payment_approved_at.split('T')[0];
+        if (!dailyMap.has(day)) {
+          dailyMap.set(day, { date: day, totalPasses: 0, totalCollected: 0 });
+        }
+        const dailyEntry = dailyMap.get(day)!;
+        dailyEntry.totalPasses += 1;
+        dailyEntry.totalCollected += price;
+      }
+    }
+
+    return {
+      workers: Array.from(workerMap.values()),
+      dailyBreakdown: Array.from(dailyMap.values()).sort((a, b) => b.date.localeCompare(a.date)),
+      overallTotalPasses,
+      overallTotalCollected,
+    };
+  },
+
   async getStats(): Promise<{ totalUsers: number, totalEvents: number, totalPasses: number, revenue: number, chartData: number[] }> {
     const supabase = createClient();
     const [{ count: userCount }, { count: eventCount }, { data: passes }] = await Promise.all([
       supabase.from('profiles').select('*', { count: 'exact', head: true }),
       supabase.from('events').select('*', { count: 'exact', head: true }),
-      supabase.from('passes').select('entry_status, created_at')
+      supabase.from('passes').select('entry_status, created_at, final_price')
     ]);
     
     // Revenue calculation
-    const paidPasses = passes?.filter((p: any) => p.entry_status === 'activated' || p.entry_status === 'scanned').length || 0;
-    const revenue = paidPasses * 20;
+    const paidPasses = passes?.filter((p: any) => p.entry_status === 'activated' || p.entry_status === 'scanned') || [];
+    const revenue = paidPasses.reduce((acc: number, p: any) => acc + (Number(p.final_price) || 20), 0);
 
     // Calculate real chart data for the last 7 days
     const chartData = [0, 0, 0, 0, 0, 0, 0];
@@ -353,7 +613,6 @@ export const api = {
         const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
         
         if (diffDays >= 0 && diffDays < 7) {
-          // diffDays 0 is today (last element), 6 is 7 days ago (first element)
           chartData[6 - diffDays]++;
         }
       });

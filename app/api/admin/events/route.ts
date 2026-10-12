@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { title, date, location, pre_orders_enabled, max_passes_per_user, image_url, description, dress_code, drinks } = body || {};
+    const { title, date, location, pre_orders_enabled, max_passes_per_user, image_url, description, dress_code, drinks, base_price, promo_codes } = body || {};
 
     if (!title || typeof title !== 'string' || !date || typeof date !== 'string' || !location || typeof location !== 'string') {
       return NextResponse.json({ error: 'Champs obligatoires manquants ou invalides (title, date, location)' }, { status: 400 });
@@ -27,7 +27,9 @@ export async function POST(req: NextRequest) {
       max_passes_per_user: Number(max_passes_per_user) || 1,
       image_url: image_url ? String(image_url).slice(0, 500) : null,
       description: description ? String(description).slice(0, 2000) : null,
-      dress_code: dress_code ? String(dress_code).slice(0, 200) : null
+      dress_code: dress_code ? String(dress_code).slice(0, 200) : null,
+      base_price: base_price !== undefined ? Math.max(0, Number(base_price) || 0) : 0,
+      promo_codes: Array.isArray(promo_codes) ? promo_codes : []
     }).select().single();
 
     if (error) {
@@ -61,7 +63,7 @@ export async function PUT(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { id, title, date, location, pre_orders_enabled, max_passes_per_user, image_url, description, dress_code, drinks } = body || {};
+    const { id, title, date, location, pre_orders_enabled, max_passes_per_user, image_url, description, dress_code, drinks, base_price, promo_codes } = body || {};
 
     if (!id || typeof id !== 'string') {
       return NextResponse.json({ error: "Identifiant d'événement manquant ou invalide" }, { status: 400 });
@@ -76,6 +78,8 @@ export async function PUT(req: NextRequest) {
     if (image_url !== undefined) updatePayload.image_url = image_url ? String(image_url).slice(0, 500) : null;
     if (description !== undefined) updatePayload.description = description ? String(description).slice(0, 2000) : null;
     if (dress_code !== undefined) updatePayload.dress_code = dress_code ? String(dress_code).slice(0, 200) : null;
+    if (base_price !== undefined) updatePayload.base_price = Math.max(0, Number(base_price) || 0);
+    if (promo_codes !== undefined) updatePayload.promo_codes = Array.isArray(promo_codes) ? promo_codes : [];
 
     const { data: event, error } = await supabaseAdmin.from('events').update(updatePayload).eq('id', id).select().single();
 

@@ -12,7 +12,7 @@ export async function requireRole(allowedRoles: string[]) {
 
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('role')
+      .select('role, is_suspended')
       .eq('id', user.id)
       .single();
 
@@ -20,7 +20,14 @@ export async function requireRole(allowedRoles: string[]) {
       return { error: NextResponse.json({ error: 'Unauthorized: Profile not found' }, { status: 401 }), user: null, role: null };
     }
 
-    if (!allowedRoles.includes(profile.role)) {
+    if (profile.is_suspended) {
+      return { error: NextResponse.json({ error: 'Compte suspendu. Veuillez contacter un administrateur.' }, { status: 403 }), user: null, role: null };
+    }
+
+    const currentRole = (profile.role || '').toLowerCase();
+    const normalizedAllowedRoles = allowedRoles.map(r => r.toLowerCase());
+
+    if (!normalizedAllowedRoles.includes(currentRole)) {
       return { error: NextResponse.json({ error: 'Forbidden: Insufficient permissions' }, { status: 403 }), user, role: profile.role };
     }
 
