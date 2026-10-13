@@ -88,20 +88,100 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Impossible de mettre à jour l'événement" }, { status: 500 });
     }
     
-    // For simplicity with drinks, just delete old ones and insert new ones
-    await supabaseAdmin.from('drink_menus').delete().eq('event_id', id);
-    if (drinks && Array.isArray(drinks) && drinks.length > 0) {
-      const drinksToInsert = drinks.map((drink: any) => ({
-        event_id: id,
-        name: String(drink.name || '').slice(0, 100)
-      })).filter((d: any) => d.name.length > 0);
-      if (drinksToInsert.length > 0) {
-        const { error: drinksError } = await supabaseAdmin.from('drink_menus').insert(drinksToInsert);
-        if (drinksError) console.error("Error updating drinks:", drinksError);
+    // Relational update logic for drink_menus:
+    // Only update drinks if explicitly provided in the payload (not undefined).
+    // If undefined, preserve existing drinks completely to prevent accidental data loss.
+    if (drinks !== undefined && Array.isArray(drinks)) {
+      // 1. Fetch current drink_menus for this event
+      const { data: currentDrinks, error: fetchErr } = await supabaseAdmin
+        .from('drink_menus')
+        .select('id, name')
+        .eq('event_id', id);
+
+      if (fetchErr) {
+        console.error("Error fetching current drinks in PUT:", fetchErr);
+      } else {
+        const existingDrinks = currentDrinks || [];
+        const existingDrinkMap = new Map(existingDrinks.map(d => [d.id, d]));
+
+        // Filter valid drinks from the payload
+        const validPayloadDrinks = drinks
+          .filter((d: any) => d && typeof d.name === 'string' && d.name.trim().length > 0)
+          .map((d: any) => ({
+            id: d.id && typeof d.id === 'string' && d.id.trim().length > 0 ? d.id.trim() : undefined,
+            name: String(d.name).trim().slice(0, 100),
+            price: typeof d.price === 'number' ? d.price : 0,
+          }));
+
+        const payloadDrinkIds = new Set(
+          validPayloadDrinks
+            .map(d => d.id)
+            .filter((drinkId): drinkId is string => Boolean(drinkId && existingDrinkMap.has(drinkId)))
+        );
+
+        // a) Update existing drinks whose name changed
+        for (const drink of validPayloadDrinks) {
+          if (drink.id && existingDrinkMap.has(drink.id)) {
+            const existing = existingDrinkMap.get(drink.id)!;
+            if (existing.name !== drink.name) {
+              const { error: updateDrinkErr } = await supabaseAdmin
+                .from('drink_menus')
+                .update({ name: drink.name })
+                .eq('id', drink.id);
+              if (updateDrinkErr) {
+                console.error(`Error updating drink ${drink.id}:`, updateDrinkErr);
+              }
+            }
+          }
+        }
+
+        // b) Insert new drinks (drinks without an existing id)
+        const drinksToInsert = validPayloadDrinks
+          .filter(d => !d.id || !existingDrinkMap.has(d.id))
+          .map(d => ({
+            event_id: id,
+            name: d.name,
+            price: d.price ?? 0,
+          }));
+
+        if (drinksToInsert.length > 0) {
+          const { error: insertErr } = await supabaseAdmin
+            .from('drink_menus')
+            .insert(drinksToInsert);
+          if (insertErr) {
+            console.error("Error inserting new drinks in PUT:", insertErr);
+          }
+        }
+
+        // c) Delete only drinks that were explicitly removed (present in DB, but omitted in payload)
+        const drinkIdsToDelete = existingDrinks
+          .filter(d => !payloadDrinkIds.has(d.id))
+          .map(d => d.id);
+
+        if (drinkIdsToDelete.length > 0) {
+          const { error: deleteErr } = await supabaseAdmin
+            .from('drink_menus')
+            .delete()
+            .in('id', drinkIdsToDelete);
+          if (deleteErr) {
+            console.error("Error deleting removed drinks in PUT:", deleteErr);
+          }
+        }
       }
     }
 
-    return NextResponse.json({ success: true, event });
+    const { data: updatedDrinks } = await supabaseAdmin
+      .from('drink_menus')
+      .select('id, name')
+      .eq('event_id', id);
+
+    return NextResponse.json({ 
+      success: true, 
+      event: {
+        ...event,
+        drink_menus: updatedDrinks || []
+      } 
+    });
   } catch (error: any) {
     console.error("Server error in events PUT:", error);
     return NextResponse.json({ error: "Une erreur interne est survenue" }, { status: 500 });

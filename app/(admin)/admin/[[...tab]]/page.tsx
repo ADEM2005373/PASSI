@@ -34,7 +34,7 @@ export default function AdminDashboard() {
   const [newImageUrl, setNewImageUrl] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [newDressCode, setNewDressCode] = useState("");
-  const [newDrinks, setNewDrinks] = useState<{name: string}[]>([]);
+  const [newDrinks, setNewDrinks] = useState<{ id?: string; name: string }[]>([]);
   const [newBasePrice, setNewBasePrice] = useState<number>(0);
   const [newPromoCodes, setNewPromoCodes] = useState<{code: string; discount_amount: number}[]>([]);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
@@ -330,7 +330,12 @@ export default function AdminDashboard() {
       alert("La date de l'événement doit être supérieure à la date d'aujourd'hui.");
       return;
     }
-    const validDrinks = newDrinks.filter(d => d.name.trim() !== "");
+    const validDrinks = newDrinks
+      .filter(d => d.name && d.name.trim() !== "")
+      .map(d => ({
+        ...(d.id ? { id: d.id } : {}),
+        name: d.name.trim()
+      }));
     const validPromoCodes = newPromoCodes
       .filter(p => p.code.trim() !== "" && Number(p.discount_amount) > 0)
       .map(p => ({ code: p.code.trim().toUpperCase(), discount_amount: Number(p.discount_amount) }));
@@ -390,7 +395,7 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleEditClick = (event: Event) => {
+  const handleEditClick = async (event: Event) => {
     setEditingEventId(event.id);
     setNewTitle(event.title);
     const d = new Date(event.date);
@@ -401,10 +406,26 @@ export default function AdminDashboard() {
     setNewImageUrl(event.image_url || "");
     setNewDescription(event.description || "");
     setNewDressCode(event.dress_code || "");
-    setNewDrinks(event.drink_menus?.map(d => ({name: d.name})) || []);
+    
+    // 1. Immediately map drinks from event, preserving existing IDs
+    const initialDrinks = (event.drink_menus && event.drink_menus.length > 0)
+      ? event.drink_menus.map(d => ({ id: d.id, name: d.name }))
+      : [];
+    setNewDrinks(initialDrinks);
+
     setNewBasePrice(event.base_price ?? 0);
     setNewPromoCodes(Array.isArray(event.promo_codes) ? event.promo_codes : []);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    // 2. Fetch fresh event data from DB to guarantee drinks list is not missing or stale
+    try {
+      const freshEvent = await api.getEvent(event.id);
+      if (freshEvent && Array.isArray(freshEvent.drink_menus)) {
+        setNewDrinks(freshEvent.drink_menus.map(d => ({ id: d.id, name: d.name })));
+      }
+    } catch (err) {
+      console.error("Failed to load fresh drinks for edit event:", err);
+    }
   };
 
   const cancelUserEdit = () => {
@@ -824,17 +845,32 @@ export default function AdminDashboard() {
                   <div className="p-4 rounded-xl" style={{ backgroundColor: 'var(--bg-input)', border: '1.5px solid var(--border)' }}>
                     <label className="label">Menu boissons (optionnel)</label>
                     {newDrinks.map((drink, index) => (
-                      <div key={index} className="flex gap-2 mb-2">
-                        <input type="text" placeholder="Ex: Vodka Redbull" value={drink.name}
-                          onChange={e => { const u=[...newDrinks]; u[index].name=e.target.value; setNewDrinks(u); }}
+                      <div key={drink.id || index} className="flex gap-2 mb-2">
+                        <input 
+                          type="text" 
+                          placeholder="Ex: Vodka Redbull" 
+                          value={drink.name}
+                          onChange={e => { 
+                            const u = [...newDrinks]; 
+                            u[index] = { ...u[index], name: e.target.value }; 
+                            setNewDrinks(u); 
+                          }}
                           className="input flex-1 text-sm"
                         />
-                        <button type="button" onClick={() => setNewDrinks(newDrinks.filter((_,i)=>i!==index))} className="p-2.5 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-colors">
+                        <button 
+                          type="button" 
+                          onClick={() => setNewDrinks(newDrinks.filter((_, i) => i !== index))} 
+                          className="p-2.5 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-colors"
+                        >
                           <X size={16}/>
                         </button>
                       </div>
                     ))}
-                    <button type="button" onClick={() => setNewDrinks([...newDrinks, {name:""}])} className="flex items-center gap-2 text-sm font-bold text-passi-turquoise hover:text-passi-turquoise/80 mt-2">
+                    <button 
+                      type="button" 
+                      onClick={() => setNewDrinks([...newDrinks, { name: "" }])} 
+                      className="flex items-center gap-2 text-sm font-bold text-passi-turquoise hover:text-passi-turquoise/80 mt-2"
+                    >
                       <Plus size={16}/> Ajouter une boisson
                     </button>
                   </div>

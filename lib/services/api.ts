@@ -103,22 +103,56 @@ export const api = {
   // --- EVENTS ---
   async getEvents(): Promise<Event[]> {
     const supabase = createClient();
-    const { data } = await supabase.from('events').select('*').order('date', { ascending: true });
-    return data || [];
+    const { data: events, error } = await supabase
+      .from('events')
+      .select('*, drink_menus(*)')
+      .order('date', { ascending: true });
+
+    if (!error && events) {
+      return events as Event[];
+    }
+
+    // Fallback if relation embedding fails
+    const { data: fallbackEvents } = await supabase
+      .from('events')
+      .select('*')
+      .order('date', { ascending: true });
+
+    if (!fallbackEvents || fallbackEvents.length === 0) return [];
+
+    const eventIds = fallbackEvents.map((e: any) => e.id);
+    const { data: allDrinks } = await supabase
+      .from('drink_menus')
+      .select('*')
+      .in('event_id', eventIds);
+
+    const drinksByEvent: Record<string, any[]> = {};
+    (allDrinks || []).forEach((d: any) => {
+      if (!drinksByEvent[d.event_id]) drinksByEvent[d.event_id] = [];
+      drinksByEvent[d.event_id].push(d);
+    });
+
+    return fallbackEvents.map((e: any) => ({
+      ...e,
+      drink_menus: drinksByEvent[e.id] || []
+    })) as Event[];
   },
 
   async getEvent(id: string): Promise<Event | undefined> {
     const supabase = createClient();
-    const { data } = await supabase.from('events').select('*').eq('id', id).single();
+    const { data } = await supabase.from('events').select('*, drink_menus(*)').eq('id', id).single();
     if (!data) return undefined;
     
-    // Safely attempt to fetch drinks (will return error/null if table missing)
-    const { data: drinks } = await supabase.from('drink_menus').select('*').eq('event_id', id);
+    // Safely attempt to fetch drinks if not returned by relation
+    if (!data.drink_menus) {
+      const { data: drinks } = await supabase.from('drink_menus').select('*').eq('event_id', id);
+      return {
+        ...data,
+        drink_menus: drinks || []
+      } as Event;
+    }
     
-    return {
-      ...data,
-      drink_menus: drinks || []
-    };
+    return data as Event;
   },
 
   // --- BOOKING (Phase 1) ---
@@ -317,7 +351,7 @@ export const api = {
     image_url: string, 
     description?: string, 
     dress_code?: string, 
-    drinks?: {name: string}[],
+    drinks?: { id?: string; name: string }[],
     base_price?: number,
     promo_codes?: PromoCode[]
   ): Promise<void> {
@@ -351,7 +385,7 @@ export const api = {
     image_url: string, 
     description?: string, 
     dress_code?: string, 
-    drinks?: {name: string}[],
+    drinks?: { id?: string; name: string }[],
     base_price?: number,
     promo_codes?: PromoCode[]
   ): Promise<void> {
