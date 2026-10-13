@@ -73,7 +73,9 @@ export default function UserDashboard() {
       return
     }
     // Show the profile-completion modal if instagram_handle is missing (and they are not an admin)
-    const isAdmin = authUser.role === 'admin' || authUser.original_role === 'admin'
+    const userRoleLower = (authUser.role || '').toLowerCase()
+    const origRoleLower = (authUser.original_role || '').toLowerCase()
+    const isAdmin = userRoleLower === 'admin' || origRoleLower === 'admin'
     setNeedsProfile(!authUser.instagram_handle && !isAdmin)
     fetchUserAndPasses()
     
@@ -107,15 +109,17 @@ export default function UserDashboard() {
     const user = authUser
     if (!user) return
 
-    if (user.role === 'barman') {
+    const activeRole = (user.role || '').toLowerCase()
+
+    if (activeRole === 'barman') {
       router.push('/scanner/barman')
       return
     }
-    if (user.role === 'security') {
+    if (activeRole === 'security') {
       router.push('/scanner/security')
       return
     }
-    if (user.role === 'admin') {
+    if (activeRole === 'admin') {
       // Check if they have linked a Google account
       const { createClient } = await import('@/lib/supabase/client');
       const supabase = createClient();

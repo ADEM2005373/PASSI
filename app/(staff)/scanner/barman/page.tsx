@@ -25,7 +25,11 @@ export default function BarmanScannerPage() {
     setMounted(true)
     const init = async () => {
       const user = await api.getCurrentUser()
-      if (!user || (user.role !== 'barman' && user.role !== 'admin')) {
+      const userRole = (user?.role || '').toLowerCase()
+      const origRole = (user?.original_role || '').toLowerCase()
+      const isAllowed = userRole === 'barman' || userRole === 'admin' || origRole === 'admin'
+
+      if (!user || !isAllowed) {
         router.replace("/login")
         return
       }

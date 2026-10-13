@@ -28,10 +28,10 @@ export async function requireRole(allowedRoles: string[]) {
     const normalizedAllowedRoles = allowedRoles.map(r => r.toLowerCase());
 
     if (!normalizedAllowedRoles.includes(currentRole)) {
-      return { error: NextResponse.json({ error: 'Forbidden: Insufficient permissions' }, { status: 403 }), user, role: profile.role };
+      return { error: NextResponse.json({ error: 'Forbidden: Insufficient permissions' }, { status: 403 }), user, role: currentRole };
     }
 
-    return { error: null, user, role: profile.role };
+    return { error: null, user, role: currentRole };
   } catch (err: any) {
     console.error("Security verification error:", err);
     return { error: NextResponse.json({ error: 'Internal Server Error' }, { status: 500 }), user: null, role: null };

@@ -1,29 +1,23 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useSimulation } from "@/lib/context/simulation-context"
 
 export function ImpersonationBanner() {
-  const [impersonating, setImpersonating] = useState(false)
+  const { isSimulating, simulatedRole, stopSimulation } = useSimulation()
 
-  useEffect(() => {
-    if (typeof document !== 'undefined') {
-      const match = document.cookie.match(/(?:^|; )passi_impersonate_role=([^;]*)/)
-      if (match && match[1]) {
-        setImpersonating(true)
-      }
-    }
-  }, [])
+  if (!isSimulating) return null
 
-  if (!impersonating) return null
-
-  const clearImpersonation = () => {
-    document.cookie = "passi_impersonate_role=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT"
-    window.location.href = "/admin"
-  }
+  const roleLabel = simulatedRole ? simulatedRole.toUpperCase() : "SIMULATION"
 
   return (
-    <div className="fixed top-0 left-0 right-0 bg-red-600 text-white text-xs text-center py-1 z-[9999] font-bold cursor-pointer hover:bg-red-700 transition-colors" onClick={clearImpersonation}>
-      Vous êtes en mode simulation. Cliquez ici pour retourner à votre compte Admin.
+    <div
+      id="impersonation-banner"
+      className="fixed top-0 left-0 right-0 bg-gradient-to-r from-red-600 to-amber-600 text-white text-xs text-center py-1.5 z-[9999] font-bold cursor-pointer hover:opacity-95 transition-opacity shadow-md flex items-center justify-center gap-2"
+      onClick={() => stopSimulation()}
+      title="Cliquez pour quitter le mode simulation"
+    >
+      <span className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wider">{roleLabel}</span>
+      <span>Vous êtes en mode simulation. Cliquez ici pour retourner au panneau Administrateur.</span>
     </div>
   )
 }

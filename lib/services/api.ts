@@ -93,7 +93,25 @@ export const api = {
       .maybeSingle();
 
     if (!profile) return null;
-    return profile as User;
+
+    let userProfile = profile as User;
+    const actualRole = (userProfile.role || '').toUpperCase();
+    if (actualRole === 'ADMIN' && typeof document !== 'undefined') {
+      const match = document.cookie.match(/(?:^|; )passi_impersonate_role=([^;]*)/);
+      if (match) {
+        const override = match[1].toLowerCase();
+        if (['admin', 'user', 'barman', 'security', 'payment_point'].includes(override)) {
+          userProfile = {
+            ...userProfile,
+            role: override as any,
+            original_role: (userProfile.original_role || userProfile.role || 'admin').toLowerCase(),
+            instagram_handle: userProfile.instagram_handle || '@admin_simulated',
+          };
+        }
+      }
+    }
+
+    return userProfile;
   },
 
   async logout(): Promise<void> {
@@ -202,15 +220,33 @@ export const api = {
       .select('*, events(id, title, date, location)')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
+
+    let activePasses = passes || [];
+
+    // Fallback for admin simulation: if an admin simulating a user has no personal passes,
+    // load available passes so the simulator user interface and mock actions can be tested
+    const match = typeof document !== 'undefined' ? document.cookie.match(/(?:^|; )passi_impersonate_role=([^;]*)/) : null;
+    const isSimulating = Boolean(match && match[1]);
+
+    if (isSimulating && activePasses.length === 0) {
+      const { data: samplePasses } = await supabase
+        .from('passes')
+        .select('*, events(id, title, date, location)')
+        .limit(10)
+        .order('created_at', { ascending: false });
+      if (samplePasses && samplePasses.length > 0) {
+        activePasses = samplePasses;
+      }
+    }
       
-    if (error || !passes) {
+    if (error && activePasses.length === 0) {
       console.error("Error fetching passes:", error);
       return [];
     }
 
     // 48-Hour Retention Filter (Soft-hide rejected passes older than 48 hours)
     const now = Date.now();
-    const validPasses = passes.filter((p: any) => {
+    const validPasses = activePasses.filter((p: any) => {
       if (p.entry_status === 'rejected') {
         const updatedAt = new Date(p.updated_at || p.created_at).getTime();
         return (now - updatedAt) <= (48 * 60 * 60 * 1000);

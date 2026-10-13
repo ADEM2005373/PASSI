@@ -71,12 +71,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(newProfile ?? null)
     } else {
       let userProfile = profile as User;
-      if (userProfile.role === 'admin' && typeof document !== 'undefined') {
+      const actualRole = (userProfile.role || '').toUpperCase();
+      if (actualRole === 'ADMIN' && typeof document !== 'undefined') {
         const match = document.cookie.match(/(?:^|; )passi_impersonate_role=([^;]*)/);
         if (match) {
-          const override = match[1];
-          if (['admin', 'user', 'barman', 'security'].includes(override)) {
-            userProfile = { ...userProfile, role: override as any, original_role: 'admin' };
+          const override = match[1].toLowerCase();
+          if (['admin', 'user', 'barman', 'security', 'payment_point'].includes(override)) {
+            userProfile = {
+              ...userProfile,
+              role: override as any,
+              original_role: (userProfile.original_role || userProfile.role || 'admin').toLowerCase(),
+              instagram_handle: userProfile.instagram_handle || '@admin_simulated',
+            };
           }
         }
       }
@@ -133,7 +139,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [fetchProfile])
 
   const logout = useCallback(async () => {
-    const isStaff = user?.role === 'admin' || user?.role === 'security' || user?.role === 'barman'
+    const role = (user?.role || '').toLowerCase()
+    const isStaff = role === 'admin' || role === 'security' || role === 'barman' || role === 'payment_point'
     const supabase = createClient()
     await supabase.auth.signOut()
     setUser(null)

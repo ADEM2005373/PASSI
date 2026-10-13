@@ -76,9 +76,11 @@ export async function updateSession(request: NextRequest) {
       return NextResponse.redirect(url)
     }
 
-    let role = (profile?.role || 'user').toLowerCase()
+    const actualRole = (profile?.role || 'user').toLowerCase()
+    let role = actualRole
+    const isImpersonating = !!request.cookies.get('passi_impersonate_role')?.value
     
-    if (role === 'admin') {
+    if (actualRole === 'admin') {
       const override = request.cookies.get('passi_impersonate_role')?.value?.toLowerCase();
       if (override && ['admin', 'user', 'barman', 'security', 'payment_point'].includes(override)) {
         role = override;
@@ -95,15 +97,15 @@ export async function updateSession(request: NextRequest) {
     }
     const userHome = roleHomes[role] || '/dashboard'
 
-    // 2. Onboarding check for standard users
+    // 2. Onboarding check for standard users (Bypass for genuine admins or active simulation)
     const hasInstagram = profile?.instagram_handle && profile.instagram_handle.trim().length > 0
-    if (role === 'user' && !hasInstagram && path !== '/onboarding' && !path.startsWith('/api') && path !== '/update-password') {
+    if (role === 'user' && actualRole !== 'admin' && !isImpersonating && !hasInstagram && path !== '/onboarding' && !path.startsWith('/api') && path !== '/update-password') {
       url.pathname = '/onboarding'
       return NextResponse.redirect(url)
     }
 
     // 3. If profile is completed and user tries to hit /onboarding, send to dashboard
-    if (path === '/onboarding' && hasInstagram) {
+    if (path === '/onboarding' && (hasInstagram || actualRole === 'admin' || isImpersonating)) {
       url.pathname = '/dashboard'
       return NextResponse.redirect(url)
     }

@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
       .eq('id', user.id)
       .maybeSingle();
 
-    const isAdmin = userProfile?.role === 'admin';
+    const isAdmin = (userProfile?.role || '').toUpperCase() === 'ADMIN';
     if (!isAdmin && pass.user_id !== user.id) {
       return NextResponse.json({ error: 'Accès non autorisé à ce pass.' }, { status: 403 });
     }

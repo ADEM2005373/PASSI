@@ -33,12 +33,15 @@ export default function OnboardingPage() {
         .eq("id", user.id)
         .maybeSingle()
 
-      if (profile?.role === "admin") {
+      const isSimulating = typeof document !== 'undefined' && document.cookie.includes('passi_impersonate_role')
+      const isAdminRole = (profile?.role || '').toLowerCase() === "admin"
+
+      if (isAdminRole && !isSimulating) {
         router.replace("/admin")
         return
       }
 
-      if (profile?.instagram_handle && profile.instagram_handle.trim().length > 0) {
+      if (isSimulating || (profile?.instagram_handle && profile.instagram_handle.trim().length > 0)) {
         router.replace("/dashboard")
         return
       }

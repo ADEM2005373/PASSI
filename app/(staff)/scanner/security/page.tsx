@@ -26,7 +26,11 @@ export default function SecurityScanner() {
     setMounted(true);
     const init = async () => {
       const user = await api.getCurrentUser();
-      if (!user || (user.role !== 'security' && user.role !== 'admin')) {
+      const userRole = (user?.role || '').toLowerCase();
+      const origRole = (user?.original_role || '').toLowerCase();
+      const isAllowed = userRole === 'security' || userRole === 'admin' || origRole === 'admin';
+
+      if (!user || !isAllowed) {
         router.replace("/login");
         return;
       }

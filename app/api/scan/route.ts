@@ -25,8 +25,10 @@ export async function POST(request: Request) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
+    const normalizedRole = (role || '').toLowerCase();
+
     if (type === 'entry') {
-      if (role !== 'security' && role !== 'admin') {
+      if (normalizedRole !== 'security' && normalizedRole !== 'admin') {
         return NextResponse.json({ success: false, message: "DENIED: Not Security" }, { status: 403 });
       }
 
@@ -57,7 +59,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, message: `SUCCESS: ${eventTitle}` });
 
     } else if (type === 'drink') {
-      if (role !== 'barman' && role !== 'admin') {
+      if (normalizedRole !== 'barman' && normalizedRole !== 'admin') {
         return NextResponse.json({ success: false, message: "DENIED: Not Barman" }, { status: 403 });
       }
 

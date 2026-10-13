@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { api, Pass, User, Event } from "@/lib/services/api";
 import { useAuth } from "@/lib/context/auth-context";
+import { useSimulation } from "@/lib/context/simulation-context";
 import { Logo } from "@/components/Logo";
 import { Sun, Moon, LogOut, LayoutDashboard, CalendarDays, Users, CheckSquare, Plus, Trash2, Pencil, X, ExternalLink, Check, DollarSign, Download, User as UserIcon, Banknote, ShieldAlert, ShieldCheck, FileSpreadsheet, FileText, Tag, Ticket, Copy } from "lucide-react";
 import jsPDF from "jspdf";
@@ -16,6 +17,7 @@ import { formatImageUrl } from "@/lib/utils/url";
 export default function AdminDashboard() {
   const router = useRouter();
   const { user, logout: contextLogout } = useAuth();
+  const { startSimulation } = useSimulation();
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -235,7 +237,10 @@ export default function AdminDashboard() {
     setMounted(true);
     const init = async () => {
       const user = await api.getCurrentUser();
-      if (!user || user.role !== 'admin') { router.replace("/staff/login"); return; }
+      const currentUserRole = (user?.role || '').toLowerCase();
+      const originalUserRole = (user?.original_role || '').toLowerCase();
+      const isUserAdmin = currentUserRole === 'admin' || originalUserRole === 'admin';
+      if (!user || !isUserAdmin) { router.replace("/staff/login"); return; }
       
       const { createClient } = await import('@/lib/supabase/client');
       const supabase = createClient();
@@ -674,10 +679,67 @@ export default function AdminDashboard() {
                     <div className="py-1">
                       <div className="px-4 py-2 text-xs text-gray-500 uppercase font-bold border-b border-gray-100 dark:border-gray-800">Mon Compte</div>
                       <button onClick={() => { handleTabClick('profil'); setIsDropdownOpen(false); }} className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-passi-surface/20">Profil</button>
-                      <div className="px-4 py-2 text-xs text-gray-500 uppercase font-bold border-y border-gray-100 dark:border-gray-800 mt-1">Passer en</div>
-                      <button onClick={() => { document.cookie = "passi_impersonate_role=user; path=/;"; window.location.href = "/dashboard"; }} className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-passi-surface/20">Utilisateur</button>
-                      <button onClick={() => { document.cookie = "passi_impersonate_role=barman; path=/;"; window.location.href = "/scanner/barman"; }} className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-passi-surface/20">Barman</button>
-                      <button onClick={() => { document.cookie = "passi_impersonate_role=security; path=/;"; window.location.href = "/scanner/security"; }} className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-passi-surface/20">Sécurité</button>
+                      <div className="px-4 py-2 text-xs text-gray-500 uppercase font-bold border-y border-gray-100 dark:border-gray-800 mt-1">Simuler un rôle</div>
+                      <button 
+                        onClick={async () => { 
+                          setIsDropdownOpen(false); 
+                          try {
+                            const currentRole = (user?.original_role || user?.role || '').toUpperCase();
+                            if (currentRole !== 'ADMIN') {
+                              throw new Error("Unauthorized: Only admins can simulate accounts.");
+                            }
+                            await startSimulation('user'); 
+                          } catch (e: any) { alert(e.message); }
+                        }} 
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-passi-surface/20"
+                      >
+                        Utilisateur
+                      </button>
+                      <button 
+                        onClick={async () => { 
+                          setIsDropdownOpen(false); 
+                          try {
+                            const currentRole = (user?.original_role || user?.role || '').toUpperCase();
+                            if (currentRole !== 'ADMIN') {
+                              throw new Error("Unauthorized: Only admins can simulate accounts.");
+                            }
+                            await startSimulation('barman'); 
+                          } catch (e: any) { alert(e.message); }
+                        }} 
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-passi-surface/20"
+                      >
+                        Barman
+                      </button>
+                      <button 
+                        onClick={async () => { 
+                          setIsDropdownOpen(false); 
+                          try {
+                            const currentRole = (user?.original_role || user?.role || '').toUpperCase();
+                            if (currentRole !== 'ADMIN') {
+                              throw new Error("Unauthorized: Only admins can simulate accounts.");
+                            }
+                            await startSimulation('security'); 
+                          } catch (e: any) { alert(e.message); }
+                        }} 
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-passi-surface/20"
+                      >
+                        Sécurité
+                      </button>
+                      <button 
+                        onClick={async () => { 
+                          setIsDropdownOpen(false); 
+                          try {
+                            const currentRole = (user?.original_role || user?.role || '').toUpperCase();
+                            if (currentRole !== 'ADMIN') {
+                              throw new Error("Unauthorized: Only admins can simulate accounts.");
+                            }
+                            await startSimulation('payment_point'); 
+                          } catch (e: any) { alert(e.message); }
+                        }} 
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-passi-surface/20"
+                      >
+                        Point de Paiement
+                      </button>
                     </div>
                   </div>
                 </>
