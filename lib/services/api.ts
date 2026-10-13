@@ -59,6 +59,19 @@ export type Pass = {
   available_drinks?: { id: string; name: string; price?: number; image_url?: string }[];
 };
 
+export type NewsItem = {
+  id: string;
+  title: string;
+  content: string;
+  image_url?: string | null;
+  created_at: string;
+  admin_id: string;
+  admin_profile?: {
+    email?: string;
+    full_name?: string;
+  } | null;
+};
+
 export const api = {
   // --- AUTH (OAuth only) ---
 
@@ -776,6 +789,54 @@ export const api = {
     const result = await res.json();
     if (!res.ok) throw new Error(result.error || 'Erreur lors de la sélection de la boisson');
     return result;
+  },
+
+  // --- NEWS FEED (Actualités) ---
+  async getNews(): Promise<NewsItem[]> {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from('news')
+      .select('*, profiles(email, full_name)')
+      .order('created_at', { ascending: false });
+
+    if (error || !data) {
+      // Fallback query if relation join is not populated
+      const { data: fallbackNews } = await supabase
+        .from('news')
+        .select('*')
+        .order('created_at', { ascending: false });
+      return (fallbackNews || []) as NewsItem[];
+    }
+
+    return data.map((item: any) => ({
+      ...item,
+      admin_profile: item.profiles || null
+    })) as NewsItem[];
+  },
+
+  async createNews(title: string, content: string, imageUrl?: string): Promise<NewsItem> {
+    const res = await fetch('/api/admin/news', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title,
+        content,
+        imageUrl: formatImageUrl(imageUrl),
+      }),
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error || "Erreur lors de la publication de l'actualité");
+    return result.news;
+  },
+
+  async deleteNews(newsId: string): Promise<void> {
+    const res = await fetch(`/api/admin/news?newsId=${newsId}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) {
+      const result = await res.json().catch(() => ({}));
+      throw new Error(result.error || "Impossible de supprimer l'actualité");
+    }
   }
 };
 

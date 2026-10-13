@@ -15,6 +15,7 @@ import { PassCard } from '@/components/PassCard'
 import { SearchBarWithSuggestions } from '@/components/SearchBarWithSuggestions'
 import { searchEventsFaultTolerant } from '@/lib/utils/search'
 import { EventCard } from '@/components/EventCard'
+import { NewsFeed } from '@/components/NewsFeed'
 
 export default function UserDashboard() {
   const router = useRouter()
@@ -488,15 +489,8 @@ export default function UserDashboard() {
           )}
 
           {activeTab === 'news' && (
-            <div className="animate-in fade-in slide-in-from-right-4 duration-500 max-w-4xl mx-auto">
-               <h1 className="text-4xl font-extrabold text-passi-bleu dark:text-white mb-10">Actualités</h1>
-               <div className="bg-white dark:bg-passi-surface rounded-[3rem] p-16 text-center shadow-lg shadow-gray-100/50 border border-gray-100 dark:border-slate-700">
-                  <div className="w-24 h-24 bg-passi-creme dark:bg-passi-bleu rounded-full flex items-center justify-center mx-auto mb-6">
-                    <FileText size={40} className="text-passi-corail" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-passi-bleu dark:text-white mb-3">Bientôt disponible</h3>
-                  <p className="text-passi-text-sec font-medium text-lg">Retrouvez bientôt toutes les actualités et offres exclusives ici.</p>
-               </div>
+            <div className="animate-in fade-in slide-in-from-right-4 duration-500 max-w-5xl mx-auto">
+              <NewsFeed />
             </div>
           )}
 
@@ -674,6 +668,10 @@ export default function UserDashboard() {
         <button onClick={() => setActiveTab('reservations')} className={`flex flex-col items-center gap-1.5 transition-colors ${activeTab === 'reservations' ? 'text-passi-corail' : 'text-gray-400'}`}>
           <Ticket size={24} className={activeTab === 'reservations' ? 'fill-current' : ''} />
           <span className="text-[10px] font-bold">Billets</span>
+        </button>
+        <button onClick={() => setActiveTab('news')} className={`flex flex-col items-center gap-1.5 transition-colors ${activeTab === 'news' ? 'text-passi-corail' : 'text-gray-400'}`}>
+          <FileText size={24} className={activeTab === 'news' ? 'text-passi-corail' : ''} />
+          <span className="text-[10px] font-bold">Actus</span>
         </button>
         <button onClick={() => setActiveTab('profile')} className={`flex flex-col items-center gap-1.5 transition-colors ${activeTab === 'profile' ? 'text-passi-corail' : 'text-gray-400'}`}>
           <User size={24} className={activeTab === 'profile' ? 'fill-current' : ''} />

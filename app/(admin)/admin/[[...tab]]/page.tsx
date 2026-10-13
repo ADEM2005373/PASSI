@@ -8,10 +8,11 @@ import { api, Pass, User, Event } from "@/lib/services/api";
 import { useAuth } from "@/lib/context/auth-context";
 import { useSimulation } from "@/lib/context/simulation-context";
 import { Logo } from "@/components/Logo";
-import { Sun, Moon, LogOut, LayoutDashboard, CalendarDays, Users, CheckSquare, Plus, Trash2, Pencil, X, ExternalLink, Check, DollarSign, Download, User as UserIcon, Banknote, ShieldAlert, ShieldCheck, FileSpreadsheet, FileText, Tag, Ticket, Copy } from "lucide-react";
+import { Sun, Moon, LogOut, LayoutDashboard, CalendarDays, Users, CheckSquare, Plus, Trash2, Pencil, X, ExternalLink, Check, DollarSign, Download, User as UserIcon, Banknote, ShieldAlert, ShieldCheck, FileSpreadsheet, FileText, Tag, Ticket, Copy, Newspaper } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { PassCreationSection } from "@/components/admin/PassCreationSection";
+import { NewsManagementSection } from "@/components/admin/NewsManagementSection";
 import { formatImageUrl } from "@/lib/utils/url";
 
 export default function AdminDashboard() {
@@ -523,6 +524,7 @@ export default function AdminDashboard() {
     { id: 'payment-points', label: 'Points de Paiement', icon: <Banknote size={20} /> },
     { id: 'utilisateurs',     label: 'Utilisateurs',      icon: <Users size={20} /> },
     { id: 'approbations',    label: 'Approbations',      icon: <CheckSquare size={20} /> },
+    { id: 'news',            label: 'Actualités',        icon: <Newspaper size={20} /> },
     { id: 'profil',          label: 'Mon Profil',        icon: <UserIcon size={20} /> },
   ];
 
@@ -1613,6 +1615,11 @@ export default function AdminDashboard() {
                 )}
               </form>
             </div>
+          )}
+
+          {/* ── ACTUALITÉS ── */}
+          {activeTab === 'news' && (
+            <NewsManagementSection />
           )}
 
           {/* ── REJECTION MODAL ── */}
