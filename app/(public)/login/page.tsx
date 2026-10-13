@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Logo } from "@/components/Logo";
-import { Sun, Moon, AlertCircle, Ticket, QrCode } from "lucide-react";
+import { Sun, Moon, AlertCircle, Ticket, QrCode, MailCheck, CheckCircle2 } from "lucide-react";
 
 // ── Social login SVG icons ──────────────────────────────────────────────────
 
@@ -104,6 +104,7 @@ function LoginContent() {
   const [mounted, setMounted] = useState(false);
   const [loadingProvider, setLoadingProvider] = useState<Provider | null>(null);
   const [error, setError] = useState("");
+  const [infoMessage, setInfoMessage] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -118,6 +119,7 @@ function LoginContent() {
 
   const handleEmailLogin = async () => {
     setError("");
+    setInfoMessage("");
     setLoading(true);
 
     // 1. Vérification Rate Limiting (10 tentatives max / 24 heures)
@@ -173,8 +175,10 @@ function LoginContent() {
         
         if (signUpError) {
           setError(signUpError.message || "Erreur d'inscription.");
+          setInfoMessage("");
         } else {
-          setError("Veuillez vérifier vos emails pour confirmer votre inscription.");
+          setError("");
+          setInfoMessage("Veuillez vérifier vos emails pour confirmer votre inscription.");
         }
       } else {
         setError(signInError.message || "La connexion a échoué.");
@@ -195,6 +199,7 @@ function LoginContent() {
 
   const handleOAuth = async (provider: Provider) => {
     setError("");
+    setInfoMessage("");
     setLoadingProvider(provider);
 
     // Vérification Rate Limiting avant redirection OAuth
@@ -373,11 +378,31 @@ function LoginContent() {
             </p>
           </div>
 
+          {/* Success / Email confirmation notification */}
+          {(infoMessage || (error && error.includes("vérifier vos emails"))) && (
+            <div className="flex items-start gap-3.5 p-4 rounded-2xl bg-passi-turquoise/10 dark:bg-passi-turquoise/15 border border-passi-turquoise/30 shadow-sm animate-in fade-in duration-300">
+              <div className="w-9 h-9 rounded-xl bg-passi-turquoise/20 text-passi-turquoise flex items-center justify-center flex-shrink-0 mt-0.5">
+                <MailCheck size={20} />
+              </div>
+              <div className="space-y-0.5">
+                <h4 className="text-sm font-bold text-passi-turquoise">
+                  Email de confirmation envoyé !
+                </h4>
+                <p className="text-xs font-medium leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                  {infoMessage || error}
+                </p>
+                <p className="text-[11px] font-semibold text-passi-turquoise/80 pt-0.5">
+                  💡 Pensez à vérifier vos courriers indésirables (spams).
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Error banner */}
-          {error && (
-            <div className="flex items-center gap-2 p-3 rounded-xl bg-passi-corail/10 border border-passi-corail/20">
-              <AlertCircle size={16} className="text-passi-corail flex-shrink-0" />
-              <span className="text-passi-corail text-sm font-semibold">
+          {error && !error.includes("vérifier vos emails") && (
+            <div className="flex items-center gap-2.5 p-3 rounded-xl bg-passi-corail/10 border border-passi-corail/20 text-passi-corail">
+              <AlertCircle size={16} className="flex-shrink-0" />
+              <span className="text-sm font-semibold">
                 {error}
               </span>
             </div>
