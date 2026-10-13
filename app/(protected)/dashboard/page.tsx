@@ -306,7 +306,8 @@ export default function UserDashboard() {
               </div>
 
 
-              {/* Categories */}
+              {/* Categories - Masqué pour le moment */}
+              {/* 
               {activeTab === 'explorer' && (
                 <>
                   <div className="flex justify-between items-end mb-8">
@@ -337,9 +338,10 @@ export default function UserDashboard() {
                   </div>
                 </>
               )}
+              */}
 
               {/* Selections */}
-              <h2 className="text-2xl font-extrabold text-passi-bleu dark:text-white mt-12 mb-8">
+              <h2 className="text-2xl font-extrabold text-passi-bleu dark:text-white mt-8 mb-8">
                 {activeTab === 'catalog' ? 'Tous les événements' : 'Nos sélections'}
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
