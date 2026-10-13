@@ -87,3 +87,78 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Une erreur interne est survenue" }, { status: 500 });
   }
 }
+
+export async function DELETE(req: NextRequest) {
+  const { error: authError } = await requireRole(['admin']);
+  if (authError) return authError;
+
+  try {
+    const body = await req.json();
+    const { passId, holderNameConfirmation } = body || {};
+
+    if (!passId || typeof passId !== 'string') {
+      return NextResponse.json({ error: 'Identifiant du pass requis' }, { status: 400 });
+    }
+
+    if (!holderNameConfirmation || typeof holderNameConfirmation !== 'string') {
+      return NextResponse.json(
+        { error: 'Veuillez saisir le nom du titulaire pour confirmer la suppression.' },
+        { status: 400 }
+      );
+    }
+
+    // 1. Fetch pass to inspect holder identity
+    const { data: pass, error: fetchError } = await supabaseAdmin
+      .from('passes')
+      .select('id, guest_first_name, guest_last_name, user_id, entry_status, profiles(full_name)')
+      .eq('id', passId)
+      .single();
+
+    if (fetchError || !pass) {
+      return NextResponse.json({ error: 'Pass introuvable' }, { status: 404 });
+    }
+
+    // 2. Compute expected holder names
+    const guestFullName = `${pass.guest_first_name || ''} ${pass.guest_last_name || ''}`.trim();
+    const profileFullName = ((pass.profiles as any)?.full_name || '').trim();
+    const expectedNames = [guestFullName, profileFullName].filter(n => n.length > 0);
+
+    const inputClean = holderNameConfirmation.trim().toLowerCase();
+    const isMatched = expectedNames.some(name => name.toLowerCase() === inputClean);
+
+    if (!isMatched) {
+      return NextResponse.json(
+        {
+          error: `Le nom saisi ne correspond pas. Nom attendu : "${expectedNames[0] || 'Inconnu'}"`,
+        },
+        { status: 400 }
+      );
+    }
+
+    // 3. Delete pass from database
+    const { error: deleteError } = await supabaseAdmin
+      .from('passes')
+      .delete()
+      .eq('id', passId);
+
+    if (deleteError) {
+      console.error('Error deleting pass in admin DELETE:', deleteError);
+      if (deleteError.message?.includes('immutable and cannot be deleted')) {
+        return NextResponse.json(
+          {
+            error:
+              "Ce pass est finalisé/payé. Pour autoriser sa suppression par les administrateurs, appliquez la migration 'supabase/allow_admin_delete_pass.sql'.",
+          },
+          { status: 403 }
+        );
+      }
+      return NextResponse.json({ error: 'Impossible de supprimer le pass: ' + deleteError.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true, message: 'Pass supprimé avec succès' });
+  } catch (err: any) {
+    console.error('Server error in admin passes DELETE:', err);
+    return NextResponse.json({ error: 'Une erreur interne est survenue' }, { status: 500 });
+  }
+}
+

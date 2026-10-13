@@ -271,6 +271,18 @@ export const api = {
     }
   },
 
+  async deletePass(passId: string, holderNameConfirmation: string): Promise<void> {
+    const res = await fetch('/api/admin/passes', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ passId, holderNameConfirmation }),
+    });
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || "Impossible de supprimer le pass");
+    }
+  },
+
   // --- SCANNER (Phase 5) ---
   async scanPass(qrUuid: string): Promise<{ success: boolean, message: string }> {
     const supabase = createClient();

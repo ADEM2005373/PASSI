@@ -64,6 +64,12 @@ export default function AdminDashboard() {
   const [isRejecting, setIsRejecting] = useState(false);
   const [approbationMsg, setApprobationMsg] = useState("");
 
+  // Delete pass confirmation state
+  const [deleteModalPass, setDeleteModalPass] = useState<Pass | null>(null);
+  const [deleteConfirmationInput, setDeleteConfirmationInput] = useState("");
+  const [isDeletingPass, setIsDeletingPass] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
   useEffect(() => {
     if (user?.full_name) setAdminFullName(user.full_name);
   }, [user]);
@@ -276,6 +282,32 @@ export default function AdminDashboard() {
       alert("Erreur: " + err.message);
     } finally {
       setIsRejecting(false);
+    }
+  };
+
+  const handleDeletePass = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!deleteModalPass) return;
+
+    const expectedName = `${deleteModalPass.guest_first_name || ''} ${deleteModalPass.guest_last_name || ''}`.trim() || 'Inconnu';
+    if (deleteConfirmationInput.trim().toLowerCase() !== expectedName.toLowerCase()) {
+      setDeleteError(`Le nom saisi ne correspond pas. Veuillez saisir exactement : "${expectedName}"`);
+      return;
+    }
+
+    setIsDeletingPass(true);
+    setDeleteError(null);
+    try {
+      await api.deletePass(deleteModalPass.id, deleteConfirmationInput.trim());
+      setDeleteModalPass(null);
+      setDeleteConfirmationInput("");
+      showApprobationMsg("Pass supprimé définitivement avec succès !");
+      await fetchData();
+    } catch (err: any) {
+      console.error("Delete pass error:", err);
+      setDeleteError(err.message || "Erreur lors de la suppression du pass");
+    } finally {
+      setIsDeletingPass(false);
     }
   };
 
@@ -1398,6 +1430,19 @@ export default function AdminDashboard() {
                               <Check size={16} /> Payé & Confirmé
                             </div>
                           )}
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDeleteModalPass(pass);
+                              setDeleteConfirmationInput("");
+                              setDeleteError(null);
+                            }}
+                            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-bold text-red-500 hover:text-white bg-red-500/10 hover:bg-red-500 border border-red-500/20 hover:border-red-500 transition-all cursor-pointer"
+                            title="Supprimer définitivement ce pass"
+                          >
+                            <Trash2 size={15} /> Supprimer
+                          </button>
                         </div>
                       </div>
                     );
@@ -1474,6 +1519,126 @@ export default function AdminDashboard() {
               </div>
             </div>
           )}
+
+          {/* ── DELETE PASS CONFIRMATION MODAL ── */}
+          {deleteModalPass && (() => {
+            const expectedName = `${deleteModalPass.guest_first_name || ''} ${deleteModalPass.guest_last_name || ''}`.trim() || 'Inconnu';
+            const isMatch = deleteConfirmationInput.trim().toLowerCase() === expectedName.toLowerCase();
+
+            return (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+                <div className="bg-white dark:bg-[#151D2A] p-6 sm:p-8 rounded-[2rem] w-full max-w-lg shadow-2xl border border-red-500/30">
+                  <div className="flex items-center gap-3 mb-4 text-red-500">
+                    <div className="w-12 h-12 rounded-2xl bg-red-500/10 flex items-center justify-center">
+                      <Trash2 size={24} />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-black text-gray-900 dark:text-white">
+                        Supprimer définitivement ce Pass
+                      </h3>
+                      <p className="text-xs text-red-500 font-semibold uppercase tracking-wider">
+                        Action irréversible
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 mb-6 text-sm text-red-700 dark:text-red-300 space-y-1">
+                    <p className="font-bold">⚠️ Attention :</p>
+                    <p className="text-xs leading-relaxed text-red-600 dark:text-red-300/90">
+                      Ce pass sera immédiatement et définitivement supprimé de la base de données, y compris tous ses QR codes d'accès et de boisson.
+                    </p>
+                  </div>
+
+                  {/* Pass Holder Info Card */}
+                  <div className="p-4 rounded-2xl bg-gray-50 dark:bg-[#0D131F] border border-gray-200 dark:border-gray-800 mb-6 space-y-2">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-gray-500 dark:text-gray-400 font-medium">Titulaire du Pass :</span>
+                      <span className="font-extrabold text-gray-900 dark:text-white text-sm">{expectedName}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-gray-500 dark:text-gray-400 font-medium">Événement :</span>
+                      <span className="font-bold text-gray-800 dark:text-gray-200">{deleteModalPass.events?.title || 'Inconnu'}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-gray-500 dark:text-gray-400 font-medium">Statut :</span>
+                      <span className="font-mono font-bold uppercase text-xs px-2 py-0.5 rounded-lg bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+                        {deleteModalPass.entry_status}
+                      </span>
+                    </div>
+                  </div>
+
+                  <form onSubmit={handleDeletePass} className="space-y-5">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-2">
+                        Pour confirmer, veuillez saisir exactement le nom du titulaire :
+                      </label>
+                      <div className="mb-2 p-2.5 rounded-xl bg-gray-100 dark:bg-black/30 border border-dashed border-gray-300 dark:border-gray-700 font-mono font-bold text-sm text-center text-red-500 select-all">
+                        {expectedName}
+                      </div>
+                      <input
+                        type="text"
+                        value={deleteConfirmationInput}
+                        onChange={e => {
+                          setDeleteConfirmationInput(e.target.value);
+                          setDeleteError(null);
+                        }}
+                        placeholder={`Tapez "${expectedName}"`}
+                        className={`w-full px-4 py-3 rounded-xl border text-sm font-semibold transition-all outline-none ${
+                          isMatch
+                            ? "border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                            : "border-gray-300 dark:border-gray-700 bg-white dark:bg-[#0D131F] text-gray-900 dark:text-white focus:border-red-500"
+                        }`}
+                        autoFocus
+                      />
+                      {isMatch && (
+                        <p className="text-xs text-emerald-500 font-bold mt-1.5 flex items-center gap-1">
+                          <Check size={14} /> Nom correspondant, confirmation valide.
+                        </p>
+                      )}
+                    </div>
+
+                    {deleteError && (
+                      <div className="p-3 rounded-xl bg-red-500/15 border border-red-500/30 text-xs text-red-500 font-semibold">
+                        {deleteError}
+                      </div>
+                    )}
+
+                    <div className="flex gap-3 justify-end pt-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDeleteModalPass(null);
+                          setDeleteConfirmationInput("");
+                          setDeleteError(null);
+                        }}
+                        disabled={isDeletingPass}
+                        className="px-4 py-2.5 rounded-xl text-sm font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+                      >
+                        Annuler
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={!isMatch || isDeletingPass}
+                        className="px-5 py-2.5 rounded-xl text-sm font-bold text-white bg-red-600 hover:bg-red-700 shadow-lg shadow-red-600/30 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 cursor-pointer"
+                      >
+                        {isDeletingPass ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                            <span>Suppression...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Trash2 size={16} />
+                            <span>Supprimer définitivement</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            );
+          })()}
 
         </div>
       </main>
