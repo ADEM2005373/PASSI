@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Logo } from "@/components/Logo";
+import { getURL } from "@/lib/utils/url";
 import { AlertCircle, CheckCircle2, ArrowLeft } from "lucide-react";
 import { resetPassword } from "./actions";
 
@@ -19,7 +20,7 @@ export default function ForgotPasswordPage() {
     setError("");
     setSuccess(false);
 
-    const result = await resetPassword(email, window.location.origin);
+    const result = await resetPassword(email, getURL());
 
     if (result.error) {
       setError(result.error || "Une erreur est survenue lors de l'envoi de l'email.");

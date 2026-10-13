@@ -1,4 +1,5 @@
 import { createClient } from '../supabase/client';
+import { getURL } from '../utils/url';
 
 export type User = {
   id: string;
@@ -74,7 +75,7 @@ export const api = {
     await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: redirectTo ?? `${window.location.origin}/auth/callback`,
+        redirectTo: redirectTo ?? `${getURL()}/auth/callback`,
       },
     });
   },

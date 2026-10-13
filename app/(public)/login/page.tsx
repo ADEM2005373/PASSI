@@ -5,6 +5,7 @@ import { useTheme } from "next-themes";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { getURL } from "@/lib/utils/url";
 import { Logo } from "@/components/Logo";
 import { Sun, Moon, AlertCircle, Ticket, QrCode, MailCheck, CheckCircle2 } from "lucide-react";
 
@@ -169,7 +170,7 @@ function LoginContent() {
           email,
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}/auth/callback`,
+            emailRedirectTo: `${getURL()}/auth/callback`,
           },
         });
         
@@ -225,7 +226,7 @@ function LoginContent() {
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: supabaseProvider,
       options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=/dashboard`,
+        redirectTo: `${getURL()}/auth/callback?next=/dashboard`,
         queryParams: {
           prompt: 'select_account',
           ...(provider === "instagram" && { display: "popup" }),

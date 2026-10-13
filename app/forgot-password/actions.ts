@@ -2,6 +2,7 @@
 
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { getURL } from "@/lib/utils/url";
 
 export async function resetPassword(email: string, origin: string) {
   const cookieStore = await cookies();
@@ -23,8 +24,9 @@ export async function resetPassword(email: string, origin: string) {
     }
   );
 
+  const baseUrl = origin || getURL();
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${origin}/auth/callback?next=/update-password`,
+    redirectTo: `${getURL()}/auth/callback?next=/update-password`,
   });
 
   if (error) {

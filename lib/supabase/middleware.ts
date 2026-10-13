@@ -35,8 +35,8 @@ export async function updateSession(request: NextRequest) {
   const url = request.nextUrl.clone()
   const path = request.nextUrl.pathname
 
-  // Allow auth callbacks to process without any interference
-  if (path.startsWith('/auth/callback')) {
+  // Allow auth callbacks and public auth API endpoints (e.g. rate limiting) to process without interference
+  if (path.startsWith('/auth/callback') || path.startsWith('/api/auth')) {
     return supabaseResponse
   }
 

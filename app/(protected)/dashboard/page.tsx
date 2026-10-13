@@ -8,6 +8,7 @@ import { Search, Calendar, MapPin, Heart, Ticket, User, Home, Compass, LogOut, F
 import { api } from '@/lib/services/api'
 import { Logo } from '@/components/Logo'
 import { createClient } from '@/lib/supabase/client'
+import { getURL } from '@/lib/utils/url'
 import { useAuth } from '@/lib/context/auth-context'
 import { CompleteProfileModal } from '@/components/CompleteProfileModal'
 import { PassCard } from '@/components/PassCard'
@@ -177,7 +178,7 @@ export default function UserDashboard() {
     const { error } = await supabase.auth.linkIdentity({
       provider,
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${getURL()}/auth/callback`,
         ...(provider === "instagram" && {
           queryParams: { display: "popup" },
         }),

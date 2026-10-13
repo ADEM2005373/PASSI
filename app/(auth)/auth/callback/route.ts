@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { createClient as createSupabaseAdminClient } from '@supabase/supabase-js'
+import { getURL } from '@/lib/utils/url'
 
 /**
  * OAuth & Auth Callback Route Handler
@@ -12,6 +13,7 @@ import { createClient as createSupabaseAdminClient } from '@supabase/supabase-js
  */
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url)
+  const canonicalBase = getURL()
   const code = requestUrl.searchParams.get('code')
   const token_hash = requestUrl.searchParams.get('token_hash')
   const type = requestUrl.searchParams.get('type')
@@ -19,11 +21,11 @@ export async function GET(request: NextRequest) {
 
   // Si aucun paramètre d'échange n'est présent
   if (!code && !token_hash) {
-    return NextResponse.redirect(new URL('/login?error=oauth_failed', request.url))
+    return NextResponse.redirect(new URL('/login?error=oauth_failed', canonicalBase))
   }
 
   // Prépare une réponse par défaut (sera modifiée pour la redirection finale)
-  let response = NextResponse.redirect(new URL('/login?error=oauth_failed', request.url))
+  let response = NextResponse.redirect(new URL('/login?error=oauth_failed', canonicalBase))
 
   // Client Supabase SSR synchronisé avec les cookies de la requête et de la réponse
   const supabase = createServerClient(
@@ -52,20 +54,20 @@ export async function GET(request: NextRequest) {
     const { data, error } = await supabase.auth.verifyOtp({ token_hash, type: 'recovery' })
     if (error || !data?.user) {
       console.error('[auth/callback] Verify OTP error:', error)
-      return NextResponse.redirect(new URL('/login?error=oauth_failed', request.url))
+      return NextResponse.redirect(new URL('/login?error=oauth_failed', canonicalBase))
     }
     authUser = data.user
   } else if (code) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code)
     if (error || !data?.user) {
       console.error('[auth/callback] exchangeCodeForSession error:', error)
-      return NextResponse.redirect(new URL('/login?error=oauth_failed', request.url))
+      return NextResponse.redirect(new URL('/login?error=oauth_failed', canonicalBase))
     }
     authUser = data.user
   }
 
   if (!authUser) {
-    return NextResponse.redirect(new URL('/login?error=oauth_failed', request.url))
+    return NextResponse.redirect(new URL('/login?error=oauth_failed', canonicalBase))
   }
 
   // Client admin pour garantir la création et la lecture immédiate du profil (évite RLS race condition)
@@ -129,7 +131,7 @@ export async function GET(request: NextRequest) {
   }
 
   // 3. Construction de la réponse finale de redirection AVEC transfert exact de tous les cookies de session
-  const targetUrl = new URL(redirectPath, requestUrl.origin)
+  const targetUrl = new URL(redirectPath, canonicalBase)
   const finalResponse = NextResponse.redirect(targetUrl)
 
   // Copie tous les cookies de session Supabase enregistrés sur `response` vers `finalResponse`

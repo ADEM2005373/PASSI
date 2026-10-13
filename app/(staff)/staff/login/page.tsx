@@ -3,6 +3,7 @@
 import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { getURL } from "@/lib/utils/url";
 import { Logo } from "@/components/Logo";
 import { useAuth } from "@/lib/context/auth-context";
 
@@ -90,7 +91,7 @@ function StaffLoginContent() {
                     const { data, error } = await supabase.auth.linkIdentity({ 
                       provider: 'google',
                       options: {
-                        redirectTo: `${window.location.origin}/auth/callback`,
+                        redirectTo: `${getURL()}/auth/callback`,
                         queryParams: { prompt: 'select_account' }
                       }
                     });
