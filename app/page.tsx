@@ -1,24 +1,18 @@
 "use client"
 
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { useTheme } from 'next-themes'
-import { ArrowRight, Moon, Sun, Ticket, ShieldCheck, Zap, Sparkles, Compass } from 'lucide-react'
+import { ArrowRight, Moon, Sun, Ticket, ShieldCheck, Zap, Sparkles } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { api, Event } from '@/lib/services/api'
 import { Logo } from '@/components/Logo'
-import { SearchBarWithSuggestions } from '@/components/SearchBarWithSuggestions'
 
 export default function LandingPage() {
-  const router = useRouter()
-  const { theme, setTheme, resolvedTheme } = useTheme()
+  const { setTheme, resolvedTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
-  const [events, setEvents] = useState<Event[]>([])
 
-  // Avoid hydration mismatch & fetch active events for search
+  // Avoid hydration mismatch
   useEffect(() => {
     setMounted(true)
-    api.getEvents().then(data => setEvents(data || [])).catch(() => {})
   }, [])
 
   return (
@@ -66,20 +60,6 @@ export default function LandingPage() {
           <p className="text-xl md:text-2xl text-passi-text-sec font-medium max-w-2xl mx-auto lg:mx-0">
             Passi est le système ultime de billetterie intelligente. Rapide, sécurisé et conçu pour vous offrir la meilleure expérience événementielle.
           </p>
-
-          {/* Fault-Tolerant Search Bar with Live Suggestions Dropdown */}
-          <div className="w-full max-w-xl mx-auto lg:mx-0 pt-2 text-left">
-            <SearchBarWithSuggestions
-              events={events}
-              placeholder="Rechercher une soirée, un concert, un lieu..."
-              autoRedirectOnSelect={true}
-              onChange={(query) => {
-                if (query.trim().length >= 2) {
-                  router.push(`/catalogue?q=${encodeURIComponent(query.trim())}`)
-                }
-              }}
-            />
-          </div>
 
           <div className="flex flex-col sm:flex-row items-center gap-4 justify-center lg:justify-start pt-2">
             <Link href="/login" className="bg-passi-corail text-white px-8 py-4 rounded-full font-extrabold text-lg flex items-center gap-2 hover:scale-105 transition-transform shadow-xl shadow-passi-corail/30 w-full sm:w-auto justify-center">
