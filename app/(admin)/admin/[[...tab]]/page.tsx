@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { api, Pass, User, Event } from "@/lib/services/api";
 import { useAuth } from "@/lib/context/auth-context";
 import { Logo } from "@/components/Logo";
-import { Sun, Moon, LogOut, LayoutDashboard, CalendarDays, Users, CheckSquare, Plus, Trash2, Pencil, X, ExternalLink, Check, DollarSign, Download, User as UserIcon, Banknote, ShieldAlert, ShieldCheck, FileSpreadsheet, FileText, Tag, Ticket } from "lucide-react";
+import { Sun, Moon, LogOut, LayoutDashboard, CalendarDays, Users, CheckSquare, Plus, Trash2, Pencil, X, ExternalLink, Check, DollarSign, Download, User as UserIcon, Banknote, ShieldAlert, ShieldCheck, FileSpreadsheet, FileText, Tag, Ticket, Copy } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { PassCreationSection } from "@/components/admin/PassCreationSection";
@@ -289,9 +290,21 @@ export default function AdminDashboard() {
     e.preventDefault();
     if (!deleteModalPass) return;
 
-    const expectedName = `${deleteModalPass.guest_first_name || ''} ${deleteModalPass.guest_last_name || ''}`.trim() || 'Inconnu';
-    if (deleteConfirmationInput.trim().toLowerCase() !== expectedName.toLowerCase()) {
-      setDeleteError(`Le nom saisi ne correspond pas. Veuillez saisir exactement : "${expectedName}"`);
+    const normalize = (s: string) => (s || '').trim().replace(/\s+/g, ' ').toLowerCase();
+    const expectedGuestName = [deleteModalPass.guest_first_name, deleteModalPass.guest_last_name]
+      .map(s => (s || '').trim())
+      .filter(Boolean)
+      .join(' ');
+    const expectedProfileName = ((deleteModalPass as any).profiles?.full_name || '').trim();
+    const expectedCandidates = [expectedGuestName, expectedProfileName]
+      .filter(Boolean)
+      .map(normalize);
+
+    const inputClean = normalize(deleteConfirmationInput);
+    const isMatch = expectedCandidates.includes(inputClean);
+
+    if (!isMatch) {
+      setDeleteError(`Le nom saisi ne correspond pas. Veuillez saisir exactement : "${expectedGuestName || expectedProfileName || 'Inconnu'}"`);
       return;
     }
 
@@ -1490,9 +1503,9 @@ export default function AdminDashboard() {
           )}
 
           {/* ── REJECTION MODAL ── */}
-          {rejectModalPass && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-              <div className="bg-white dark:bg-passi-bleu p-6 rounded-2xl w-full max-w-md shadow-xl" style={{ border: '1px solid var(--border)' }}>
+          {mounted && rejectModalPass && createPortal(
+            <div className="fixed inset-0 z-[9999] overflow-y-auto flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
+              <div className="relative my-auto bg-white dark:bg-passi-bleu p-6 rounded-2xl w-full max-w-md shadow-2xl" style={{ border: '1px solid var(--border)' }}>
                 <h3 className="text-xl font-bold mb-2">Rejeter le Pass</h3>
                 <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
                   Êtes-vous sûr de vouloir rejeter ce pass ? Cette action marquera la demande comme rejetée.
@@ -1517,19 +1530,28 @@ export default function AdminDashboard() {
                   </div>
                 </form>
               </div>
-            </div>
+            </div>,
+            document.body
           )}
 
           {/* ── DELETE PASS CONFIRMATION MODAL ── */}
-          {deleteModalPass && (() => {
-            const expectedName = `${deleteModalPass.guest_first_name || ''} ${deleteModalPass.guest_last_name || ''}`.trim() || 'Inconnu';
-            const isMatch = deleteConfirmationInput.trim().toLowerCase() === expectedName.toLowerCase();
+          {mounted && deleteModalPass && (() => {
+            const normalize = (s: string) => (s || '').trim().replace(/\s+/g, ' ').toLowerCase();
+            const expectedGuestName = [deleteModalPass.guest_first_name, deleteModalPass.guest_last_name]
+              .map(s => (s || '').trim())
+              .filter(Boolean)
+              .join(' ');
+            const expectedProfileName = ((deleteModalPass as any).profiles?.full_name || '').trim();
+            const targetName = expectedGuestName || expectedProfileName || 'Inconnu';
+            const expectedCandidates = [expectedGuestName, expectedProfileName].filter(Boolean).map(normalize);
 
-            return (
-              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-                <div className="bg-white dark:bg-[#151D2A] p-6 sm:p-8 rounded-[2rem] w-full max-w-lg shadow-2xl border border-red-500/30">
+            const isMatch = expectedCandidates.includes(normalize(deleteConfirmationInput));
+
+            return createPortal(
+              <div className="fixed inset-0 z-[9999] overflow-y-auto flex items-center justify-center p-4 sm:p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+                <div className="relative my-auto bg-white dark:bg-[#151D2A] p-6 sm:p-8 rounded-[2rem] w-full max-w-lg shadow-2xl border border-red-500/30">
                   <div className="flex items-center gap-3 mb-4 text-red-500">
-                    <div className="w-12 h-12 rounded-2xl bg-red-500/10 flex items-center justify-center">
+                    <div className="w-12 h-12 rounded-2xl bg-red-500/10 flex items-center justify-center flex-shrink-0">
                       <Trash2 size={24} />
                     </div>
                     <div>
@@ -1553,7 +1575,7 @@ export default function AdminDashboard() {
                   <div className="p-4 rounded-2xl bg-gray-50 dark:bg-[#0D131F] border border-gray-200 dark:border-gray-800 mb-6 space-y-2">
                     <div className="flex justify-between items-center text-xs">
                       <span className="text-gray-500 dark:text-gray-400 font-medium">Titulaire du Pass :</span>
-                      <span className="font-extrabold text-gray-900 dark:text-white text-sm">{expectedName}</span>
+                      <span className="font-extrabold text-gray-900 dark:text-white text-sm">{targetName}</span>
                     </div>
                     <div className="flex justify-between items-center text-xs">
                       <span className="text-gray-500 dark:text-gray-400 font-medium">Événement :</span>
@@ -1569,11 +1591,25 @@ export default function AdminDashboard() {
 
                   <form onSubmit={handleDeletePass} className="space-y-5">
                     <div>
-                      <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-2">
-                        Pour confirmer, veuillez saisir exactement le nom du titulaire :
-                      </label>
-                      <div className="mb-2 p-2.5 rounded-xl bg-gray-100 dark:bg-black/30 border border-dashed border-gray-300 dark:border-gray-700 font-mono font-bold text-sm text-center text-red-500 select-all">
-                        {expectedName}
+                      <div className="flex justify-between items-center mb-2">
+                        <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
+                          Pour confirmer, veuillez saisir le nom du titulaire :
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setDeleteConfirmationInput(targetName)}
+                          className="text-[11px] font-bold text-passi-corail hover:underline flex items-center gap-1 cursor-pointer"
+                          title="Remplir automatiquement le champ"
+                        >
+                          <Copy size={12} /> Copier le nom
+                        </button>
+                      </div>
+                      <div
+                        onClick={() => setDeleteConfirmationInput(targetName)}
+                        className="mb-2 p-2.5 rounded-xl bg-gray-100 dark:bg-black/30 border border-dashed border-gray-300 dark:border-gray-700 font-mono font-bold text-sm text-center text-red-500 select-all cursor-pointer hover:bg-gray-200 dark:hover:bg-black/50 transition-colors"
+                        title="Cliquez pour insérer ce nom"
+                      >
+                        {targetName}
                       </div>
                       <input
                         type="text"
@@ -1582,7 +1618,7 @@ export default function AdminDashboard() {
                           setDeleteConfirmationInput(e.target.value);
                           setDeleteError(null);
                         }}
-                        placeholder={`Tapez "${expectedName}"`}
+                        placeholder={`Tapez "${targetName}"`}
                         className={`w-full px-4 py-3 rounded-xl border text-sm font-semibold transition-all outline-none ${
                           isMatch
                             ? "border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
@@ -1590,9 +1626,13 @@ export default function AdminDashboard() {
                         }`}
                         autoFocus
                       />
-                      {isMatch && (
+                      {isMatch ? (
                         <p className="text-xs text-emerald-500 font-bold mt-1.5 flex items-center gap-1">
                           <Check size={14} /> Nom correspondant, confirmation valide.
+                        </p>
+                      ) : (
+                        <p className="text-[11px] text-gray-400 mt-1">
+                          Astuce : vous pouvez aussi cliquer sur le nom ci-dessus pour le remplir automatiquement.
                         </p>
                       )}
                     </div>
@@ -1636,7 +1676,8 @@ export default function AdminDashboard() {
                     </div>
                   </form>
                 </div>
-              </div>
+              </div>,
+              document.body
             );
           })()}
 

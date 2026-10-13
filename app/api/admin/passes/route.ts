@@ -118,18 +118,25 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Pass introuvable' }, { status: 404 });
     }
 
-    // 2. Compute expected holder names
-    const guestFullName = `${pass.guest_first_name || ''} ${pass.guest_last_name || ''}`.trim();
-    const profileFullName = ((pass.profiles as any)?.full_name || '').trim();
-    const expectedNames = [guestFullName, profileFullName].filter(n => n.length > 0);
+    // 2. Compute expected holder names with whitespace normalization
+    const normalize = (s: string) => (s || '').trim().replace(/\s+/g, ' ').toLowerCase();
 
-    const inputClean = holderNameConfirmation.trim().toLowerCase();
-    const isMatched = expectedNames.some(name => name.toLowerCase() === inputClean);
+    const guestFullName = [pass.guest_first_name, pass.guest_last_name]
+      .map(s => (s || '').trim())
+      .filter(Boolean)
+      .join(' ');
+    const profileFullName = ((pass.profiles as any)?.full_name || '').trim();
+    const expectedCandidates = [guestFullName, profileFullName]
+      .filter(n => n.length > 0)
+      .map(normalize);
+
+    const inputClean = normalize(holderNameConfirmation);
+    const isMatched = expectedCandidates.includes(inputClean);
 
     if (!isMatched) {
       return NextResponse.json(
         {
-          error: `Le nom saisi ne correspond pas. Nom attendu : "${expectedNames[0] || 'Inconnu'}"`,
+          error: `Le nom saisi ne correspond pas. Nom attendu : "${guestFullName || profileFullName || 'Inconnu'}"`,
         },
         { status: 400 }
       );
