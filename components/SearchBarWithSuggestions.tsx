@@ -13,6 +13,7 @@ import {
   Clock 
 } from "lucide-react";
 import { Event } from "@/lib/services/api";
+import { formatImageUrl } from "@/lib/utils/url";
 import { 
   searchEventsFaultTolerant, 
   splitHighlightParts, 
@@ -298,17 +299,7 @@ export function SearchBarWithSuggestions({
                     >
                       {/* Event Thumbnail */}
                       <div className="w-12 h-12 rounded-2xl overflow-hidden bg-gray-200 dark:bg-neutral-800 shrink-0 relative border border-gray-200/60 dark:border-neutral-700/60">
-                        {event.image_url ? (
-                          <img
-                            src={event.image_url}
-                            alt={event.title}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-passi-corail font-bold text-xs bg-passi-corail/10">
-                            <Ticket size={18} />
-                          </div>
-                        )}
+                        <SearchThumbnail event={event} />
                       </div>
 
                       {/* Event Details with Highlighted Title */}
@@ -377,6 +368,28 @@ export function SearchBarWithSuggestions({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function SearchThumbnail({ event }: { event: Event }) {
+  const [hasError, setHasError] = useState(false);
+  const formatted = formatImageUrl(event.image_url);
+
+  if (formatted && !hasError && formatted !== "undefined") {
+    return (
+      <img
+        src={formatted}
+        alt={event.title}
+        className="w-full h-full object-cover"
+        onError={() => setHasError(true)}
+      />
+    );
+  }
+
+  return (
+    <div className="w-full h-full flex items-center justify-center text-passi-corail font-bold text-xs bg-passi-corail/10">
+      <Ticket size={18} />
     </div>
   );
 }

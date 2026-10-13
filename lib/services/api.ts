@@ -1,5 +1,5 @@
 import { createClient } from '../supabase/client';
-import { getURL } from '../utils/url';
+import { getURL, formatImageUrl } from '../utils/url';
 
 export type User = {
   id: string;
@@ -365,7 +365,7 @@ export const api = {
         location, 
         pre_orders_enabled, 
         max_passes_per_user, 
-        image_url, 
+        image_url: formatImageUrl(image_url), 
         description, 
         dress_code, 
         drinks,
@@ -400,7 +400,7 @@ export const api = {
         location, 
         pre_orders_enabled, 
         max_passes_per_user, 
-        image_url, 
+        image_url: formatImageUrl(image_url), 
         description, 
         dress_code, 
         drinks,

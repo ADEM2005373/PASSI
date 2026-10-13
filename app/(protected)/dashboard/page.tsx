@@ -14,6 +14,7 @@ import { CompleteProfileModal } from '@/components/CompleteProfileModal'
 import { PassCard } from '@/components/PassCard'
 import { SearchBarWithSuggestions } from '@/components/SearchBarWithSuggestions'
 import { searchEventsFaultTolerant } from '@/lib/utils/search'
+import { EventCard } from '@/components/EventCard'
 
 export default function UserDashboard() {
   const router = useRouter()
@@ -354,50 +355,7 @@ export default function UserDashboard() {
                   </div>
                 )}
                 {filteredEvents.map((event, index) => (
-                  <div key={event.id} className="bg-white dark:bg-passi-surface rounded-[2rem] overflow-hidden shadow-sm hover:shadow-xl transition-shadow duration-300 border border-gray-100 dark:border-slate-700 group flex flex-col">
-                    <div className="h-56 bg-gray-200 relative overflow-hidden">
-                      <img 
-                        src={event.image_url && event.image_url !== 'undefined' ? event.image_url : `https://images.unsplash.com/photo-1540039155732-6761b54cb43a?q=80&w=600&auto=format&fit=crop&sig=${index}`} 
-                        alt="Event" 
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" 
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
-                      <button className="absolute top-4 right-4 bg-white dark:bg-passi-surface/20 backdrop-blur-md p-2 rounded-full text-white hover:bg-passi-corail transition-colors">
-                        <Heart size={20} />
-                      </button>
-                      <div className="absolute bottom-4 left-4 text-white">
-                        <span className="bg-passi-corail px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">Tendance</span>
-                      </div>
-                    </div>
-                    <div className="p-6 flex-1 flex flex-col">
-                      <h3 className="font-extrabold text-xl text-passi-bleu dark:text-white mb-4 leading-tight">{event.title}</h3>
-                      <div className="space-y-3 mb-8 flex-1">
-                        <div className="flex items-center text-sm font-medium text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-slate-800 p-2 rounded-xl">
-                          <div className="bg-white dark:bg-passi-surface p-1.5 rounded-lg mr-3 shadow-sm"><Calendar size={16} className="text-passi-turquoise" /></div> 
-                          {new Date(event.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
-                        </div>
-                        <div className="flex items-center text-sm font-medium text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-slate-800 p-2 rounded-xl">
-                          <div className="bg-white dark:bg-passi-surface p-1.5 rounded-lg mr-3 shadow-sm"><MapPin size={16} className="text-passi-corail" /></div> 
-                          {event.location}
-                        </div>
-                        {event.dress_code && (
-                          <div className="flex items-center text-sm font-medium text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-slate-800 p-2 rounded-xl">
-                            <div className="bg-white dark:bg-passi-surface p-1.5 rounded-lg mr-3 shadow-sm"><Shirt size={16} className="text-purple-500" /></div> 
-                            {event.dress_code}
-                          </div>
-                        )}
-                        {event.description && (
-                          <div className="flex text-sm font-medium text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-slate-800 p-2 rounded-xl">
-                            <div className="bg-white dark:bg-passi-surface p-1.5 rounded-lg mr-3 shadow-sm h-fit"><Info size={16} className="text-blue-500" /></div> 
-                            <span className="line-clamp-2">{event.description}</span>
-                          </div>
-                        )}
-                      </div>
-                      <Link href={`/events/${event.id}`} className="block text-center w-full bg-passi-bleu text-white py-4 rounded-2xl font-bold hover:bg-passi-corail transition-colors shadow-lg shadow-passi-bleu/20">
-                        Réserver maintenant
-                      </Link>
-                    </div>
-                  </div>
+                  <EventCard key={event.id} event={event} index={index} />
                 ))}
               </div>
             </div>

@@ -18,7 +18,7 @@ const securityHeaders = [
       "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com data:",
-      "img-src 'self' data: blob: https://*.supabase.co https://images.unsplash.com https://*.unsplash.com",
+      "img-src 'self' data: blob: https://*.supabase.co https://images.unsplash.com https://*.unsplash.com https://raw.githubusercontent.com https://avatars.githubusercontent.com https://*.githubusercontent.com https://github.com https://i.imgur.com https://*.imgur.com",
       "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://images.unsplash.com https://*.unsplash.com",
       "frame-ancestors 'none'",
       "base-uri 'self'",
@@ -60,7 +60,14 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
+      { protocol: 'https', hostname: 'raw.githubusercontent.com' },
+      { protocol: 'https', hostname: 'avatars.githubusercontent.com' },
+      { protocol: 'https', hostname: 'github.com' },
+      { protocol: 'https', hostname: '**.githubusercontent.com' },
+      { protocol: 'https', hostname: 'i.imgur.com' },
+      { protocol: 'https', hostname: '**.imgur.com' },
       { protocol: 'https', hostname: 'images.unsplash.com' },
+      { protocol: 'https', hostname: '**.unsplash.com' },
       { protocol: 'https', hostname: '**.supabase.co' },
     ],
   },

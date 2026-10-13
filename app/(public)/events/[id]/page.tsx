@@ -4,9 +4,11 @@ import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { api, Event, User, Pass } from "@/lib/services/api";
+import Image from "next/image";
+import { formatImageUrl } from "@/lib/utils/url";
 import { QRCodeSVG } from 'qrcode.react';
 import { Logo } from "@/components/Logo";
-import { Sun, Moon, ArrowLeft, LogOut, MapPin, Calendar, Clock, Ticket, Wine, CheckCircle, AlertCircle, Info, Shirt } from "lucide-react";
+import { Sun, Moon, ArrowLeft, LogOut, MapPin, Calendar, Clock, Ticket, Wine, CheckCircle, AlertCircle, Info, Shirt, Sparkles } from "lucide-react";
 
 export default function EventPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
@@ -20,6 +22,7 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
   const [guests, setGuests] = useState([{ firstName: "", lastName: "", drinkId: "" }]);
   const [promoCode, setPromoCode] = useState("");
   const [isBooking, setIsBooking] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -111,11 +114,39 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
       <div className="max-w-3xl mx-auto px-6 py-10 space-y-8">
         {/* Event Hero */}
         <div className="card overflow-hidden shadow-xl">
-          {event.image_url && (
-            <div className="w-full h-64 overflow-hidden">
-              <img src={event.image_url} alt={event.title} className="w-full h-full object-cover" />
-            </div>
-          )}
+          {(() => {
+            const formattedImage = formatImageUrl(event.image_url);
+            const hasImage = Boolean(formattedImage && !imageError && formattedImage !== 'undefined');
+            if (hasImage) {
+              return (
+                <div className="w-full h-64 md:h-80 relative overflow-hidden bg-gray-100 dark:bg-slate-800">
+                  <Image
+                    src={formattedImage}
+                    alt={event.title}
+                    fill
+                    priority
+                    sizes="(max-width: 768px) 100vw, 800px"
+                    className="object-cover"
+                    onError={() => setImageError(true)}
+                  />
+                </div>
+              );
+            }
+            return (
+              <div className="w-full h-44 relative overflow-hidden bg-gradient-to-br from-passi-bleu via-slate-800 to-passi-corail/30 flex items-center justify-center">
+                <div className="absolute inset-0 opacity-15 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white to-transparent" />
+                <div className="relative z-10 flex flex-col items-center gap-2 text-white">
+                  <div className="w-14 h-14 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-xl font-black shadow-lg">
+                    {event.title ? event.title.slice(0, 2).toUpperCase() : 'EV'}
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs uppercase tracking-widest font-bold opacity-80">
+                    <Sparkles size={12} className="text-passi-turquoise" />
+                    <span>Passi Expérience</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
           <div className="p-7">
             <h1 className="text-3xl font-extrabold mb-3" style={{ color: 'var(--text-primary)' }}>{event.title}</h1>
             <div className="flex flex-wrap gap-4">

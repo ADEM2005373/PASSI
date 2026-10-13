@@ -11,6 +11,7 @@ import { Sun, Moon, LogOut, LayoutDashboard, CalendarDays, Users, CheckSquare, P
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { PassCreationSection } from "@/components/admin/PassCreationSection";
+import { formatImageUrl } from "@/lib/utils/url";
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -340,6 +341,8 @@ export default function AdminDashboard() {
       .filter(p => p.code.trim() !== "" && Number(p.discount_amount) > 0)
       .map(p => ({ code: p.code.trim().toUpperCase(), discount_amount: Number(p.discount_amount) }));
 
+    const formattedImage = formatImageUrl(newImageUrl);
+
     if (editingEventId) {
       await api.updateEvent(
         editingEventId, 
@@ -348,7 +351,7 @@ export default function AdminDashboard() {
         newLocation, 
         false, 
         newMax, 
-        newImageUrl, 
+        formattedImage, 
         newDescription, 
         newDressCode, 
         validDrinks,
@@ -362,7 +365,7 @@ export default function AdminDashboard() {
         newLocation, 
         false, 
         newMax, 
-        newImageUrl, 
+        formattedImage, 
         newDescription, 
         newDressCode, 
         validDrinks,
@@ -780,7 +783,19 @@ export default function AdminDashboard() {
                   </div>
                   <div>
                     <label className="label">URL de l'image (optionnel)</label>
-                    <input type="url" value={newImageUrl} onChange={e => setNewImageUrl(e.target.value)} placeholder="https://..." className="input" />
+                    <input 
+                      type="url" 
+                      value={newImageUrl} 
+                      onChange={e => setNewImageUrl(e.target.value)} 
+                      onBlur={e => setNewImageUrl(formatImageUrl(e.target.value))}
+                      placeholder="https://... (Lien direct ou GitHub auto-converti)" 
+                      className="input" 
+                    />
+                    {newImageUrl && (
+                      <p className="text-[11px] text-passi-text-sec mt-1 truncate">
+                        Formaté : {formatImageUrl(newImageUrl)}
+                      </p>
+                    )}
                   </div>
 
                   {/* Promo Codes */}

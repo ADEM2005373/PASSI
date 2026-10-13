@@ -23,6 +23,7 @@ import { api, Event } from "@/lib/services/api";
 import { Logo } from "@/components/Logo";
 import { SearchBarWithSuggestions } from "@/components/SearchBarWithSuggestions";
 import { searchEventsFaultTolerant } from "@/lib/utils/search";
+import { EventCard } from "@/components/EventCard";
 
 const CATEGORIES = [
   "Tous",
@@ -273,101 +274,9 @@ export default function CataloguePage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {filteredEvents.map((event, index) => {
-              const formattedDate = event.date 
-                ? new Date(event.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
-                : "Date à confirmer";
-
-              return (
-                <div 
-                  key={event.id}
-                  className="bg-white dark:bg-passi-surface rounded-[2rem] overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-200 dark:border-slate-800 group flex flex-col hover:-translate-y-1"
-                >
-                  {/* Card Header & Thumbnail */}
-                  <div className="h-56 bg-gray-200 dark:bg-slate-800 relative overflow-hidden">
-                    <img 
-                      src={event.image_url && event.image_url !== 'undefined' ? event.image_url : `https://images.unsplash.com/photo-1540039155732-6761b54cb43a?q=80&w=600&auto=format&fit=crop&sig=${index}`} 
-                      alt={event.title}
-                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" 
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
-
-                    {/* Price Badge */}
-                    {event.base_price !== undefined && (
-                      <div className="absolute top-4 left-4 bg-white/95 dark:bg-slate-900/90 backdrop-blur-md px-3.5 py-1 rounded-full text-xs font-black text-passi-bleu dark:text-white shadow-md border border-white/20">
-                        {event.base_price > 0 ? `${event.base_price} DT` : 'Entrée Libre'}
-                      </div>
-                    )}
-
-                    {/* Favorite Button */}
-                    <button 
-                      aria-label="Ajouter aux favoris"
-                      className="absolute top-4 right-4 bg-white/20 backdrop-blur-md p-2 rounded-full text-white hover:bg-passi-corail transition-colors"
-                    >
-                      <Heart size={18} />
-                    </button>
-
-                    {/* Trending tag */}
-                    <div className="absolute bottom-4 left-4 text-white">
-                      <span className="bg-passi-corail px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider shadow-sm">
-                        Événement
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Card Body */}
-                  <div className="p-6 flex-1 flex flex-col justify-between">
-                    <div>
-                      <h3 className="font-extrabold text-xl text-passi-bleu dark:text-white mb-4 leading-snug line-clamp-2">
-                        {event.title}
-                      </h3>
-
-                      <div className="space-y-2.5 mb-6">
-                        <div className="flex items-center text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-slate-800/80 p-2.5 rounded-xl border border-gray-100 dark:border-slate-800">
-                          <div className="bg-white dark:bg-slate-700 p-1.5 rounded-lg mr-2.5 shadow-xs shrink-0">
-                            <Calendar size={14} className="text-passi-turquoise" />
-                          </div> 
-                          <span className="capitalize">{formattedDate}</span>
-                        </div>
-
-                        {event.location && (
-                          <div className="flex items-center text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-slate-800/80 p-2.5 rounded-xl border border-gray-100 dark:border-slate-800">
-                            <div className="bg-white dark:bg-slate-700 p-1.5 rounded-lg mr-2.5 shadow-xs shrink-0">
-                              <MapPin size={14} className="text-passi-corail" />
-                            </div> 
-                            <span className="truncate">{event.location}</span>
-                          </div>
-                        )}
-
-                        {event.dress_code && (
-                          <div className="flex items-center text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-slate-800/80 p-2.5 rounded-xl border border-gray-100 dark:border-slate-800">
-                            <div className="bg-white dark:bg-slate-700 p-1.5 rounded-lg mr-2.5 shadow-xs shrink-0">
-                              <Shirt size={14} className="text-purple-500" />
-                            </div> 
-                            <span className="truncate">{event.dress_code}</span>
-                          </div>
-                        )}
-
-                        {event.description && (
-                          <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 pt-1">
-                            {event.description}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Card CTA */}
-                    <Link 
-                      href={`/events/${event.id}`} 
-                      className="block text-center w-full bg-passi-bleu text-white py-3.5 rounded-2xl font-bold hover:bg-passi-corail transition-colors shadow-md shadow-passi-bleu/20 text-sm flex items-center justify-center gap-2 group-hover:shadow-lg"
-                    >
-                      <span>Réserver mon Pass</span>
-                      <ArrowRight size={16} />
-                    </Link>
-                  </div>
-                </div>
-              );
-            })}
+            {filteredEvents.map((event, index) => (
+              <EventCard key={event.id} event={event} index={index} />
+            ))}
           </div>
         )}
       </main>

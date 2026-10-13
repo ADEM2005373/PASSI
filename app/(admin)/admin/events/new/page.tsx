@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { api, PromoCode } from "@/lib/services/api";
+import { formatImageUrl } from "@/lib/utils/url";
 import { useAuth } from "@/lib/context/auth-context";
 import { Logo } from "@/components/Logo";
 import { 
@@ -111,7 +112,7 @@ export default function NewEventPage() {
         location.trim(),
         false,
         Number(maxPasses) || 1,
-        imageUrl.trim(),
+        formatImageUrl(imageUrl.trim()),
         description.trim() || undefined,
         dressCode.trim() || undefined,
         validDrinks,
@@ -356,9 +357,15 @@ export default function NewEventPage() {
                   type="url"
                   value={imageUrl}
                   onChange={e => setImageUrl(e.target.value)}
-                  placeholder="https://..."
+                  onBlur={e => setImageUrl(formatImageUrl(e.target.value))}
+                  placeholder="https://... (Lien direct ou GitHub auto-converti)"
                   className="input"
                 />
+                {imageUrl && (
+                  <p className="text-[11px] text-passi-text-sec mt-1 truncate">
+                    Formaté : {formatImageUrl(imageUrl)}
+                  </p>
+                )}
               </div>
             </div>
 

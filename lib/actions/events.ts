@@ -3,6 +3,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { requireRole } from '@/lib/supabase/api-security';
 import { PromoCode } from '@/lib/services/api';
+import { formatImageUrl } from '@/lib/utils/url';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -59,7 +60,7 @@ export async function updateEvent(payload: UpdateEventPayload) {
   if (location !== undefined) updatePayload.location = String(location).slice(0, 200);
   if (pre_orders_enabled !== undefined) updatePayload.pre_orders_enabled = Boolean(pre_orders_enabled);
   if (max_passes_per_user !== undefined) updatePayload.max_passes_per_user = Number(max_passes_per_user) || 1;
-  if (image_url !== undefined) updatePayload.image_url = image_url ? String(image_url).slice(0, 500) : null;
+  if (image_url !== undefined) updatePayload.image_url = image_url ? String(formatImageUrl(image_url)).slice(0, 500) : null;
   if (description !== undefined) updatePayload.description = description ? String(description).slice(0, 2000) : null;
   if (dress_code !== undefined) updatePayload.dress_code = dress_code ? String(dress_code).slice(0, 200) : null;
   if (base_price !== undefined) updatePayload.base_price = Math.max(0, Number(base_price) || 0);
@@ -168,5 +169,105 @@ export async function updateEvent(payload: UpdateEventPayload) {
       ...event,
       drink_menus: updatedDrinks || []
     }
+  };
+}
+
+export interface CreateEventPayload {
+  title: string;
+  date: string;
+  location: string;
+  pre_orders_enabled?: boolean;
+  max_passes_per_user?: number;
+  image_url?: string;
+  description?: string;
+  dress_code?: string;
+  drinks?: { name: string; price?: number }[];
+  base_price?: number;
+  promo_codes?: PromoCode[];
+}
+
+/**
+ * Server Action: createEvent
+ * Creates a new event with sanitized fields and formatted image URL.
+ */
+export async function createEvent(payload: CreateEventPayload) {
+  const { error: authError } = await requireRole(['admin']);
+  if (authError) {
+    throw new Error('Action non autorisée : droits administrateur requis');
+  }
+
+  const { 
+    title, 
+    date, 
+    location, 
+    pre_orders_enabled, 
+    max_passes_per_user, 
+    image_url, 
+    description, 
+    dress_code, 
+    drinks, 
+    base_price, 
+    promo_codes 
+  } = payload || {};
+
+  if (!title || !date || !location) {
+    throw new Error('Champs obligatoires manquants (titre, date, lieu)');
+  }
+
+  const formattedImage = image_url ? String(formatImageUrl(image_url)).slice(0, 500) : null;
+
+  const { data: newEvent, error: insertError } = await supabaseAdmin
+    .from('events')
+    .insert({
+      title: String(title).slice(0, 200),
+      date,
+      location: String(location).slice(0, 200),
+      pre_orders_enabled: Boolean(pre_orders_enabled),
+      max_passes_per_user: Number(max_passes_per_user) || 1,
+      image_url: formattedImage,
+      description: description ? String(description).slice(0, 2000) : null,
+      dress_code: dress_code ? String(dress_code).slice(0, 200) : null,
+      base_price: Math.max(0, Number(base_price) || 0),
+      promo_codes: Array.isArray(promo_codes) ? promo_codes : [],
+    })
+    .select()
+    .single();
+
+  if (insertError) {
+    console.error('Database error in createEvent server action:', insertError);
+    throw new Error("Impossible de créer l'événement");
+  }
+
+  // Insert drinks if provided
+  if (drinks && Array.isArray(drinks) && drinks.length > 0) {
+    const validDrinks = drinks
+      .filter((d: any) => d && typeof d.name === 'string' && d.name.trim().length > 0)
+      .map((d: any) => ({
+        event_id: newEvent.id,
+        name: String(d.name).trim().slice(0, 100),
+        price: typeof d.price === 'number' ? Math.max(0, d.price) : 0,
+      }));
+
+    if (validDrinks.length > 0) {
+      const { error: drinkErr } = await supabaseAdmin
+        .from('drink_menus')
+        .insert(validDrinks);
+      if (drinkErr) {
+        console.error('Error inserting drinks in createEvent:', drinkErr);
+      }
+    }
+  }
+
+  const { data: createdDrinks } = await supabaseAdmin
+    .from('drink_menus')
+    .select('id, name')
+    .eq('event_id', newEvent.id);
+
+  return {
+    success: true,
+    event: {
+      ...newEvent,
+      drink_menus: createdDrinks || [],
+    },
   };
 }

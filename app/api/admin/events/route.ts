@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { requireRole } from '@/lib/supabase/api-security';
+import { formatImageUrl } from '@/lib/utils/url';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest) {
       location: String(location).slice(0, 200), 
       pre_orders_enabled: Boolean(pre_orders_enabled), 
       max_passes_per_user: Number(max_passes_per_user) || 1,
-      image_url: image_url ? String(image_url).slice(0, 500) : null,
+      image_url: image_url ? String(formatImageUrl(image_url)).slice(0, 500) : null,
       description: description ? String(description).slice(0, 2000) : null,
       dress_code: dress_code ? String(dress_code).slice(0, 200) : null,
       base_price: base_price !== undefined ? Math.max(0, Number(base_price) || 0) : 0,
@@ -75,7 +76,7 @@ export async function PUT(req: NextRequest) {
     if (location !== undefined) updatePayload.location = String(location).slice(0, 200);
     if (pre_orders_enabled !== undefined) updatePayload.pre_orders_enabled = Boolean(pre_orders_enabled);
     if (max_passes_per_user !== undefined) updatePayload.max_passes_per_user = Number(max_passes_per_user) || 1;
-    if (image_url !== undefined) updatePayload.image_url = image_url ? String(image_url).slice(0, 500) : null;
+    if (image_url !== undefined) updatePayload.image_url = image_url ? String(formatImageUrl(image_url)).slice(0, 500) : null;
     if (description !== undefined) updatePayload.description = description ? String(description).slice(0, 2000) : null;
     if (dress_code !== undefined) updatePayload.dress_code = dress_code ? String(dress_code).slice(0, 200) : null;
     if (base_price !== undefined) updatePayload.base_price = Math.max(0, Number(base_price) || 0);

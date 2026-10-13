@@ -10,3 +10,16 @@ export const getURL = () => {
   url = url.startsWith('http') ? url : `https://${url}`;
   return url.endsWith('/') ? url.slice(0, -1) : url;
 };
+
+/**
+ * Auto-converts GitHub blob URLs to raw user content URLs so images can render properly.
+ * E.g., https://github.com/user/repo/blob/main/image.png -> https://raw.githubusercontent.com/user/repo/main/image.png
+ */
+export function formatImageUrl(url?: string | null): string {
+  if (!url || typeof url !== 'string') return '';
+  const trimmed = url.trim();
+  if (trimmed.includes('github.com') && trimmed.includes('/blob/')) {
+    return trimmed.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/');
+  }
+  return trimmed;
+}
