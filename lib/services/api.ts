@@ -5,7 +5,7 @@ export type User = {
   id: string;
   email: string;
   instagram_handle: string;
-  role: 'admin' | 'user' | 'security' | 'barman' | 'PAYMENT_POINT';
+  role: 'admin' | 'user' | 'security' | 'barman' | 'payment_point' | 'PAYMENT_POINT' | string;
   is_suspended?: boolean;
   original_role?: string;
   full_name?: string;
@@ -523,6 +523,30 @@ export const api = {
       console.error("Error creating user:", error);
       throw new Error(error);
     }
+  },
+
+  async createStaffAccount(payload: { email: string; password: string; role: string; fullName?: string; instagramHandle?: string }): Promise<{ success: boolean; userId?: string }> {
+    const res = await fetch('/api/admin/users', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email: payload.email,
+        password: payload.password,
+        role: payload.role,
+        instagramHandle: payload.instagramHandle,
+        fullName: payload.fullName,
+      }),
+    });
+
+    if (!res.ok) {
+      const { error } = await res.json();
+      throw new Error(error || 'Failed to create staff account');
+    }
+
+    const data = await res.json();
+    return { success: true, userId: data.userId };
   },
 
   async toggleUserSuspension(userId: string, is_suspended: boolean): Promise<void> {

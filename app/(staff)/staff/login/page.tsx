@@ -37,9 +37,11 @@ function StaffLoginContent() {
         // Stay on page to show Google Linking UI
       } else {
         // Auto-redirect to appropriate dashboard
-        if (user.role === 'admin') router.replace('/admin');
-        else if (user.role === 'security') router.replace('/scanner/security');
-        else if (user.role === 'barman') router.replace('/scanner/barman');
+        const userRole = (user.role || '').toLowerCase();
+        if (userRole === 'admin') router.replace('/admin');
+        else if (userRole === 'security') router.replace('/scanner/security');
+        else if (userRole === 'barman') router.replace('/scanner/barman');
+        else if (userRole === 'payment_point') router.replace('/payment-point/dashboard');
         else router.replace('/dashboard');
       }
     }
@@ -153,10 +155,29 @@ function StaffLoginContent() {
       }
     } catch (e) {}
 
-    const { error: authError } = await supabase.auth.signInWithPassword({
+    let { error: authError } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
+
+    // Auto-confirm internal staff account if blocked by email confirmation
+    if (authError && authError.message.toLowerCase().includes("email not confirmed")) {
+      try {
+        const confirmRes = await fetch('/api/auth/confirm-staff', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        });
+        const confirmData = await confirmRes.json();
+        if (confirmData?.confirmed) {
+          const retryRes = await supabase.auth.signInWithPassword({
+            email,
+            password,
+          });
+          authError = retryRes.error;
+        }
+      } catch (e) {}
+    }
 
     if (authError) {
       try {

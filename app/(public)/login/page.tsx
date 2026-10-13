@@ -143,10 +143,31 @@ function LoginContent() {
     const supabase = createClient();
 
     // 2. Tentative de connexion
-    const { error: signInError } = await supabase.auth.signInWithPassword({
+    let { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
+
+    // Bypasser la confirmation d'email si le compte est ADMIN ou STAFF
+    if (signInError && signInError.message.toLowerCase().includes("email not confirmed")) {
+      try {
+        const confirmRes = await fetch('/api/auth/confirm-staff', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        });
+        const confirmData = await confirmRes.json();
+        if (confirmData?.confirmed) {
+          // Re-tentative immédiate de connexion car le compte staff/admin est maintenant confirmé
+          const retryRes = await supabase.auth.signInWithPassword({
+            email,
+            password,
+          });
+          signInData = retryRes.data;
+          signInError = retryRes.error;
+        }
+      } catch (e) {}
+    }
 
     if (signInError) {
       // Enregistrer l'échec de tentative
@@ -164,7 +185,7 @@ function LoginContent() {
         }
       } catch (e) {}
 
-      // Si identifiants invalides, tenter l'inscription automatique si applicable
+      // Si identifiants invalides, tenter l'inscription automatique si applicable (pour les utilisateurs réguliers)
       if (signInError.message.includes("Invalid login credentials")) {
         const { error: signUpError } = await supabase.auth.signUp({
           email,
@@ -193,6 +214,34 @@ function LoginContent() {
           body: JSON.stringify({ action: 'reset', email }),
         });
       } catch (e) {}
+
+      // Redirection immédiate selon le rôle du compte (Admin ou Staff ou Utilisateur)
+      try {
+        const user = signInData?.user || (await supabase.auth.getUser()).data.user;
+        if (user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .single();
+
+          const role = (profile?.role || user.user_metadata?.role || '').toLowerCase();
+          if (role === 'admin') {
+            window.location.href = "/admin";
+            return;
+          } else if (role === 'barman') {
+            window.location.href = "/scanner/barman";
+            return;
+          } else if (role === 'security') {
+            window.location.href = "/scanner/security";
+            return;
+          } else if (role === 'payment_point') {
+            window.location.href = "/payment-point/dashboard";
+            return;
+          }
+        }
+      } catch (e) {}
+
       window.location.href = "/dashboard";
     }
     setLoading(false);

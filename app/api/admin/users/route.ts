@@ -31,11 +31,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Rôle invalide' }, { status: 400 });
     }
 
-    // 1. Create Auth User
+    // 1. Create Auth User with email_confirm: true to bypass email confirmation for staff/admin
     const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.createUser({
       email: String(email).trim().toLowerCase(),
       password: String(password),
       email_confirm: true,
+      user_metadata: {
+        role: normalizedRole.toUpperCase(),
+      },
     });
 
     if (authErr) {
