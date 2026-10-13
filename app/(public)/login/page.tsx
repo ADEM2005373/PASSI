@@ -119,16 +119,49 @@ function LoginContent() {
   const handleEmailLogin = async () => {
     setError("");
     setLoading(true);
+
+    // 1. Vérification Rate Limiting (10 tentatives max / 24 heures)
+    try {
+      const rlRes = await fetch('/api/auth/rate-limit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'check', email }),
+      });
+      if (rlRes.status === 429) {
+        const rlData = await rlRes.json();
+        setError(rlData.error || "Trop de tentatives. Veuillez réessayer demain.");
+        setLoading(false);
+        return;
+      }
+    } catch (e) {
+      // Non-bloquant si incident réseau
+    }
+
     const supabase = createClient();
 
-    // First try to sign in
+    // 2. Tentative de connexion
     const { error: signInError } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
     if (signInError) {
-      // If invalid credentials, maybe user doesn't exist. We could try to sign up.
+      // Enregistrer l'échec de tentative
+      try {
+        const failRes = await fetch('/api/auth/rate-limit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'record_failure', email }),
+        });
+        if (failRes.status === 429) {
+          const failData = await failRes.json();
+          setError(failData.error || "Trop de tentatives. Veuillez réessayer demain.");
+          setLoading(false);
+          return;
+        }
+      } catch (e) {}
+
+      // Si identifiants invalides, tenter l'inscription automatique si applicable
       if (signInError.message.includes("Invalid login credentials")) {
         const { error: signUpError } = await supabase.auth.signUp({
           email,
@@ -147,6 +180,14 @@ function LoginContent() {
         setError(signInError.message || "La connexion a échoué.");
       }
     } else {
+      // Connexion réussie : réinitialiser le compteur de tentatives
+      try {
+        await fetch('/api/auth/rate-limit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'reset', email }),
+        });
+      } catch (e) {}
       window.location.href = "/dashboard";
     }
     setLoading(false);
@@ -155,6 +196,22 @@ function LoginContent() {
   const handleOAuth = async (provider: Provider) => {
     setError("");
     setLoadingProvider(provider);
+
+    // Vérification Rate Limiting avant redirection OAuth
+    try {
+      const rlRes = await fetch('/api/auth/rate-limit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'check' }),
+      });
+      if (rlRes.status === 429) {
+        const rlData = await rlRes.json();
+        setError(rlData.error || "Trop de tentatives. Veuillez réessayer demain.");
+        setLoadingProvider(null);
+        return;
+      }
+    } catch (e) {}
+
     const supabase = createClient();
 
     // Map "instagram" to the "facebook" Supabase provider

@@ -137,16 +137,51 @@ function StaffLoginContent() {
     setError("");
     setLoading(true);
 
+    // 1. Vérification Rate Limiting (10 tentatives max / 24h)
+    try {
+      const rlRes = await fetch('/api/auth/rate-limit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'check', email }),
+      });
+      if (rlRes.status === 429) {
+        const rlData = await rlRes.json();
+        setError(rlData.error || "Trop de tentatives. Veuillez réessayer demain.");
+        setLoading(false);
+        return;
+      }
+    } catch (e) {}
+
     const { error: authError } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
     if (authError) {
-      setError(authError.message);
+      try {
+        const failRes = await fetch('/api/auth/rate-limit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'record_failure', email }),
+        });
+        if (failRes.status === 429) {
+          const failData = await failRes.json();
+          setError(failData.error || "Trop de tentatives. Veuillez réessayer demain.");
+          setLoading(false);
+          return;
+        }
+      } catch (e) {}
+      setError(authError.message === "Invalid login credentials" ? "Identifiants incorrects" : authError.message);
       setLoading(false);
+    } else {
+      try {
+        await fetch('/api/auth/rate-limit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'reset', email }),
+        });
+      } catch (e) {}
     }
-    // No else block needed: the useEffect above will handle the redirect once `user` state updates!
   };
 
   return (
