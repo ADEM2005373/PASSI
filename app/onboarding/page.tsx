@@ -90,17 +90,42 @@ export default function OnboardingPage() {
     setIsSubmitting(true)
     const supabase = createClient()
 
+    let hasSucceeded = false
+    let failureMsg = ""
+
+    // 1. Essai de mise à jour directe via client
     const { error: updateError } = await supabase
       .from("profiles")
       .update({
         instagram_handle: formatted,
-        updated_at: new Date().toISOString()
       })
       .eq("id", userId)
 
-    if (updateError) {
-      console.error("Error saving instagram handle:", updateError)
-      setError("Erreur lors de l'enregistrement. Veuillez réessayer.")
+    if (!updateError) {
+      hasSucceeded = true
+    } else {
+      console.warn("Client-side profile update failed, trying server API:", updateError)
+      // 2. Fallback via la route serveur sécurisée
+      try {
+        const apiRes = await fetch("/api/user/onboarding", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ instagramHandle: formatted }),
+        })
+        if (apiRes.ok) {
+          hasSucceeded = true
+        } else {
+          const apiData = await apiRes.json().catch(() => ({}))
+          failureMsg = apiData.error || "Erreur serveur"
+        }
+      } catch (apiErr: any) {
+        console.error("API fallback failed:", apiErr)
+        failureMsg = apiErr?.message || "Erreur de connexion"
+      }
+    }
+
+    if (!hasSucceeded) {
+      setError(failureMsg || "Erreur lors de l'enregistrement. Veuillez réessayer.")
       setIsSubmitting(false)
       return
     }
