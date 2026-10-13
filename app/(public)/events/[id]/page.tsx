@@ -8,7 +8,7 @@ import Image from "next/image";
 import { formatImageUrl } from "@/lib/utils/url";
 import { QRCodeSVG } from 'qrcode.react';
 import { Logo } from "@/components/Logo";
-import { Sun, Moon, ArrowLeft, LogOut, MapPin, Calendar, Clock, Ticket, Wine, CheckCircle, AlertCircle, Info, Shirt, Sparkles } from "lucide-react";
+import { Sun, Moon, ArrowLeft, LogOut, MapPin, Calendar, Clock, Ticket, Wine, CheckCircle, AlertCircle, Info, Shirt, Sparkles, Mail } from "lucide-react";
 
 export default function EventPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
@@ -222,13 +222,24 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
                           <p className="text-xs mt-2 font-medium text-amber-500">En attente d'approbation par les organisateurs...</p>
                         )}
                         {pass.entry_status === 'awaiting_payment' && (
-                          <div className="mt-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 space-y-1">
-                            <p className="font-bold flex items-center gap-1.5">
-                              <AlertCircle size={14} className="text-amber-400" />
-                              Règlement au Point de Paiement
+                          <div className="mt-3 p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 text-xs text-emerald-300 space-y-1.5">
+                            <p className="font-bold flex items-center gap-1.5 text-emerald-400">
+                              <Mail size={14} />
+                              Demande pré-approuvée
                             </p>
                             <p className="text-neutral-300">
-                              Veuillez présenter votre nom ou Pass ID <strong>#{pass.id.slice(0, 8)}</strong> à l'un de nos guichets agréés et régler <strong>{passPrice} DT</strong> en espèces pour activer votre QR code d'accès.
+                              Félicitations ! Votre demande est pré-approuvée. 📧 <strong className="font-bold underline text-white">Veuillez vérifier vos e-mails</strong> pour découvrir nos points de vente et finaliser votre règlement de <strong>{passPrice} DT</strong>.
+                            </p>
+                          </div>
+                        )}
+                        {pass.entry_status === 'rejected' && (
+                          <div className="mt-3 p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/25 text-xs text-rose-300 space-y-1.5">
+                            <p className="font-bold flex items-center gap-1.5 text-rose-400">
+                              <AlertCircle size={14} />
+                              Demande refusée
+                            </p>
+                            <p className="text-neutral-300">
+                              Votre demande de pass a été refusée. 📧 <strong className="font-bold underline text-white">Veuillez vérifier vos e-mails</strong> pour plus de détails.
                             </p>
                           </div>
                         )}

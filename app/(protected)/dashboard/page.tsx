@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { QRCodeSVG } from 'qrcode.react'
-import { Search, Calendar, MapPin, Heart, Ticket, User, Home, Compass, LogOut, FileText, ChevronRight, Settings, Moon, ChevronLeft, MoreHorizontal, Clock, Info, Shirt } from 'lucide-react'
+import { Search, Calendar, MapPin, Heart, Ticket, User, Home, Compass, LogOut, FileText, ChevronRight, Settings, Moon, ChevronLeft, MoreHorizontal, Clock, Info, Shirt, Mail, AlertCircle } from 'lucide-react'
 import { api } from '@/lib/services/api'
 import { Logo } from '@/components/Logo'
 import { createClient } from '@/lib/supabase/client'
@@ -424,27 +424,49 @@ export default function UserDashboard() {
                             <h3 className="text-xl font-bold text-passi-bleu dark:text-white mb-2">En attente</h3>
                             <p className="text-gray-500 dark:text-gray-400 font-medium">Votre demande est en cours de validation par notre équipe.</p>
                           </div>
-                        ) : pass.entry_status === 'awaiting_payment' ? (
-                          <div className="h-full flex flex-col justify-center bg-orange-50 rounded-3xl p-8 border border-orange-100">
-                            <strong className="block text-2xl text-orange-600 mb-3 font-extrabold">Validation réussie ! 🎉</strong> 
-                            <p className="text-orange-700 font-medium text-lg leading-relaxed">Veuillez payer en espèces à l'organisateur sur place pour obtenir votre QR Code d'entrée.</p>
+                        ) : (pass.entry_status === 'awaiting_payment' || (pass as any).status === 'PENDING_PAYMENT') ? (
+                          <div className="h-full w-full flex flex-col justify-center bg-emerald-50 dark:bg-emerald-950/20 rounded-3xl p-6 sm:p-8 border border-emerald-200 dark:border-emerald-800/40 shadow-sm animate-in fade-in duration-300">
+                            <div className="flex items-center gap-3 mb-4">
+                              <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0 shadow-sm">
+                                <Mail size={22} />
+                              </div>
+                              <div>
+                                <span className="text-[11px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Étape 1 : Pré-approbation</span>
+                                <h3 className="text-xl sm:text-2xl text-emerald-800 dark:text-emerald-200 font-extrabold leading-tight">Validation réussie ! 🎉</h3>
+                              </div>
+                            </div>
+                            <div className="bg-white/80 dark:bg-slate-900/60 backdrop-blur-sm rounded-2xl p-4 sm:p-5 border border-emerald-100 dark:border-emerald-800/30 shadow-xs">
+                              <p className="text-emerald-900 dark:text-emerald-100 font-medium text-sm sm:text-base leading-relaxed">
+                                Félicitations ! Votre demande est pré-approuvée. 📧 <strong className="font-extrabold text-emerald-700 dark:text-emerald-300 underline decoration-emerald-400 decoration-2 underline-offset-4">Veuillez vérifier vos e-mails</strong> pour découvrir nos points de vente et finaliser votre paiement.
+                              </p>
+                            </div>
                           </div>
-                        ) : pass.entry_status === 'rejected' ? (
-                          <div className="h-full flex flex-col justify-center bg-red-50 dark:bg-red-900/10 rounded-3xl p-8 border border-red-100 dark:border-red-900/30">
-                            <strong className="block text-2xl text-red-600 mb-3 font-extrabold">Demande rejetée</strong> 
-                            <p className="text-red-700 dark:text-red-400 font-medium text-lg leading-relaxed">
-                              Désolé, votre demande a été rejetée par l'organisation.
-                            </p>
+                        ) : (pass.entry_status === 'rejected' || (pass as any).status === 'REJECTED') ? (
+                          <div className="h-full w-full flex flex-col justify-center bg-rose-50 dark:bg-rose-950/20 rounded-3xl p-6 sm:p-8 border border-rose-200 dark:border-rose-900/30 shadow-sm animate-in fade-in duration-300">
+                            <div className="flex items-center gap-3 mb-4">
+                              <div className="w-12 h-12 rounded-2xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-600 dark:text-rose-400 shrink-0 shadow-sm">
+                                <AlertCircle size={22} />
+                              </div>
+                              <div>
+                                <span className="text-[11px] font-black uppercase tracking-wider text-rose-600 dark:text-rose-400">Notification</span>
+                                <h3 className="text-xl sm:text-2xl text-rose-800 dark:text-rose-200 font-extrabold leading-tight">Demande rejetée</h3>
+                              </div>
+                            </div>
+                            <div className="bg-white/80 dark:bg-slate-900/60 backdrop-blur-sm rounded-2xl p-4 sm:p-5 border border-rose-100 dark:border-rose-900/30 shadow-xs mb-3">
+                              <p className="text-rose-900 dark:text-rose-100 font-medium text-sm sm:text-base leading-relaxed">
+                                Votre demande de pass a été refusée. 📧 <strong className="font-extrabold text-rose-700 dark:text-rose-300 underline decoration-rose-400 decoration-2 underline-offset-4">Veuillez vérifier vos e-mails</strong> pour plus de détails.
+                              </p>
+                            </div>
                             {pass.rejection_reason && (
-                              <div className="mt-4 p-4 bg-white/50 dark:bg-black/20 rounded-xl text-red-800 dark:text-red-300 italic text-sm">
-                                "{pass.rejection_reason}"
+                              <div className="p-3.5 bg-rose-100/60 dark:bg-black/30 rounded-xl text-rose-800 dark:text-rose-300 italic text-xs mb-2 border border-rose-200/40 dark:border-rose-800/30">
+                                Motif : "{pass.rejection_reason}"
                               </div>
                             )}
                             {(() => {
                               const updatedTime = new Date(pass.updated_at || pass.created_at).getTime();
                               const remainingHours = Math.max(1, Math.ceil((48 * 3600 * 1000 - (Date.now() - updatedTime)) / (3600 * 1000)));
                               return (
-                                <p className="text-xs text-red-500/80 mt-4 font-semibold flex items-center gap-1.5">
+                                <p className="text-xs text-rose-500/80 font-semibold flex items-center gap-1.5 mt-2">
                                   <span>⏳ Ce pass sera automatiquement et définitivement supprimé dans {remainingHours}h</span>
                                 </p>
                               );

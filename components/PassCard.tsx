@@ -77,6 +77,10 @@ export function PassCard({ pass, onUpdate }: PassCardProps) {
   const isPendingInvitation = isInvitation && localPass.invitation_status === "PENDING";
   const isDeclinedInvitation = isInvitation && localPass.invitation_status === "DECLINED";
 
+  // Check email notification banners (Phase 1 pre-approval & Rejection)
+  const isAwaitingPayment = localPass.entry_status === "awaiting_payment" || (localPass as any).status === "PENDING_PAYMENT";
+  const isRejected = localPass.entry_status === "rejected" || (localPass as any).status === "REJECTED";
+
   // Check if drink tab should be available:
   // 1. Pass already has a drink attached (drink_id or drink_status)
   // 2. OR Pass is eligible for asynchronous drink selection (VIP, GIFT, ACCEPTED INVITATION) and available drinks exist
@@ -230,6 +234,28 @@ export function PassCard({ pass, onUpdate }: PassCardProps) {
       ) : (
         /* STANDARD & ACCEPTED PASS VIEW: DUAL TABS (ENTRY / DRINK) */
         <>
+          {/* Condition 1: PENDING_PAYMENT Info Banner */}
+          {isAwaitingPayment && (
+            <div className="mb-5 bg-emerald-500/15 border border-emerald-500/35 rounded-2xl p-4 text-emerald-200 flex items-start gap-3 animate-in fade-in duration-300 shadow-sm">
+              <Mail size={18} className="text-emerald-400 shrink-0 mt-0.5" />
+              <div className="text-xs leading-relaxed">
+                <strong className="block text-emerald-300 font-extrabold mb-0.5">Demande pré-approuvée ! 🎉</strong>
+                Félicitations ! Votre demande est pré-approuvée. 📧 <strong className="font-bold underline text-white">Veuillez vérifier vos e-mails</strong> pour découvrir nos points de vente et finaliser votre paiement.
+              </div>
+            </div>
+          )}
+
+          {/* Condition 2: REJECTED Warning Banner */}
+          {isRejected && (
+            <div className="mb-5 bg-rose-500/15 border border-rose-500/35 rounded-2xl p-4 text-rose-200 flex items-start gap-3 animate-in fade-in duration-300 shadow-sm">
+              <AlertCircle size={18} className="text-rose-400 shrink-0 mt-0.5" />
+              <div className="text-xs leading-relaxed">
+                <strong className="block text-rose-300 font-extrabold mb-0.5">Demande de pass refusée</strong>
+                Votre demande de pass a été refusée. 📧 <strong className="font-bold underline text-white">Veuillez vérifier vos e-mails</strong> pour plus de détails.
+              </div>
+            </div>
+          )}
+
           {/* Dual-tab toggle */}
           <div
             className={`flex rounded-full p-1.5 mb-6 border ${
