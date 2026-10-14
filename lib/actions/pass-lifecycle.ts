@@ -288,3 +288,39 @@ export async function rejectPassAction(passId: string, rejectionReason?: string)
 
   return { success: true, status: 'rejected' };
 }
+
+/**
+ * Server Action: Fetch passes for Payment Point (strictly pre-approved / awaiting_payment only)
+ */
+export async function getPassesForPaymentPoint(eventId?: string) {
+  const { error: authError } = await requireRole(['payment_point', 'admin']);
+  if (authError) {
+    throw new Error('Action non autorisée : droits point de paiement ou administrateur requis');
+  }
+
+  let query = supabaseAdmin
+    .from('passes')
+    .select('*, events(title, base_price), drink_menus(name)')
+    .eq('entry_status', 'awaiting_payment')
+    .order('created_at', { ascending: true });
+
+  if (eventId) {
+    query = query.eq('event_id', eventId);
+  }
+
+  const { data: passesData, error } = await query;
+  if (error) {
+    console.error('Error in getPassesForPaymentPoint action:', error);
+    throw new Error('Erreur lors de la récupération des passes: ' + error.message);
+  }
+
+  const filtered = (passesData || []).filter((p: any) => {
+    const s = p.entry_status || p.status;
+    return s === 'awaiting_payment' || s === 'PENDING_PAYMENT';
+  });
+
+  return filtered.map((pass: any) => ({
+    ...pass,
+    status: 'PENDING_PAYMENT',
+  }));
+}

@@ -30,9 +30,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Pass introuvable' }, { status: 404 });
     }
 
-    if (pass.entry_status !== 'awaiting_payment' && pass.entry_status !== 'pending') {
+    // Strict Security Guard: Only passes pre-approved by admin ('awaiting_payment' / 'PENDING_PAYMENT')
+    // can be validated for payment at the payment point. Passes in 'pending', 'rejected', or 'activated'/'scanned' are forbidden.
+    const isPreApproved = pass.entry_status === 'awaiting_payment' || (pass as any).status === 'PENDING_PAYMENT';
+    if (!isPreApproved) {
       return NextResponse.json({ 
-        error: `Ce pass a déjà été traité (statut actuel: ${pass.entry_status})` 
+        error: `Ce pass ne peut pas être encaissé (statut actuel: ${pass.entry_status || (pass as any).status}). Seuls les pass pré-approuvés par l'administrateur en attente de paiement peuvent être validés au guichet.` 
       }, { status: 400 });
     }
 

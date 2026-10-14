@@ -86,7 +86,12 @@ export default function PaymentPointDashboard() {
     setErrorToast(null);
     try {
       const data = await api.getPaymentPointPasses(eventId);
-      setPasses(data);
+      // Strictly filter to ensure only pre-approved passes (awaiting_payment / PENDING_PAYMENT) are displayed
+      const preApprovedOnly = (data || []).filter((p: any) => {
+        const s = p.entry_status || p.status;
+        return s === 'awaiting_payment' || s === 'PENDING_PAYMENT';
+      });
+      setPasses(preApprovedOnly);
     } catch (err: any) {
       console.error("Error fetching passes:", err);
       setErrorToast("Erreur lors de la récupération des passes en attente");

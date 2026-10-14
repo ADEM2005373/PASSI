@@ -563,21 +563,47 @@ export const api = {
 
   async getPaymentPointPasses(eventId?: string): Promise<Pass[]> {
     const supabase = createClient();
+    // CRITICAL FIX: Strictly filter passes for Payment Point.
+    // Must only return passes pre-approved by admin ('awaiting_payment' / 'PENDING_PAYMENT').
+    // Explicitly excludes 'pending' (waiting for admin), 'rejected', and 'activated'/'scanned' (already paid).
     let query = supabase
       .from('passes')
       .select('*, events(title, base_price), drink_menus(name)')
-      .in('entry_status', ['awaiting_payment', 'pending'])
-      .order('created_at', { ascending: false });
+      .eq('entry_status', 'awaiting_payment')
+      .order('created_at', { ascending: true });
 
     if (eventId) {
       query = query.eq('event_id', eventId);
     }
 
-    const { data: passesData, error } = await query;
+    let { data: passesData, error } = await query;
+
+    // Schema compatibility fallback if column is named 'status' instead of 'entry_status'
+    if (error && error.message?.includes('entry_status')) {
+      let fallbackQuery = supabase
+        .from('passes')
+        .select('*, events(title, base_price), drink_menus(name)')
+        .eq('status', 'PENDING_PAYMENT')
+        .order('created_at', { ascending: true });
+
+      if (eventId) {
+        fallbackQuery = fallbackQuery.eq('event_id', eventId);
+      }
+      const fallbackRes = await fallbackQuery;
+      passesData = fallbackRes.data;
+      error = fallbackRes.error;
+    }
+
     if (error || !passesData) return [];
 
+    // Defensive check: explicitly exclude 'pending', 'rejected', 'activated', and 'scanned'
+    const preApprovedPasses = passesData.filter((pass: any) => {
+      const s = pass.entry_status || pass.status;
+      return s === 'awaiting_payment' || s === 'PENDING_PAYMENT';
+    });
+
     // Fetch user profiles to display user identity
-    const userIds = Array.from(new Set(passesData.map((p: any) => p.user_id).filter(Boolean)));
+    const userIds = Array.from(new Set(preApprovedPasses.map((p: any) => p.user_id).filter(Boolean)));
     let profilesMap: Record<string, { email?: string; instagram_handle?: string }> = {};
 
     if (userIds.length > 0) {
@@ -592,14 +618,20 @@ export const api = {
       }
     }
 
-    return passesData.map((pass: any) => {
+    return preApprovedPasses.map((pass: any) => {
       const userProf = profilesMap[pass.user_id];
       return {
         ...pass,
+        status: 'PENDING_PAYMENT',
         instagram_handle: userProf?.instagram_handle || '@inconnu',
         user_email: userProf?.email || '',
       };
     });
+  },
+
+  // Alias for getPaymentPointPasses matching standard naming convention
+  async getPassesForPaymentPoint(eventId?: string): Promise<Pass[]> {
+    return api.getPaymentPointPasses(eventId);
   },
 
   async approvePaymentPointPass(passId: string): Promise<void> {
@@ -864,3 +896,6 @@ export const api = {
   }
 };
 
+export async function getPassesForPaymentPoint(eventId?: string): Promise<Pass[]> {
+  return api.getPaymentPointPasses(eventId);
+}
