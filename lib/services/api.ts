@@ -1109,6 +1109,136 @@ export const api = {
     };
   },
 
+  async getPassesActivityAnalytics(timeframeDays: number = 30): Promise<{
+    dailyData: Array<{
+      date: string;
+      formattedDate: string;
+      totalPasses: number;
+      validatedPasses: number;
+      pendingPasses: number;
+      volumeDiff: number;
+      volumeTrend: string;
+    }>;
+    totalPasses: number;
+    totalValidated: number;
+    totalPending: number;
+    averageDailyPasses: number;
+    peakDay: {
+      date: string;
+      formattedDate: string;
+      count: number;
+    } | null;
+    startDate: string;
+    endDate: string;
+  }> {
+    try {
+      const { getPassesActivityAnalytics: serverAction } = await import('@/lib/actions/analytics');
+      return await serverAction(timeframeDays);
+    } catch (e) {
+      console.warn("Falling back to client query for passes activity analytics:", e);
+      const supabase = createClient();
+      const { data: passesData } = await supabase
+        .from('passes')
+        .select('id, created_at, payment_approved_at, entry_status')
+        .order('created_at', { ascending: true });
+
+      const rawPasses = passesData || [];
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+
+      const daysToInclude = Math.max(7, Math.min(365, timeframeDays));
+      const dailyMap = new Map<string, { total: number; validated: number; pending: number }>();
+
+      for (let i = daysToInclude - 1; i >= 0; i--) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - i);
+        const dateStr = d.toISOString().split('T')[0];
+        dailyMap.set(dateStr, { total: 0, validated: 0, pending: 0 });
+      }
+
+      for (const pass of rawPasses) {
+        if (!pass.created_at) continue;
+        const dateStr = pass.created_at.split('T')[0];
+        const status = (pass.entry_status || '').toLowerCase();
+        const isValidated = Boolean(
+          pass.payment_approved_at || ['activated', 'scanned', 'paid'].includes(status)
+        );
+        const isPending = ['pending', 'en attente'].includes(status) || (!isValidated && !['rejected', 'cancelled'].includes(status));
+
+        if (!dailyMap.has(dateStr)) {
+          dailyMap.set(dateStr, { total: 0, validated: 0, pending: 0 });
+        }
+        const cur = dailyMap.get(dateStr)!;
+        cur.total += 1;
+        if (isValidated) cur.validated += 1;
+        if (isPending) cur.pending += 1;
+      }
+
+      const sortedDates = Array.from(dailyMap.keys()).sort();
+      const windowDates = sortedDates.slice(-daysToInclude);
+
+      let totalPasses = 0;
+      let totalValidated = 0;
+      let totalPending = 0;
+      let peakDay: { date: string; formattedDate: string; count: number } | null = null;
+
+      const dailyData = windowDates.map((dateStr, index) => {
+        const entry = dailyMap.get(dateStr) || { total: 0, validated: 0, pending: 0 };
+        totalPasses += entry.total;
+        totalValidated += entry.validated;
+        totalPending += entry.pending;
+
+        const dateObj = new Date(dateStr + "T00:00:00");
+        const formattedDate = dateObj.toLocaleDateString('fr-FR', {
+          day: 'numeric',
+          month: 'short'
+        });
+
+        if (!peakDay || entry.total > peakDay.count) {
+          if (entry.total > 0) {
+            peakDay = { date: dateStr, formattedDate, count: entry.total };
+          }
+        }
+
+        let volumeDiff = 0;
+        if (index > 0) {
+          const prevDate = windowDates[index - 1];
+          const prevEntry = dailyMap.get(prevDate) || { total: 0, validated: 0, pending: 0 };
+          volumeDiff = entry.total - prevEntry.total;
+        }
+
+        const volumeTrend = index === 0
+          ? "0 passes"
+          : volumeDiff > 0
+            ? `+${volumeDiff} passes`
+            : volumeDiff < 0
+              ? `${volumeDiff} passes`
+              : "0 passes";
+
+        return {
+          date: dateStr,
+          formattedDate,
+          totalPasses: entry.total,
+          validatedPasses: entry.validated,
+          pendingPasses: entry.pending,
+          volumeDiff,
+          volumeTrend
+        };
+      });
+
+      return {
+        dailyData,
+        totalPasses,
+        totalValidated,
+        totalPending,
+        averageDailyPasses: dailyData.length > 0 ? Math.round((totalPasses / dailyData.length) * 10) / 10 : 0,
+        peakDay,
+        startDate: windowDates[0] || '',
+        endDate: windowDates[windowDates.length - 1] || ''
+      };
+    }
+  },
+
   // --- MANUAL PASS CREATION (Admin) ---
   async createManualPass(data: {
     userId: string;

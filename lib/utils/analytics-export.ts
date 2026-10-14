@@ -1,6 +1,11 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { DailyAnalyticsItem, DashboardAnalyticsResponse } from "@/lib/actions/analytics";
+import { 
+  DailyAnalyticsItem, 
+  DashboardAnalyticsResponse,
+  DailyPassesActivityItem,
+  PassesActivityResponse 
+} from "@/lib/actions/analytics";
 
 export type AnalyticsExportInput = 
   | DashboardAnalyticsResponse 
@@ -217,4 +222,173 @@ export function generatePDFReport(input: AnalyticsExportInput): void {
 
   // 4. Save and trigger download
   doc.save("rapport_analytique_passi.pdf");
+}
+
+/**
+ * Client Utility: generatePassesActivityCSVReport
+ * Formats daily pass activity into CSV and triggers download.
+ * File: rapport_activite_passes_passi.csv
+ */
+export function generatePassesActivityCSVReport(input: PassesActivityResponse | DailyPassesActivityItem[]): void {
+  let items: DailyPassesActivityItem[] = [];
+  if (Array.isArray(input)) {
+    items = input;
+  } else if (input && Array.isArray(input.dailyData)) {
+    items = input.dailyData;
+  }
+
+  if (!items || items.length === 0) {
+    alert("Aucune donnée d'activité disponible à exporter.");
+    return;
+  }
+
+  const headers = [
+    "Date",
+    "Passes Créés",
+    "Passes Validés",
+    "Passes en Attente",
+    "Tendance (Volume)"
+  ];
+
+  const escapeCSV = (str: any) => {
+    const val = String(str ?? '');
+    if (val.includes(',') || val.includes('"') || val.includes('\n')) {
+      return `"${val.replace(/"/g, '""')}"`;
+    }
+    return val;
+  };
+
+  const rows = items.map(item => [
+    escapeCSV(item.date),
+    escapeCSV(item.totalPasses),
+    escapeCSV(item.validatedPasses),
+    escapeCSV(item.pendingPasses),
+    escapeCSV(item.volumeTrend)
+  ]);
+
+  const csvContent = "\uFEFF" + [
+    headers.map(escapeCSV).join(","),
+    ...rows.map(r => r.join(","))
+  ].join("\n");
+
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", "rapport_activite_passes_passi.csv");
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Client Utility: generatePassesActivityPDFReport
+ * Generates an analytical PDF report for Passes Activity using jsPDF and jspdf-autotable.
+ * Includes executive summary & styled table with pass metrics.
+ */
+export function generatePassesActivityPDFReport(input: PassesActivityResponse): void {
+  const items = input.dailyData || [];
+  if (!items || items.length === 0) {
+    alert("Aucune donnée d'activité disponible à exporter.");
+    return;
+  }
+
+  const doc = new jsPDF({
+    orientation: "portrait",
+    unit: "mm",
+    format: "a4"
+  });
+
+  // 1. Header & Title
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(18);
+  doc.setTextColor(26, 35, 51); // Dark navy
+  doc.text("Rapport d'Activité des Passes - Passi", 14, 20);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(110, 120, 135);
+  const now = new Date();
+  const dateStr = `${now.toLocaleDateString('fr-FR')} à ${now.toLocaleTimeString('fr-FR')}`;
+  doc.text(`Généré le ${dateStr} | Plateforme Officielle Passi`, 14, 26);
+
+  // 2. Executive Summary Cards
+  doc.setFillColor(245, 247, 250);
+  doc.roundedRect(14, 32, 182, 24, 3, 3, "F");
+
+  // Total Passes Block
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(100, 116, 139);
+  doc.text("TOTAL PASSES ÉMIS", 20, 40);
+  doc.setFontSize(14);
+  doc.setTextColor(255, 107, 94); // Passi Corail
+  doc.text(`${input.totalPasses} passes`, 20, 50);
+
+  // Validated Passes Block
+  doc.setFontSize(9);
+  doc.setTextColor(100, 116, 139);
+  doc.text("PASSES VALIDÉS", 85, 40);
+  doc.setFontSize(14);
+  doc.setTextColor(16, 185, 129); // Emerald
+  const valPercentage = input.totalPasses > 0 ? Math.round((input.totalValidated / input.totalPasses) * 100) : 0;
+  doc.text(`${input.totalValidated} (${valPercentage}%)`, 85, 50);
+
+  // Peak Day / Period Block
+  doc.setFontSize(9);
+  doc.setTextColor(100, 116, 139);
+  doc.text("PIC D'ACTIVITÉ", 145, 40);
+  doc.setFontSize(11);
+  doc.setTextColor(30, 41, 59);
+  const peakLabel = input.peakDay ? `${input.peakDay.count} passes (${input.peakDay.formattedDate})` : "Aucun";
+  doc.text(peakLabel, 145, 49);
+
+  // 3. AutoTable Content
+  const tableRows = items.map(item => [
+    item.date,
+    `${item.totalPasses}`,
+    `${item.validatedPasses}`,
+    `${item.pendingPasses}`,
+    item.volumeTrend
+  ]);
+
+  autoTable(doc, {
+    startY: 63,
+    head: [["Date", "Passes Créés", "Passes Validés", "En Attente", "Évolution (J-1)"]],
+    body: tableRows,
+    foot: [["Total Période", `${input.totalPasses}`, `${input.totalValidated}`, `${input.totalPending}`, "-"]],
+    theme: "striped",
+    headStyles: {
+      fillColor: [26, 35, 51],
+      textColor: [255, 255, 255],
+      fontStyle: "bold",
+      fontSize: 9,
+      halign: "left"
+    },
+    bodyStyles: {
+      fontSize: 8.5,
+      textColor: [51, 65, 85]
+    },
+    footStyles: {
+      fillColor: [238, 242, 246],
+      textColor: [15, 23, 42],
+      fontStyle: "bold",
+      fontSize: 9
+    },
+    alternateRowStyles: {
+      fillColor: [249, 250, 252]
+    },
+    columnStyles: {
+      0: { cellWidth: 35 },
+      1: { cellWidth: 32, halign: "center" },
+      2: { cellWidth: 32, halign: "center" },
+      3: { cellWidth: 32, halign: "center" },
+      4: { cellWidth: 51 }
+    },
+    margin: { left: 14, right: 14 }
+  });
+
+  // 4. Save and trigger download
+  doc.save("rapport_activite_passes_passi.pdf");
 }

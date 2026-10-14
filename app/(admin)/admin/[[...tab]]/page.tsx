@@ -14,6 +14,7 @@ import autoTable from "jspdf-autotable";
 import { PassCreationSection } from "@/components/admin/PassCreationSection";
 import { NewsManagementSection } from "@/components/admin/NewsManagementSection";
 import { FinancialAnalyticsSection } from "@/components/admin/FinancialAnalyticsSection";
+import { PassesActivityChart } from "@/components/admin/PassesActivityChart";
 import { formatImageUrl } from "@/lib/utils/url";
 
 export default function AdminDashboard({ initialTab }: { initialTab?: string } = {}) {
@@ -786,39 +787,8 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
                 ))}
               </div>
 
-              {/* Chart */}
-              <div className="card p-8 shadow-sm">
-                <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>Activité des passes</h3>
-                </div>
-                <div className="w-full h-56 relative" style={{ borderBottom: '1px solid var(--border)', borderLeft: '1px solid var(--border)' }}>
-                  {(() => {
-                    const data = stats.chartData || [0,0,0,0,0,0,0];
-                    const maxVal = Math.max(...data, 1);
-                    const points = data.map((val, i) => ({ x: (i/(data.length-1))*100, y: 100-(val/maxVal)*80, val }));
-                    const fillPath = `M0 100 L${points.map(p=>`${p.x} ${p.y}`).join(' L')} L100 100 Z`;
-                    const linePath = `M${points.map(p=>`${p.x} ${p.y}`).join(' L')}`;
-                    return (
-                      <svg className="w-full h-full overflow-visible" preserveAspectRatio="none" viewBox="0 0 100 100">
-                        <defs>
-                          <linearGradient id="grad-admin" x1="0%" y1="0%" x2="0%" y2="100%">
-                            <stop offset="0%" stopColor="#FF6B5E" stopOpacity="0.35"/>
-                            <stop offset="100%" stopColor="#FF6B5E" stopOpacity="0"/>
-                          </linearGradient>
-                        </defs>
-                        <path d={fillPath} fill="url(#grad-admin)"/>
-                        <path d={linePath} fill="none" stroke="#FF6B5E" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                        {points.map((p,i) => (
-                          <circle key={i} cx={p.x} cy={p.y} r="2.5" fill="#FF6B5E"/>
-                        ))}
-                      </svg>
-                    );
-                  })()}
-                  <div className="absolute -bottom-6 left-0 text-xs font-medium" style={{ color: 'var(--text-muted)' }}>J-6</div>
-                  <div className="absolute -bottom-6 left-1/2 text-xs font-medium" style={{ color: 'var(--text-muted)', transform:'translateX(-50%)' }}>Moy.</div>
-                  <div className="absolute -bottom-6 right-0 text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Aujourd'hui</div>
-                </div>
-              </div>
+              {/* ── NOUVELLE COURBE ACTIVITÉ DES PASSES & RAPPORTS EXPORTABLES (PDF & CSV) ── */}
+              <PassesActivityChart />
 
               {/* ── NOUVELLE COURBE FINANCIÈRE & RAPPORTS EXPORTABLES (PDF & CSV) ── */}
               <FinancialAnalyticsSection />

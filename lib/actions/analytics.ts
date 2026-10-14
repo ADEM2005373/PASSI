@@ -159,3 +159,164 @@ export async function getDashboardAnalytics(
     endDate: windowDates[windowDates.length - 1] || ''
   };
 }
+
+export interface DailyPassesActivityItem {
+  date: string; // "YYYY-MM-DD"
+  formattedDate: string; // e.g. "14 oct."
+  totalPasses: number; // created on this date
+  validatedPasses: number; // validated / activated
+  pendingPasses: number; // waiting / pending
+  volumeDiff: number; // day-over-day difference in created passes
+  volumeTrend: string; // e.g. "+5 passes", "-2 passes", "0 passes"
+}
+
+export interface PassesActivityResponse {
+  dailyData: DailyPassesActivityItem[];
+  totalPasses: number;
+  totalValidated: number;
+  totalPending: number;
+  averageDailyPasses: number;
+  peakDay: {
+    date: string;
+    formattedDate: string;
+    count: number;
+  } | null;
+  startDate: string;
+  endDate: string;
+}
+
+/**
+ * Server Action: getPassesActivityAnalytics
+ * Fetches all passes from Supabase, aggregates daily creation, validation, and pending counts,
+ * and calculates day-over-day trends for pass activity.
+ */
+export async function getPassesActivityAnalytics(
+  timeframeDays: number = 30
+): Promise<PassesActivityResponse> {
+  const { error: authError } = await requireRole(['admin']);
+  if (authError) {
+    throw new Error('Action non autorisée : droits administrateur requis');
+  }
+
+  // 1. Query all passes ordered by created_at
+  const { data: passesData, error } = await supabaseAdmin
+    .from('passes')
+    .select('id, created_at, payment_approved_at, entry_status')
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching passes in getPassesActivityAnalytics:', error);
+    throw new Error('Impossible de récupérer l\'activité des passes');
+  }
+
+  const rawPasses = passesData || [];
+
+  // 2. Continuous date range
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+
+  const daysToInclude = Math.max(7, Math.min(365, timeframeDays));
+  const dailyMap = new Map<string, { total: number; validated: number; pending: number }>();
+
+  for (let i = daysToInclude - 1; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().split('T')[0];
+    dailyMap.set(dateStr, { total: 0, validated: 0, pending: 0 });
+  }
+
+  // 3. Aggregate passes
+  for (const pass of rawPasses) {
+    if (!pass.created_at) continue;
+    const dateStr = pass.created_at.split('T')[0];
+
+    const status = (pass.entry_status || '').toLowerCase();
+    const isValidated = Boolean(
+      pass.payment_approved_at ||
+      ['activated', 'scanned', 'paid'].includes(status)
+    );
+    const isPending = ['pending', 'en attente'].includes(status) || (!isValidated && !['rejected', 'cancelled'].includes(status));
+
+    if (!dailyMap.has(dateStr)) {
+      dailyMap.set(dateStr, { total: 0, validated: 0, pending: 0 });
+    }
+
+    const current = dailyMap.get(dateStr)!;
+    current.total += 1;
+    if (isValidated) current.validated += 1;
+    if (isPending) current.pending += 1;
+  }
+
+  // 4. Sort dates ascending and slice window
+  const sortedDates = Array.from(dailyMap.keys()).sort();
+  const windowDates = sortedDates.slice(-daysToInclude);
+
+  // 5. Calculate day-over-day trends & metrics
+  let totalPasses = 0;
+  let totalValidated = 0;
+  let totalPending = 0;
+  let peakDay: { date: string; formattedDate: string; count: number } | null = null;
+
+  const dailyData: DailyPassesActivityItem[] = windowDates.map((dateStr, index) => {
+    const entry = dailyMap.get(dateStr) || { total: 0, validated: 0, pending: 0 };
+    totalPasses += entry.total;
+    totalValidated += entry.validated;
+    totalPending += entry.pending;
+
+    const dateObj = new Date(dateStr + "T00:00:00");
+    const formattedDate = dateObj.toLocaleDateString('fr-FR', {
+      day: 'numeric',
+      month: 'short'
+    });
+
+    if (!peakDay || entry.total > peakDay.count) {
+      if (entry.total > 0) {
+        peakDay = {
+          date: dateStr,
+          formattedDate,
+          count: entry.total
+        };
+      }
+    }
+
+    let volumeDiff = 0;
+    if (index > 0) {
+      const prevDate = windowDates[index - 1];
+      const prevEntry = dailyMap.get(prevDate) || { total: 0, validated: 0, pending: 0 };
+      volumeDiff = entry.total - prevEntry.total;
+    }
+
+    const volumeTrend = index === 0
+      ? "0 passes"
+      : volumeDiff > 0
+        ? `+${volumeDiff} passes`
+        : volumeDiff < 0
+          ? `${volumeDiff} passes`
+          : "0 passes";
+
+    return {
+      date: dateStr,
+      formattedDate,
+      totalPasses: entry.total,
+      validatedPasses: entry.validated,
+      pendingPasses: entry.pending,
+      volumeDiff,
+      volumeTrend
+    };
+  });
+
+  const averageDailyPasses = dailyData.length > 0 
+    ? Math.round((totalPasses / dailyData.length) * 10) / 10 
+    : 0;
+
+  return {
+    dailyData,
+    totalPasses,
+    totalValidated,
+    totalPending,
+    averageDailyPasses,
+    peakDay,
+    startDate: windowDates[0] || '',
+    endDate: windowDates[windowDates.length - 1] || ''
+  };
+}
