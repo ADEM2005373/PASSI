@@ -330,6 +330,7 @@ export interface SavePassPayload {
   userId: string;
   guestFirstName: string;
   guestLastName: string;
+  drinkName?: string | null;
   drinkId?: string | null;
   selectedAromas?: string[];
   promoCode?: string | null;
@@ -340,7 +341,7 @@ export interface SavePassPayload {
  * Saves a pass with guest information, optional drink selection, and selected_aromas.
  */
 export async function savePassAction(payload: SavePassPayload) {
-  const { eventId, userId, guestFirstName, guestLastName, drinkId, selectedAromas, promoCode } = payload || {};
+  const { eventId, userId, guestFirstName, guestLastName, drinkName, drinkId, selectedAromas, promoCode } = payload || {};
 
   if (!eventId || !guestFirstName || !guestLastName) {
     throw new Error('Champs requis manquants pour la réservation du pass');
@@ -350,13 +351,16 @@ export async function savePassAction(payload: SavePassPayload) {
     ? selectedAromas.filter(a => typeof a === 'string' && a.trim().length > 0).map(a => a.trim())
     : [];
 
-  // Try RPC create_pass_with_pricing first
+  const selectedDrink = (drinkName || drinkId || '').trim();
+  const drinkParam = selectedDrink || null;
+
+  // Try RPC create_pass_with_pricing with p_drink_name (TEXT) first
   const { data: rpcData, error: rpcError } = await supabaseAdmin.rpc('create_pass_with_pricing', {
     p_user_id: userId,
     p_event_id: eventId,
     p_guest_first_name: guestFirstName.trim(),
     p_guest_last_name: guestLastName.trim(),
-    p_drink_id: drinkId || null,
+    p_drink_name: drinkParam,
     p_promo_code: promoCode ? promoCode.trim() : null,
     p_selected_aromas: formattedAromas
   });
@@ -396,8 +400,8 @@ export async function savePassAction(payload: SavePassPayload) {
     entry_status: 'pending',
     final_price: finalPrice,
     promo_used: promoUsed,
-    drink_id: drinkId || null,
-    drink_status: drinkId ? 'pending' : null,
+    drink_name: drinkParam,
+    drink_status: drinkParam ? 'pending' : null,
     selected_aromas: formattedAromas,
   };
 
@@ -408,8 +412,9 @@ export async function savePassAction(payload: SavePassPayload) {
     .single();
 
   if (insertError) {
-    console.warn("Direct pass insert failed with selected_aromas, retrying without column:", insertError);
+    console.warn("Direct pass insert failed, retrying without selected_aromas/drink_name:", insertError);
     delete insertData.selected_aromas;
+    delete insertData.drink_name;
     const { data: retryPass, error: retryError } = await supabaseAdmin
       .from('passes')
       .insert(insertData)
@@ -419,10 +424,10 @@ export async function savePassAction(payload: SavePassPayload) {
     if (retryError || !retryPass) {
       throw new Error("Impossible d'enregistrer le pass: " + (retryError?.message || insertError.message));
     }
-    return { success: true, pass: { ...retryPass, selected_aromas: formattedAromas } };
+    return { success: true, passId: retryPass.id, finalPrice, promoUsed };
   }
 
-  return { success: true, pass: newPass };
+  return { success: true, pass: newPass, passId: newPass.id, finalPrice, promoUsed };
 }
 
 /**

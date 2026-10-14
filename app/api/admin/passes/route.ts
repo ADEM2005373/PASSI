@@ -27,7 +27,7 @@ export async function PATCH(req: NextRequest) {
     // Backend Validation Guards
     const { data: existingPass, error: fetchError } = await supabaseAdmin
       .from('passes')
-      .select('entry_status, drink_id, entry_qr_uuid, drink_qr_uuid')
+      .select('*')
       .eq('id', passId)
       .single();
 
@@ -56,7 +56,7 @@ export async function PATCH(req: NextRequest) {
         updated_at: new Date().toISOString()
       };
       
-      if (existingPass.drink_id) {
+      if ((existingPass as any).drink_name || (existingPass as any).drink_id) {
         const drinkQr = existingPass.drink_qr_uuid || crypto.randomUUID();
         updateData.drink_status = 'activated';
         updateData.drink_qr_uuid = drinkQr;

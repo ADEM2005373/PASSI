@@ -43,17 +43,17 @@ export function PassCard({ pass, onUpdate }: PassCardProps) {
     setLocalPass(pass);
   }, [pass]);
 
-  // Auto-heal: If pass is activated, has drink_id, but no drink QR code generated yet, auto-generate it
+  // Auto-heal: If pass is activated, has drink_name or drink_id, but no drink QR code generated yet, auto-generate it
   useEffect(() => {
     if (
       localPass.entry_status === "activated" &&
-      localPass.drink_id &&
+      (localPass.drink_name || localPass.drink_id) &&
       !localPass.drink_qr_uuid &&
       !localPass.drink_qr_code &&
       !isSubmittingDrink
     ) {
       setIsSubmittingDrink(true);
-      api.selectPassDrink(localPass.id, localPass.drink_id)
+      api.selectPassDrink(localPass.id, localPass.drink_name || localPass.drink_id!)
         .then((res) => {
           if (res.pass) {
             setLocalPass(res.pass);
@@ -67,7 +67,7 @@ export function PassCard({ pass, onUpdate }: PassCardProps) {
           setIsSubmittingDrink(false);
         });
     }
-  }, [localPass.id, localPass.entry_status, localPass.drink_id, localPass.drink_qr_uuid, localPass.drink_qr_code]);
+  }, [localPass.id, localPass.entry_status, localPass.drink_name, localPass.drink_id, localPass.drink_qr_uuid, localPass.drink_qr_code]);
 
   const passType = (localPass.pass_type || "NORMAL").toUpperCase();
   const isVip = passType === "VIP";
@@ -88,7 +88,7 @@ export function PassCard({ pass, onUpdate }: PassCardProps) {
   // 2. OR Pass is eligible for asynchronous drink selection (VIP, GIFT, ACCEPTED INVITATION) and available drinks exist
   const hasAvailableDrinks = (localPass.available_drinks && localPass.available_drinks.length > 0) || false;
   const hasDrinkTab = 
-    Boolean(localPass.drink_id || (localPass.drink_status && localPass.drink_status !== "none")) ||
+    Boolean(localPass.drink_name || localPass.drink_id || (localPass.drink_status && localPass.drink_status !== "none")) ||
     (isSpecialPass && hasAvailableDrinks);
 
   // Handle invitation accept or decline
@@ -395,14 +395,14 @@ export function PassCard({ pass, onUpdate }: PassCardProps) {
                       Présentez ce QR Code directement au barman
                     </p>
                   </>
-                ) : localPass.drink_id ? (
+                ) : (localPass.drink_name || localPass.drink_id) ? (
                   /* Pass ALREADY has a drink assigned (e.g. normal pass booked with a drink) */
                   <div className="w-full flex flex-col items-center text-center p-3">
                     <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mb-3">
                       <Wine size={26} />
                     </div>
                     <h3 className="text-lg font-extrabold text-white mb-1">
-                      {localPass.drink_menus?.name || "Boisson réservée"}
+                      {localPass.drink_name || localPass.drink_menus?.name || "Boisson réservée"}
                     </h3>
                     <p className="text-xs text-neutral-400 mb-4 max-w-xs leading-relaxed">
                       {localPass.entry_status === "activated"
@@ -411,7 +411,7 @@ export function PassCard({ pass, onUpdate }: PassCardProps) {
                     </p>
                     {localPass.entry_status === "activated" && (
                       <button
-                        onClick={() => handleSelectDrinkWithId(localPass.drink_id!)}
+                        onClick={() => handleSelectDrinkWithId(localPass.drink_name || localPass.drink_id!)}
                         disabled={isSubmittingDrink}
                         className="py-2.5 px-4 rounded-xl font-bold text-xs bg-amber-500 hover:bg-amber-400 text-neutral-950 shadow-lg shadow-amber-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
                       >

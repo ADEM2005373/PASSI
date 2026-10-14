@@ -92,7 +92,7 @@ export function DrinkSelector({
         >
           <option value="">-- Choisir une boisson --</option>
           {drinks.map((drink, idx) => {
-            const val = drink.id || drink.name;
+            const val = drink.name || drink.id;
             const aromaCount = drink.aromas && drink.aromas.length > 0 ? ` (${drink.aromas.length} arômes disponibles)` : '';
             return (
               <option key={drink.id || `drink-${idx}`} value={val}>

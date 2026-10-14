@@ -72,6 +72,7 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
     setIsBooking(true);
     const formattedGuests = guests.map(g => ({
       ...g,
+      drinkName: g.drinkId || undefined,
       drinkId: g.drinkId || undefined,
       selectedAromas: g.selectedAromas || []
     }));

@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     // 1. Fetch the pass to verify its existence and status
     const { data: pass, error: fetchError } = await supabaseAdmin
       .from('passes')
-      .select('id, entry_status, event_id, user_id, final_price, entry_qr_uuid, drink_id, drink_qr_uuid, drink_status')
+      .select('*')
       .eq('id', passId)
       .single();
 
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
     };
 
     // If the pass has an associated drink, activate it and generate drink QR code
-    if (pass.drink_id) {
+    if ((pass as any).drink_name || (pass as any).drink_id) {
       const drinkQr = pass.drink_qr_uuid || crypto.randomUUID();
       updatePayload.drink_status = 'activated';
       updatePayload.drink_qr_uuid = drinkQr;

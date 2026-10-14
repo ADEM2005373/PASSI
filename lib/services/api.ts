@@ -61,6 +61,7 @@ export type Pass = {
   // Special Pass Types (NORMAL, GIFT, INVITATION, VIP) & Asynchronous Drinks
   pass_type?: 'NORMAL' | 'GIFT' | 'INVITATION' | 'VIP';
   invitation_status?: 'PENDING' | 'ACCEPTED' | 'DECLINED' | null;
+  drink_name?: string | null;
   drink_id?: string | null;
   selected_aromas?: string[] | null;
   drink_qr_code?: string | null;
@@ -204,45 +205,64 @@ export const api = {
   async bookPasses(
     eventId: string, 
     userId: string, 
-    guests: { firstName: string, lastName: string, drinkId?: string, selectedAromas?: string[] }[],
+    guests: { firstName: string, lastName: string, drinkName?: string, drinkId?: string, selectedAromas?: string[] }[],
     promoCode?: string
   ): Promise<void> {
     const supabase = createClient();
     
     for (const guest of guests) {
+      const drinkName = (guest.drinkName || guest.drinkId || '').trim() || null;
+
+      // 1. Primary RPC: create_pass_with_pricing using p_drink_name (TEXT) and p_selected_aromas
       const { data, error } = await supabase.rpc('create_pass_with_pricing', {
         p_user_id: userId,
         p_event_id: eventId,
         p_guest_first_name: guest.firstName,
         p_guest_last_name: guest.lastName,
-        p_drink_id: guest.drinkId || null,
+        p_drink_name: drinkName,
         p_promo_code: promoCode ? promoCode.trim() : null,
         p_selected_aromas: Array.isArray(guest.selectedAromas) ? guest.selectedAromas : []
       });
 
       if (error) {
-        console.warn("create_pass_with_pricing RPC with aromas failed, retrying without p_selected_aromas:", error);
+        console.warn("create_pass_with_pricing RPC with p_drink_name and aromas failed, trying fallback:", error);
+        
+        // 2. Fallback: try create_pass_with_pricing without p_selected_aromas
         const { error: retryError } = await supabase.rpc('create_pass_with_pricing', {
           p_user_id: userId,
           p_event_id: eventId,
           p_guest_first_name: guest.firstName,
           p_guest_last_name: guest.lastName,
-          p_drink_id: guest.drinkId || null,
+          p_drink_name: drinkName,
           p_promo_code: promoCode ? promoCode.trim() : null
         });
 
         if (retryError) {
-          // Fallback to legacy create_pass RPC if migration not yet applied
+          // 3. Fallback: legacy create_pass RPC with p_drink_name
           const { error: fallbackError } = await supabase.rpc('create_pass', {
             p_user_id: userId,
             p_event_id: eventId,
             p_guest_first_name: guest.firstName,
             p_guest_last_name: guest.lastName,
-            p_drink_id: guest.drinkId || null
+            p_drink_name: drinkName
           });
+
           if (fallbackError) {
-            console.error("Failed to book pass via RPC:", fallbackError);
-            alert("Erreur de réservation: " + fallbackError.message);
+            // 4. Fallback: direct insert to passes table
+            const { error: directInsertError } = await supabase.from('passes').insert({
+              user_id: userId,
+              event_id: eventId,
+              guest_first_name: guest.firstName,
+              guest_last_name: guest.lastName,
+              drink_name: drinkName,
+              selected_aromas: Array.isArray(guest.selectedAromas) ? guest.selectedAromas : [],
+              entry_status: 'pending'
+            });
+
+            if (directInsertError) {
+              console.error("Failed to book pass via all methods:", directInsertError);
+              alert("Erreur de réservation: " + (directInsertError.message || fallbackError.message));
+            }
           }
         }
       }
@@ -315,7 +335,9 @@ export const api = {
       });
 
       validPasses.forEach((pass: any) => {
-        if (pass.drink_id && menusMap[pass.drink_id]) {
+        if (pass.drink_name) {
+          pass.drink_menus = { name: pass.drink_name };
+        } else if (pass.drink_id && menusMap[pass.drink_id]) {
           pass.drink_menus = menusMap[pass.drink_id];
         }
         pass.available_drinks = drinksByEvent[pass.event_id] || [];
