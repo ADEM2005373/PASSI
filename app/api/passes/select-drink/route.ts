@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { passId, drinkId } = body || {};
+    const { passId, drinkId, selectedAromas } = body || {};
 
     if (!passId || !drinkId) {
       return NextResponse.json(
@@ -77,8 +77,13 @@ export async function POST(req: NextRequest) {
       passType === 'GIFT' || 
       (passType === 'INVITATION' && pass.invitation_status === 'ACCEPTED');
 
+    const formattedAromas = Array.isArray(selectedAromas)
+      ? selectedAromas.filter((a: any) => typeof a === 'string' && a.trim().length > 0)
+      : [];
+
     const updateData: any = {
       drink_id: drinkId,
+      selected_aromas: formattedAromas,
       updated_at: new Date().toISOString(),
     };
 
@@ -94,7 +99,8 @@ export async function POST(req: NextRequest) {
     }
 
     // 5. Update pass
-    const { data: updatedPass, error: updateError } = await supabaseAdmin
+    let updatedPass: any = null;
+    const { data: passUpdated, error: updateError } = await supabaseAdmin
       .from('passes')
       .update(updateData)
       .eq('id', passId)
@@ -102,7 +108,21 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (updateError) {
-      throw updateError;
+      console.warn("Update pass failed with selected_aromas, retrying without column:", updateError);
+      delete updateData.selected_aromas;
+      const { data: retryPass, error: retryError } = await supabaseAdmin
+        .from('passes')
+        .update(updateData)
+        .eq('id', passId)
+        .select('*, events(title, date, location)')
+        .single();
+
+      if (retryError) {
+        throw retryError;
+      }
+      updatedPass = { ...retryPass, selected_aromas: formattedAromas };
+    } else {
+      updatedPass = passUpdated;
     }
 
     // Attach drink details to returned pass

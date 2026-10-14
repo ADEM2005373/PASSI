@@ -17,6 +17,14 @@ export type PromoCode = {
   discount_amount: number;
 };
 
+export type DrinkItem = {
+  id?: string;
+  name: string;
+  price?: number;
+  aromas?: string[];
+  image_url?: string;
+};
+
 export type Event = {
   id: string;
   title: string;
@@ -29,7 +37,8 @@ export type Event = {
   image_url?: string;
   description?: string;
   dress_code?: string;
-  drink_menus?: { id: string, name: string }[];
+  drinks?: DrinkItem[];
+  drink_menus?: DrinkItem[];
 };
 
 export type Pass = {
@@ -47,16 +56,17 @@ export type Pass = {
   payment_approved_at?: string | null;
   updated_at?: string;
   instagram_handle?: string;
-  drink_menus?: { id?: string; name: string; price?: number; image_url?: string } | null;
+  drink_menus?: { id?: string; name: string; price?: number; image_url?: string; aromas?: string[] } | null;
   events?: { id?: string; title: string; base_price?: number; date?: string; location?: string } | null;
   // Special Pass Types (NORMAL, GIFT, INVITATION, VIP) & Asynchronous Drinks
   pass_type?: 'NORMAL' | 'GIFT' | 'INVITATION' | 'VIP';
   invitation_status?: 'PENDING' | 'ACCEPTED' | 'DECLINED' | null;
   drink_id?: string | null;
+  selected_aromas?: string[] | null;
   drink_qr_code?: string | null;
   drink_qr_uuid?: string | null;
   drink_status?: string | null;
-  available_drinks?: { id: string; name: string; price?: number; image_url?: string }[];
+  available_drinks?: DrinkItem[];
 };
 
 export type NewsItem = {
@@ -191,7 +201,7 @@ export const api = {
   async bookPasses(
     eventId: string, 
     userId: string, 
-    guests: { firstName: string, lastName: string, drinkId?: string }[],
+    guests: { firstName: string, lastName: string, drinkId?: string, selectedAromas?: string[] }[],
     promoCode?: string
   ): Promise<void> {
     const supabase = createClient();
@@ -203,22 +213,34 @@ export const api = {
         p_guest_first_name: guest.firstName,
         p_guest_last_name: guest.lastName,
         p_drink_id: guest.drinkId || null,
-        p_promo_code: promoCode ? promoCode.trim() : null
+        p_promo_code: promoCode ? promoCode.trim() : null,
+        p_selected_aromas: Array.isArray(guest.selectedAromas) ? guest.selectedAromas : []
       });
 
       if (error) {
-        console.warn("create_pass_with_pricing RPC failed, falling back to create_pass:", error);
-        // Fallback to legacy create_pass RPC if migration not yet applied
-        const { error: fallbackError } = await supabase.rpc('create_pass', {
+        console.warn("create_pass_with_pricing RPC with aromas failed, retrying without p_selected_aromas:", error);
+        const { error: retryError } = await supabase.rpc('create_pass_with_pricing', {
           p_user_id: userId,
           p_event_id: eventId,
           p_guest_first_name: guest.firstName,
           p_guest_last_name: guest.lastName,
-          p_drink_id: guest.drinkId || null
+          p_drink_id: guest.drinkId || null,
+          p_promo_code: promoCode ? promoCode.trim() : null
         });
-        if (fallbackError) {
-          console.error("Failed to book pass via RPC:", fallbackError);
-          alert("Erreur de réservation: " + fallbackError.message);
+
+        if (retryError) {
+          // Fallback to legacy create_pass RPC if migration not yet applied
+          const { error: fallbackError } = await supabase.rpc('create_pass', {
+            p_user_id: userId,
+            p_event_id: eventId,
+            p_guest_first_name: guest.firstName,
+            p_guest_last_name: guest.lastName,
+            p_drink_id: guest.drinkId || null
+          });
+          if (fallbackError) {
+            console.error("Failed to book pass via RPC:", fallbackError);
+            alert("Erreur de réservation: " + fallbackError.message);
+          }
         }
       }
     }
@@ -401,7 +423,7 @@ export const api = {
     image_url: string, 
     description?: string, 
     dress_code?: string, 
-    drinks?: { id?: string; name: string }[],
+    drinks?: { id?: string; name: string; aromas?: string[]; price?: number }[],
     base_price?: number,
     promo_codes?: PromoCode[]
   ): Promise<void> {
@@ -435,7 +457,7 @@ export const api = {
     image_url: string, 
     description?: string, 
     dress_code?: string, 
-    drinks?: { id?: string; name: string }[],
+    drinks?: { id?: string; name: string; aromas?: string[]; price?: number }[],
     base_price?: number,
     promo_codes?: PromoCode[]
   ): Promise<void> {
@@ -836,11 +858,11 @@ export const api = {
   },
 
   // --- ASYNCHRONOUS DRINK SELECTION (User) ---
-  async selectPassDrink(passId: string, drinkId: string): Promise<{ success: boolean; pass: Pass; drink?: any; message?: string }> {
+  async selectPassDrink(passId: string, drinkId: string, selectedAromas?: string[]): Promise<{ success: boolean; pass: Pass; drink?: any; message?: string }> {
     const res = await fetch('/api/passes/select-drink', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ passId, drinkId }),
+      body: JSON.stringify({ passId, drinkId, selectedAromas: selectedAromas || [] }),
     });
     const result = await res.json();
     if (!res.ok) throw new Error(result.error || 'Erreur lors de la sélection de la boisson');

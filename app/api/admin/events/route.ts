@@ -20,7 +20,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Champs obligatoires manquants ou invalides (title, date, location)' }, { status: 400 });
     }
 
-    const { data: event, error } = await supabaseAdmin.from('events').insert({ 
+    const validDrinks = (drinks && Array.isArray(drinks))
+      ? drinks
+          .filter((d: any) => d && typeof d.name === 'string' && d.name.trim().length > 0)
+          .map((d: any) => ({
+            name: String(d.name).trim().slice(0, 100),
+            price: typeof d.price === 'number' ? Math.max(0, d.price) : 0,
+            aromas: Array.isArray(d.aromas)
+              ? d.aromas.filter((a: any) => typeof a === 'string' && a.trim().length > 0).map((a: string) => a.trim())
+              : []
+          }))
+      : [];
+
+    const jsonbDrinks = validDrinks.map(d => ({
+      name: d.name,
+      aromas: d.aromas
+    }));
+
+    let event: any = null;
+    const insertPayload: Record<string, any> = {
       title: String(title).slice(0, 200), 
       date, 
       location: String(location).slice(0, 200), 
@@ -30,27 +48,42 @@ export async function POST(req: NextRequest) {
       description: description ? String(description).slice(0, 2000) : null,
       dress_code: dress_code ? String(dress_code).slice(0, 200) : null,
       base_price: base_price !== undefined ? Math.max(0, Number(base_price) || 0) : 0,
-      promo_codes: Array.isArray(promo_codes) ? promo_codes : []
-    }).select().single();
+      promo_codes: Array.isArray(promo_codes) ? promo_codes : [],
+      drinks: jsonbDrinks
+    };
+
+    const { data: createdEvent, error } = await supabaseAdmin.from('events').insert(insertPayload).select().single();
 
     if (error) {
-      console.error("Database error in events POST:", error);
-      return NextResponse.json({ error: "Impossible de créer l'événement" }, { status: 500 });
+      console.warn("Retrying events insert without drinks JSONB:", error);
+      delete insertPayload.drinks;
+      const { data: retryEvent, error: retryError } = await supabaseAdmin.from('events').insert(insertPayload).select().single();
+      if (retryError || !retryEvent) {
+        console.error("Database error in events POST:", retryError || error);
+        return NextResponse.json({ error: "Impossible de créer l'événement" }, { status: 500 });
+      }
+      event = retryEvent;
+    } else {
+      event = createdEvent;
     }
     
     // Insert drinks if provided
-    if (drinks && Array.isArray(drinks) && drinks.length > 0 && event) {
-      const drinksToInsert = drinks.map((drink: any) => ({
+    if (validDrinks.length > 0 && event) {
+      const drinksToInsert = validDrinks.map((drink: any) => ({
         event_id: event.id,
-        name: String(drink.name || '').slice(0, 100)
-      })).filter((d: any) => d.name.length > 0);
-      if (drinksToInsert.length > 0) {
-        const { error: drinksError } = await supabaseAdmin.from('drink_menus').insert(drinksToInsert);
-        if (drinksError) console.error("Error inserting drinks:", drinksError);
+        name: drink.name,
+        price: drink.price,
+        aromas: drink.aromas
+      }));
+      const { error: drinksError } = await supabaseAdmin.from('drink_menus').insert(drinksToInsert);
+      if (drinksError) {
+        console.warn("Retrying drink_menus insert without aromas column:", drinksError);
+        const fallbackDrinks = drinksToInsert.map(({ aromas, ...rest }) => rest);
+        await supabaseAdmin.from('drink_menus').insert(fallbackDrinks);
       }
     }
 
-    return NextResponse.json({ success: true, event });
+    return NextResponse.json({ success: true, event: { ...event, drinks: jsonbDrinks } });
 
   } catch (error: any) {
     console.error("Server error in events POST:", error);
@@ -112,7 +145,24 @@ export async function PUT(req: NextRequest) {
             id: d.id && typeof d.id === 'string' && d.id.trim().length > 0 ? d.id.trim() : undefined,
             name: String(d.name).trim().slice(0, 100),
             price: typeof d.price === 'number' ? d.price : 0,
+            aromas: Array.isArray(d.aromas)
+              ? d.aromas.filter((a: any) => typeof a === 'string' && a.trim().length > 0).map((a: string) => a.trim())
+              : []
           }));
+
+        // Update events.drinks JSONB column directly
+        const jsonbDrinks = validPayloadDrinks.map(d => ({
+          name: d.name,
+          aromas: d.aromas
+        }));
+        try {
+          await supabaseAdmin
+            .from('events')
+            .update({ drinks: jsonbDrinks })
+            .eq('id', id);
+        } catch (err: any) {
+          console.warn("Could not update events.drinks JSONB in PUT:", err);
+        }
 
         const payloadDrinkIds = new Set(
           validPayloadDrinks
@@ -120,18 +170,21 @@ export async function PUT(req: NextRequest) {
             .filter((drinkId): drinkId is string => Boolean(drinkId && existingDrinkMap.has(drinkId)))
         );
 
-        // a) Update existing drinks whose name changed
+        // a) Update existing drinks whose name or aromas changed
         for (const drink of validPayloadDrinks) {
           if (drink.id && existingDrinkMap.has(drink.id)) {
-            const existing = existingDrinkMap.get(drink.id)!;
-            if (existing.name !== drink.name) {
-              const { error: updateDrinkErr } = await supabaseAdmin
+            const { error: updateDrinkErr } = await supabaseAdmin
+              .from('drink_menus')
+              .update({ 
+                name: drink.name,
+                aromas: drink.aromas
+              })
+              .eq('id', drink.id);
+            if (updateDrinkErr) {
+              await supabaseAdmin
                 .from('drink_menus')
                 .update({ name: drink.name })
                 .eq('id', drink.id);
-              if (updateDrinkErr) {
-                console.error(`Error updating drink ${drink.id}:`, updateDrinkErr);
-              }
             }
           }
         }
@@ -143,6 +196,7 @@ export async function PUT(req: NextRequest) {
             event_id: id,
             name: d.name,
             price: d.price ?? 0,
+            aromas: d.aromas,
           }));
 
         if (drinksToInsert.length > 0) {
@@ -150,7 +204,9 @@ export async function PUT(req: NextRequest) {
             .from('drink_menus')
             .insert(drinksToInsert);
           if (insertErr) {
-            console.error("Error inserting new drinks in PUT:", insertErr);
+            console.warn("Retrying drink_menus insert without aromas column:", insertErr);
+            const fallbackDrinks = drinksToInsert.map(({ aromas, ...rest }) => rest);
+            await supabaseAdmin.from('drink_menus').insert(fallbackDrinks);
           }
         }
 

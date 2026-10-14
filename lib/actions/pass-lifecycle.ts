@@ -324,3 +324,149 @@ export async function getPassesForPaymentPoint(eventId?: string) {
     status: 'PENDING_PAYMENT',
   }));
 }
+
+export interface SavePassPayload {
+  eventId: string;
+  userId: string;
+  guestFirstName: string;
+  guestLastName: string;
+  drinkId?: string | null;
+  selectedAromas?: string[];
+  promoCode?: string | null;
+}
+
+/**
+ * Server Action: savePassAction
+ * Saves a pass with guest information, optional drink selection, and selected_aromas.
+ */
+export async function savePassAction(payload: SavePassPayload) {
+  const { eventId, userId, guestFirstName, guestLastName, drinkId, selectedAromas, promoCode } = payload || {};
+
+  if (!eventId || !guestFirstName || !guestLastName) {
+    throw new Error('Champs requis manquants pour la réservation du pass');
+  }
+
+  const formattedAromas = Array.isArray(selectedAromas)
+    ? selectedAromas.filter(a => typeof a === 'string' && a.trim().length > 0).map(a => a.trim())
+    : [];
+
+  // Try RPC create_pass_with_pricing first
+  const { data: rpcData, error: rpcError } = await supabaseAdmin.rpc('create_pass_with_pricing', {
+    p_user_id: userId,
+    p_event_id: eventId,
+    p_guest_first_name: guestFirstName.trim(),
+    p_guest_last_name: guestLastName.trim(),
+    p_drink_id: drinkId || null,
+    p_promo_code: promoCode ? promoCode.trim() : null,
+    p_selected_aromas: formattedAromas
+  });
+
+  if (!rpcError && rpcData?.success) {
+    return { success: true, passId: rpcData.pass_id, finalPrice: rpcData.final_price, promoUsed: rpcData.promo_used };
+  }
+
+  // Fallback: direct insert with pricing and promo validation
+  const { data: eventData } = await supabaseAdmin
+    .from('events')
+    .select('base_price, promo_codes')
+    .eq('id', eventId)
+    .single();
+
+  const basePrice = Number(eventData?.base_price) || 0;
+  let discount = 0;
+  let promoUsed: string | null = null;
+
+  if (promoCode && eventData?.promo_codes && Array.isArray(eventData.promo_codes)) {
+    const matched = eventData.promo_codes.find(
+      (p: any) => p && typeof p.code === 'string' && p.code.trim().toUpperCase() === promoCode.trim().toUpperCase()
+    );
+    if (matched) {
+      discount = Number(matched.discount_amount) || 0;
+      promoUsed = matched.code.trim().toUpperCase();
+    }
+  }
+
+  const finalPrice = Math.max(0, basePrice - discount);
+
+  const insertData: Record<string, any> = {
+    user_id: userId,
+    event_id: eventId,
+    guest_first_name: guestFirstName.trim(),
+    guest_last_name: guestLastName.trim(),
+    entry_status: 'pending',
+    final_price: finalPrice,
+    promo_used: promoUsed,
+    drink_id: drinkId || null,
+    drink_status: drinkId ? 'pending' : null,
+    selected_aromas: formattedAromas,
+  };
+
+  const { data: newPass, error: insertError } = await supabaseAdmin
+    .from('passes')
+    .insert(insertData)
+    .select()
+    .single();
+
+  if (insertError) {
+    console.warn("Direct pass insert failed with selected_aromas, retrying without column:", insertError);
+    delete insertData.selected_aromas;
+    const { data: retryPass, error: retryError } = await supabaseAdmin
+      .from('passes')
+      .insert(insertData)
+      .select()
+      .single();
+
+    if (retryError || !retryPass) {
+      throw new Error("Impossible d'enregistrer le pass: " + (retryError?.message || insertError.message));
+    }
+    return { success: true, pass: { ...retryPass, selected_aromas: formattedAromas } };
+  }
+
+  return { success: true, pass: newPass };
+}
+
+/**
+ * Server Action: selectPassDrinkAction
+ * Asynchronously selects drink and saves selected_aromas for a pass.
+ */
+export async function selectPassDrinkAction(
+  passId: string, 
+  drinkId: string, 
+  selectedAromas: string[] = []
+) {
+  if (!passId || !drinkId) {
+    throw new Error('ID du pass et ID de la boisson requis.');
+  }
+
+  const formattedAromas = Array.isArray(selectedAromas)
+    ? selectedAromas.filter(a => typeof a === 'string' && a.trim().length > 0).map(a => a.trim())
+    : [];
+
+  const updateData: Record<string, any> = {
+    drink_id: drinkId,
+    selected_aromas: formattedAromas,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data: updatedPass, error: updateError } = await supabaseAdmin
+    .from('passes')
+    .update(updateData)
+    .eq('id', passId)
+    .select('*, events(title, date, location)')
+    .single();
+
+  if (updateError) {
+    console.warn("Server action selectPassDrinkAction failed with selected_aromas, retrying without column:", updateError);
+    delete updateData.selected_aromas;
+    const { data: retryPass, error: retryError } = await supabaseAdmin
+      .from('passes')
+      .update(updateData)
+      .eq('id', passId)
+      .select('*, events(title, date, location)')
+      .single();
+    if (retryError) throw new Error(retryError.message);
+    return { success: true, pass: { ...retryPass, selected_aromas: formattedAromas } };
+  }
+
+  return { success: true, pass: updatedPass };
+}

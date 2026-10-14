@@ -17,6 +17,7 @@ import {
   AlertCircle
 } from "lucide-react";
 import { api, Pass } from "@/lib/services/api";
+import { DrinkSelector } from "@/components/DrinkSelector";
 
 type PassCardProps = {
   pass: Pass;
@@ -29,6 +30,7 @@ export function PassCard({ pass, onUpdate }: PassCardProps) {
 
   // Drink Selection state
   const [selectedDrinkId, setSelectedDrinkId] = useState<string>("");
+  const [selectedAromas, setSelectedAromas] = useState<string[]>([]);
   const [isSubmittingDrink, setIsSubmittingDrink] = useState(false);
   const [drinkError, setDrinkError] = useState<string | null>(null);
 
@@ -108,11 +110,11 @@ export function PassCard({ pass, onUpdate }: PassCardProps) {
   };
 
   // Handle drink selection submission with explicit drink ID
-  const handleSelectDrinkWithId = async (drinkId: string) => {
+  const handleSelectDrinkWithId = async (drinkId: string, aromas: string[] = []) => {
     setIsSubmittingDrink(true);
     setDrinkError(null);
     try {
-      const res = await api.selectPassDrink(localPass.id, drinkId);
+      const res = await api.selectPassDrink(localPass.id, drinkId, aromas);
       if (res.pass) {
         setLocalPass(res.pass);
         if (onUpdate) onUpdate(res.pass);
@@ -128,7 +130,7 @@ export function PassCard({ pass, onUpdate }: PassCardProps) {
   // Handle drink selection submission from form
   const handleSelectDrink = async () => {
     if (!selectedDrinkId) return;
-    await handleSelectDrinkWithId(selectedDrinkId);
+    await handleSelectDrinkWithId(selectedDrinkId, selectedAromas);
   };
 
   const drinkQrValue = localPass.drink_qr_code || localPass.drink_qr_uuid;
@@ -378,10 +380,17 @@ export function PassCard({ pass, onUpdate }: PassCardProps) {
                         fgColor="#0F172A"
                       />
                     </div>
-                    <p className="mt-6 text-neutral-200 text-xs font-bold tracking-wide uppercase flex items-center gap-2">
-                      <Wine size={15} className="text-amber-400" />
-                      <span>{localPass.drink_menus?.name || "Boisson réservée"}</span>
-                    </p>
+                    <div className="mt-6 text-neutral-200 text-xs font-bold tracking-wide uppercase flex flex-col items-center gap-1">
+                      <div className="flex items-center gap-2">
+                        <Wine size={15} className="text-amber-400" />
+                        <span>{localPass.drink_menus?.name || "Boisson réservée"}</span>
+                      </div>
+                      {localPass.selected_aromas && localPass.selected_aromas.length > 0 && (
+                        <span className="text-[11px] text-amber-300 font-medium normal-case">
+                          Arômes : {localPass.selected_aromas.join(', ')}
+                        </span>
+                      )}
+                    </div>
                     <p className="text-[11px] text-neutral-400 mt-1">
                       Présentez ce QR Code directement au barman
                     </p>
@@ -442,35 +451,19 @@ export function PassCard({ pass, onUpdate }: PassCardProps) {
                       </div>
                     )}
 
-                    {/* Drink Selection List */}
+                    {/* Drink Selection via DrinkSelector */}
                     {hasAvailableDrinks ? (
-                      <div className="w-full space-y-2 mb-4 max-h-48 overflow-y-auto px-1 hide-scrollbar">
-                        {localPass.available_drinks?.map((drink) => {
-                          const isSelected = selectedDrinkId === drink.id;
-                          return (
-                            <button
-                              key={drink.id}
-                              type="button"
-                              onClick={() => setSelectedDrinkId(drink.id)}
-                              className={`w-full flex items-center justify-between p-3 rounded-2xl border text-left transition-all cursor-pointer ${
-                                isSelected
-                                  ? "bg-amber-500/20 border-amber-500 text-white shadow-md"
-                                  : "bg-neutral-900/60 border-neutral-800 text-neutral-300 hover:bg-neutral-800/60"
-                              }`}
-                            >
-                              <div className="flex items-center gap-2.5 min-w-0">
-                                <Beer 
-                                  size={16} 
-                                  className={isSelected ? "text-amber-400" : "text-neutral-500"} 
-                                />
-                                <span className="text-xs font-bold truncate">{drink.name}</span>
-                              </div>
-                              <span className="text-[11px] font-mono text-neutral-400 shrink-0 ml-2">
-                                {isSpecialPass ? "Offert" : `${drink.price ?? 0} DT`}
-                              </span>
-                            </button>
-                          );
-                        })}
+                      <div className="w-full text-left mb-4">
+                        <DrinkSelector
+                          drinks={localPass.available_drinks || []}
+                          selectedDrinkId={selectedDrinkId}
+                          selectedAromas={selectedAromas}
+                          label="Boisson au choix"
+                          onChange={(drinkId, aromas) => {
+                            setSelectedDrinkId(drinkId);
+                            setSelectedAromas(aromas);
+                          }}
+                        />
                       </div>
                     ) : (
                       <div className="py-6 text-xs text-neutral-400">

@@ -8,6 +8,7 @@ import Image from "next/image";
 import { formatImageUrl } from "@/lib/utils/url";
 import { QRCodeSVG } from 'qrcode.react';
 import { Logo } from "@/components/Logo";
+import { DrinkSelector } from "@/components/DrinkSelector";
 import { Sun, Moon, ArrowLeft, LogOut, MapPin, Calendar, Clock, Ticket, Wine, CheckCircle, AlertCircle, Info, Shirt, Sparkles, Mail } from "lucide-react";
 
 export default function EventPage({ params }: { params: Promise<{ id: string }> }) {
@@ -19,7 +20,9 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
   const [user, setUser] = useState<User | null>(null);
   const [userPasses, setUserPasses] = useState<Pass[]>([]);
   const [numPasses, setNumPasses] = useState(1);
-  const [guests, setGuests] = useState([{ firstName: "", lastName: "", drinkId: "" }]);
+  const [guests, setGuests] = useState<{ firstName: string; lastName: string; drinkId: string; selectedAromas: string[] }[]>([
+    { firstName: "", lastName: "", drinkId: "", selectedAromas: [] }
+  ]);
   const [promoCode, setPromoCode] = useState("");
   const [isBooking, setIsBooking] = useState(false);
   const [imageError, setImageError] = useState(false);
@@ -30,8 +33,12 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
     setGuests(prev => {
       const newGuests = [...prev];
       if (newGuests.length < numPasses) {
-        for (let i = newGuests.length; i < numPasses; i++) newGuests.push({ firstName: "", lastName: "", drinkId: "" });
-      } else { newGuests.length = numPasses; }
+        for (let i = newGuests.length; i < numPasses; i++) {
+          newGuests.push({ firstName: "", lastName: "", drinkId: "", selectedAromas: [] });
+        }
+      } else { 
+        newGuests.length = numPasses; 
+      }
       return newGuests;
     });
   }, [numPasses]);
@@ -63,13 +70,17 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
     e.preventDefault();
     if (!event || !user) return;
     setIsBooking(true);
-    const formattedGuests = guests.map(g => ({ ...g, drinkId: g.drinkId || undefined }));
+    const formattedGuests = guests.map(g => ({
+      ...g,
+      drinkId: g.drinkId || undefined,
+      selectedAromas: g.selectedAromas || []
+    }));
     await api.bookPasses(event.id, user.id, formattedGuests, promoCode.trim() || undefined);
     await fetchPasses(user.id, event.id);
     setIsBooking(false);
     setNumPasses(1);
     setPromoCode("");
-    setGuests([{ firstName: "", lastName: "", drinkId: "" }]);
+    setGuests([{ firstName: "", lastName: "", drinkId: "", selectedAromas: [] }]);
   };
 
   const statusInfo: Record<string, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
@@ -218,6 +229,17 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
                             </span>
                           )}
                         </div>
+                        {pass.drink_menus?.name && (
+                          <div className="flex items-center gap-1.5 mt-2 text-xs text-neutral-300">
+                            <Wine size={13} className="text-amber-400" />
+                            <span className="font-semibold">{pass.drink_menus.name}</span>
+                            {pass.selected_aromas && pass.selected_aromas.length > 0 && (
+                              <span className="text-neutral-400 font-normal">
+                                ({pass.selected_aromas.join(', ')})
+                              </span>
+                            )}
+                          </div>
+                        )}
                         {pass.entry_status === 'pending' && (
                           <p className="text-xs mt-2 font-medium text-amber-500">En attente d'approbation par les organisateurs...</p>
                         )}
@@ -318,18 +340,19 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
                     </div>
                   </div>
 
-                  {((event as any).drink_menus && (event as any).drink_menus.length > 0) && (
-                    <div>
-                      <label className="label flex items-center gap-1.5"><Wine size={14} className="text-passi-turquoise"/> Boisson incluse</label>
-                      <select required value={guest.drinkId}
-                        onChange={e => { const g=[...guests]; g[index].drinkId=e.target.value; setGuests(g); }}
-                        className="input">
-                        <option value="">Sélectionner une boisson...</option>
-                        {(event as any).drink_menus.map((drink: any) => (
-                          <option key={drink.id} value={drink.id}>{drink.name}</option>
-                        ))}
-                      </select>
-                    </div>
+                  {(((event as any).drink_menus && (event as any).drink_menus.length > 0) || ((event as any).drinks && (event as any).drinks.length > 0)) && (
+                    <DrinkSelector
+                      drinks={(event as any).drink_menus && (event as any).drink_menus.length > 0 ? (event as any).drink_menus : ((event as any).drinks || [])}
+                      selectedDrinkId={guest.drinkId}
+                      selectedAromas={guest.selectedAromas}
+                      required
+                      onChange={(drinkId, selectedAromas) => {
+                        const g = [...guests];
+                        g[index].drinkId = drinkId;
+                        g[index].selectedAromas = selectedAromas;
+                        setGuests(g);
+                      }}
+                    />
                   )}
                 </div>
               ))}

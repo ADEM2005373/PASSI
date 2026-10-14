@@ -37,7 +37,7 @@ export default function NewEventPage() {
   const [imageUrl, setImageUrl] = useState("");
   const [description, setDescription] = useState("");
   const [dressCode, setDressCode] = useState("");
-  const [drinks, setDrinks] = useState<{ name: string }[]>([]);
+  const [drinks, setDrinks] = useState<{ name: string; aromasInput: string }[]>([]);
   const [promoCodes, setPromoCodes] = useState<PromoCode[]>([]);
 
   useEffect(() => {
@@ -54,16 +54,16 @@ export default function NewEventPage() {
   }, [router]);
 
   const handleAddDrink = () => {
-    setDrinks([...drinks, { name: "" }]);
+    setDrinks([...drinks, { name: "", aromasInput: "" }]);
   };
 
   const handleRemoveDrink = (index: number) => {
     setDrinks(drinks.filter((_, i) => i !== index));
   };
 
-  const handleDrinkChange = (index: number, val: string) => {
+  const handleDrinkFieldChange = (index: number, field: 'name' | 'aromasInput', val: string) => {
     const updated = [...drinks];
-    updated[index].name = val;
+    updated[index][field] = val;
     setDrinks(updated);
   };
 
@@ -101,7 +101,15 @@ export default function NewEventPage() {
 
     setIsSubmitting(true);
     try {
-      const validDrinks = drinks.filter(d => d.name.trim() !== "");
+      const validDrinks = drinks
+        .filter(d => d.name.trim() !== "")
+        .map(d => ({
+          name: d.name.trim(),
+          aromas: d.aromasInput
+            ? d.aromasInput.split(',').map(a => a.trim()).filter(a => a.length > 0)
+            : []
+        }));
+
       const validPromoCodes = promoCodes
         .filter(p => p.code.trim() !== "" && p.discount_amount > 0)
         .map(p => ({ code: p.code.trim().toUpperCase(), discount_amount: Number(p.discount_amount) }));
@@ -369,36 +377,94 @@ export default function NewEventPage() {
               </div>
             </div>
 
-            {/* Drinks List */}
-            <div className="p-4 rounded-xl" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border)' }}>
-              <div className="flex justify-between items-center mb-2">
-                <label className="label !mb-0">Menu boissons incluses (optionnel)</label>
+            {/* Drinks List with Aromas */}
+            <div className="p-4 rounded-xl space-y-3" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border)' }}>
+              <div className="flex justify-between items-center mb-1">
+                <div>
+                  <label className="label !mb-0 text-sm font-bold">Menu boissons & arômes (optionnel)</label>
+                  <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">
+                    Définissez chaque boisson et ses arômes/goûts disponibles, séparés par des virgules.
+                  </p>
+                </div>
                 <button
                   type="button"
                   onClick={handleAddDrink}
-                  className="flex items-center gap-1 text-xs font-bold text-passi-turquoise hover:underline"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-passi-turquoise bg-passi-turquoise/10 hover:bg-passi-turquoise/20 transition-colors"
                 >
-                  <Plus size={14} /> Ajouter boisson
+                  <Plus size={14} /> Ajouter une boisson
                 </button>
               </div>
-              {drinks.map((d, index) => (
-                <div key={index} className="flex gap-2 mb-2">
-                  <input
-                    type="text"
-                    placeholder="Ex: Gin Tonic, Bière artisanale"
-                    value={d.name}
-                    onChange={e => handleDrinkChange(index, e.target.value)}
-                    className="input flex-1 text-sm"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveDrink(index)}
-                    className="p-2.5 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500/20"
-                  >
-                    <X size={15} />
-                  </button>
+
+              {drinks.length === 0 ? (
+                <div className="py-6 text-center text-xs text-[var(--text-secondary)] border border-dashed border-[var(--border)] rounded-xl">
+                  Aucune boisson définie. Cliquez sur "Ajouter une boisson" pour configurer des consommations et leurs arômes.
                 </div>
-              ))}
+              ) : (
+                <div className="space-y-3">
+                  {drinks.map((d, index) => (
+                    <div 
+                      key={index} 
+                      className="p-3.5 rounded-xl border border-[var(--border)] bg-black/20 space-y-2 relative group animate-in fade-in duration-200"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-extrabold uppercase tracking-wider text-passi-turquoise">
+                          Boisson #{index + 1}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveDrink(index)}
+                          className="p-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
+                          title="Supprimer cette boisson"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[11px] font-semibold text-[var(--text-secondary)] block mb-1">
+                            Nom de la boisson *
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Ex: Mojito, Café, Gin Tonic..."
+                            value={d.name}
+                            onChange={e => handleDrinkFieldChange(index, 'name', e.target.value)}
+                            className="input text-sm w-full"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-semibold text-[var(--text-secondary)] block mb-1">
+                            Arômes / Goûts (séparés par des virgules)
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Ex: Fraise, Passion, Menthe classique"
+                            value={d.aromasInput}
+                            onChange={e => handleDrinkFieldChange(index, 'aromasInput', e.target.value)}
+                            className="input text-sm w-full"
+                          />
+                        </div>
+                      </div>
+
+                      {d.aromasInput.trim() && (
+                        <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                          <span className="text-[10px] text-[var(--text-secondary)] mr-1">Arômes détectés :</span>
+                          {d.aromasInput.split(',').map(a => a.trim()).filter(Boolean).map((aroma, aIdx) => (
+                            <span 
+                              key={aIdx} 
+                              className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-passi-turquoise/15 text-passi-turquoise border border-passi-turquoise/25"
+                            >
+                              {aroma}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
