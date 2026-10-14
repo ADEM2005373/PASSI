@@ -39,7 +39,7 @@ export default function AdminDashboard() {
   const [newImageUrl, setNewImageUrl] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [newDressCode, setNewDressCode] = useState("");
-  const [newDrinks, setNewDrinks] = useState<{ id?: string; name: string }[]>([]);
+  const [newDrinks, setNewDrinks] = useState<{ id?: string; name: string; aromas: string }[]>([]);
   const [newBasePrice, setNewBasePrice] = useState<number>(0);
   const [newPromoCodes, setNewPromoCodes] = useState<{code: string; discount_amount: number}[]>([]);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
@@ -342,7 +342,8 @@ export default function AdminDashboard() {
       .filter(d => d.name && d.name.trim() !== "")
       .map(d => ({
         ...(d.id ? { id: d.id } : {}),
-        name: d.name.trim()
+        name: d.name.trim(),
+        aromas: d.aromas ? d.aromas.split(',').map((a: string) => a.trim()).filter(Boolean) : []
       }));
     const validPromoCodes = newPromoCodes
       .filter(p => p.code.trim() !== "" && Number(p.discount_amount) > 0)
@@ -417,10 +418,21 @@ export default function AdminDashboard() {
     setNewDescription(event.description || "");
     setNewDressCode(event.dress_code || "");
     
+    // Helper to map drinks from either drink_menus or drinks JSONB
+    const mapDrinksToState = (drinksList: any[]) => {
+      return drinksList.map(item => ({
+        id: item.id,
+        name: item.name || "",
+        aromas: Array.isArray(item.aromas)
+          ? item.aromas.join(', ')
+          : (typeof item.aromas === 'string' ? item.aromas : '')
+      }));
+    };
+
     // 1. Immediately map drinks from event, preserving existing IDs
     const initialDrinks = (event.drink_menus && event.drink_menus.length > 0)
-      ? event.drink_menus.map(d => ({ id: d.id, name: d.name }))
-      : [];
+      ? mapDrinksToState(event.drink_menus)
+      : (Array.isArray(event.drinks) && event.drinks.length > 0 ? mapDrinksToState(event.drinks) : []);
     setNewDrinks(initialDrinks);
 
     setNewBasePrice(event.base_price ?? 0);
@@ -430,8 +442,10 @@ export default function AdminDashboard() {
     // 2. Fetch fresh event data from DB to guarantee drinks list is not missing or stale
     try {
       const freshEvent = await api.getEvent(event.id);
-      if (freshEvent && Array.isArray(freshEvent.drink_menus)) {
-        setNewDrinks(freshEvent.drink_menus.map(d => ({ id: d.id, name: d.name })));
+      if (freshEvent && Array.isArray(freshEvent.drink_menus) && freshEvent.drink_menus.length > 0) {
+        setNewDrinks(mapDrinksToState(freshEvent.drink_menus));
+      } else if (freshEvent && Array.isArray(freshEvent.drinks) && freshEvent.drinks.length > 0) {
+        setNewDrinks(mapDrinksToState(freshEvent.drinks));
       }
     } catch (err) {
       console.error("Failed to load fresh drinks for edit event:", err);
@@ -924,38 +938,102 @@ export default function AdminDashboard() {
                     </button>
                   </div>
 
-                  {/* Drinks */}
+                  {/* Drinks & Aromas */}
                   <div className="p-4 rounded-xl" style={{ backgroundColor: 'var(--bg-input)', border: '1.5px solid var(--border)' }}>
-                    <label className="label">Menu boissons (optionnel)</label>
-                    {newDrinks.map((drink, index) => (
-                      <div key={drink.id || index} className="flex gap-2 mb-2">
-                        <input 
-                          type="text" 
-                          placeholder="Ex: Vodka Redbull" 
-                          value={drink.name}
-                          onChange={e => { 
-                            const u = [...newDrinks]; 
-                            u[index] = { ...u[index], name: e.target.value }; 
-                            setNewDrinks(u); 
-                          }}
-                          className="input flex-1 text-sm"
-                        />
-                        <button 
-                          type="button" 
-                          onClick={() => setNewDrinks(newDrinks.filter((_, i) => i !== index))} 
-                          className="p-2.5 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-colors"
-                        >
-                          <X size={16}/>
-                        </button>
+                    <div className="flex justify-between items-center mb-2">
+                      <div>
+                        <label className="label !mb-0 font-bold">Menu boissons & arômes (optionnel)</label>
+                        <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">
+                          Définissez chaque boisson et ses arômes disponibles (séparés par des virgules).
+                        </p>
                       </div>
-                    ))}
-                    <button 
-                      type="button" 
-                      onClick={() => setNewDrinks([...newDrinks, { name: "" }])} 
-                      className="flex items-center gap-2 text-sm font-bold text-passi-turquoise hover:text-passi-turquoise/80 mt-2"
-                    >
-                      <Plus size={16}/> Ajouter une boisson
-                    </button>
+                      <button 
+                        type="button" 
+                        onClick={() => setNewDrinks([...newDrinks, { name: "", aromas: "" }])} 
+                        className="flex items-center gap-1.5 text-xs font-bold text-passi-turquoise hover:text-passi-turquoise/80 cursor-pointer"
+                      >
+                        <Plus size={14}/> Ajouter une boisson
+                      </button>
+                    </div>
+
+                    {newDrinks.length === 0 ? (
+                      <div className="py-4 text-center text-xs text-[var(--text-secondary)] border border-dashed border-[var(--border)] rounded-xl">
+                        Aucune boisson définie. Cliquez sur "Ajouter une boisson" pour configurer les consommations.
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {newDrinks.map((drink, index) => (
+                          <div 
+                            key={drink.id || index} 
+                            className="p-3 rounded-xl border border-[var(--border)] bg-black/10 space-y-2 relative"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-[11px] font-bold uppercase tracking-wider text-passi-turquoise">
+                                Boisson #{index + 1}
+                              </span>
+                              <button 
+                                type="button" 
+                                onClick={() => setNewDrinks(newDrinks.filter((_, i) => i !== index))} 
+                                className="p-1.5 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-colors cursor-pointer"
+                                title="Supprimer cette boisson"
+                              >
+                                <X size={14}/>
+                              </button>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                              <div>
+                                <label className="text-[11px] font-semibold text-[var(--text-secondary)] block mb-1">
+                                  Nom de la boisson *
+                                </label>
+                                <input 
+                                  type="text" 
+                                  placeholder="Ex: Mojito, Café..." 
+                                  value={drink.name}
+                                  onChange={e => { 
+                                    const u = [...newDrinks]; 
+                                    u[index] = { ...u[index], name: e.target.value }; 
+                                    setNewDrinks(u); 
+                                  }}
+                                  className="input text-sm w-full"
+                                  required
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[11px] font-semibold text-[var(--text-secondary)] block mb-1">
+                                  Arômes disponibles
+                                </label>
+                                <input 
+                                  type="text" 
+                                  placeholder="Ex: Fraise, Passion, Pêche (séparés par des virgules)" 
+                                  value={drink.aromas || ""}
+                                  onChange={e => { 
+                                    const u = [...newDrinks]; 
+                                    u[index] = { ...u[index], aromas: e.target.value }; 
+                                    setNewDrinks(u); 
+                                  }}
+                                  className="input text-sm w-full"
+                                />
+                              </div>
+                            </div>
+
+                            {drink.aromas && drink.aromas.trim() && (
+                              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                                <span className="text-[10px] text-[var(--text-secondary)] mr-1">Arômes détectés :</span>
+                                {drink.aromas.split(',').map(a => a.trim()).filter(Boolean).map((aroma, aIdx) => (
+                                  <span 
+                                    key={aIdx} 
+                                    className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-passi-turquoise/15 text-passi-turquoise border border-passi-turquoise/25"
+                                  >
+                                    {aroma}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex gap-3 pt-2">

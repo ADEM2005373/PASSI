@@ -427,7 +427,7 @@ export default function NewEventPage() {
                           </label>
                           <input
                             type="text"
-                            placeholder="Ex: Mojito, Café, Gin Tonic..."
+                            placeholder="Ex: Mojito, Café..."
                             value={d.name}
                             onChange={e => handleDrinkFieldChange(index, 'name', e.target.value)}
                             className="input text-sm w-full"
@@ -436,11 +436,11 @@ export default function NewEventPage() {
                         </div>
                         <div>
                           <label className="text-[11px] font-semibold text-[var(--text-secondary)] block mb-1">
-                            Arômes / Goûts (séparés par des virgules)
+                            Arômes disponibles
                           </label>
                           <input
                             type="text"
-                            placeholder="Ex: Fraise, Passion, Menthe classique"
+                            placeholder="Ex: Fraise, Passion, Pêche (séparés par des virgules)"
                             value={d.aromasInput}
                             onChange={e => handleDrinkFieldChange(index, 'aromasInput', e.target.value)}
                             className="input text-sm w-full"
