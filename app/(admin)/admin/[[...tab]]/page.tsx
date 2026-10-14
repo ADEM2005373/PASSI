@@ -16,14 +16,14 @@ import { NewsManagementSection } from "@/components/admin/NewsManagementSection"
 import { FinancialAnalyticsSection } from "@/components/admin/FinancialAnalyticsSection";
 import { formatImageUrl } from "@/lib/utils/url";
 
-export default function AdminDashboard() {
+export default function AdminDashboard({ initialTab }: { initialTab?: string } = {}) {
   const router = useRouter();
   const { user, logout: contextLogout } = useAuth();
   const { startSimulation } = useSimulation();
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [activeTab, setActiveTab] = useState("dashboard");
+  const [activeTab, setActiveTab] = useState(initialTab || "dashboard");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   const [passes, setPasses] = useState<Pass[]>([]);
@@ -69,6 +69,9 @@ export default function AdminDashboard() {
   const [rejectionReason, setRejectionReason] = useState("");
   const [isRejecting, setIsRejecting] = useState(false);
   const [approbationMsg, setApprobationMsg] = useState("");
+  const [approbEventFilter, setApprobEventFilter] = useState("");
+  const [approbStatusFilter, setApprobStatusFilter] = useState("all");
+  const [isRefreshingApprob, setIsRefreshingApprob] = useState(false);
 
   // Delete pass confirmation state
   const [deleteModalPass, setDeleteModalPass] = useState<Pass | null>(null);
@@ -544,6 +547,10 @@ export default function AdminDashboard() {
   ];
 
   useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+      return;
+    }
     const path = window.location.pathname;
     if (path === '/admin/passes/create' || path === '/admin/passes-creation') {
       setActiveTab('passes-creation');
@@ -556,7 +563,7 @@ export default function AdminDashboard() {
         setActiveTab('dashboard');
       }
     }
-  }, []);
+  }, [initialTab]);
 
   const handleTabClick = (id: string) => {
     setActiveTab(id);
@@ -1570,97 +1577,165 @@ export default function AdminDashboard() {
           )}
 
           {/* ── PASSES TAB ── */}
-          {activeTab === 'approbations' && (
-            <div className="card p-7 shadow-sm">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>Approbation des passes</h3>
-                {approbationMsg && (
-                  <p className="text-sm font-semibold px-4 py-2 rounded-xl bg-passi-turquoise/10 text-passi-turquoise">
-                    ✓ {approbationMsg}
-                  </p>
+          {activeTab === 'approbations' && (() => {
+            const displayedPasses = passes.filter(pass => {
+              if (approbEventFilter && pass.event_id !== approbEventFilter) {
+                return false;
+              }
+              if (approbStatusFilter !== 'all') {
+                const s = (pass.entry_status || pass.status || '').toLowerCase();
+                if (s !== approbStatusFilter.toLowerCase()) return false;
+              }
+              return true;
+            });
+
+            return (
+              <div className="card p-7 shadow-sm">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                  <div>
+                    <h3 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>Approbation des passes</h3>
+                    <p className="text-xs text-neutral-400 mt-1">
+                      {displayedPasses.length} demande(s) affichée(s) sur {passes.length} au total
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {approbationMsg && (
+                      <p className="text-sm font-semibold px-4 py-2 rounded-xl bg-passi-turquoise/10 text-passi-turquoise">
+                        ✓ {approbationMsg}
+                      </p>
+                    )}
+                    <button
+                      type="button"
+                      disabled={isRefreshingApprob}
+                      onClick={async () => {
+                        setIsRefreshingApprob(true);
+                        try {
+                          await fetchData();
+                        } finally {
+                          setIsRefreshingApprob(false);
+                        }
+                      }}
+                      className="px-3 py-1.5 rounded-xl text-xs font-semibold border border-neutral-700 hover:border-passi-turquoise text-neutral-300 hover:text-white transition-all cursor-pointer"
+                      title="Actualiser la liste en temps réel"
+                    >
+                      {isRefreshingApprob ? "Rafraîchissement..." : "↻ Rafraîchir"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Filters: Defaults to ALL events */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 mb-6 rounded-2xl" style={{ backgroundColor: 'var(--bg-input)', border: '1.5px solid var(--border)' }}>
+                  <div>
+                    <label className="label text-xs">Filtrer par Événement</label>
+                    <select
+                      value={approbEventFilter}
+                      onChange={(e) => setApprobEventFilter(e.target.value)}
+                      className="input text-sm"
+                    >
+                      <option value="">Tous les événements (Défaut)</option>
+                      {events.map(ev => (
+                        <option key={ev.id} value={ev.id}>{ev.title}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label text-xs">Filtrer par Statut</label>
+                    <select
+                      value={approbStatusFilter}
+                      onChange={(e) => setApprobStatusFilter(e.target.value)}
+                      className="input text-sm"
+                    >
+                      <option value="all">Tous les statuts</option>
+                      <option value="pending">En attente (Pending)</option>
+                      <option value="awaiting_payment">En attente de paiement</option>
+                      <option value="activated">Activé / Payé</option>
+                      <option value="rejected">Rejeté</option>
+                    </select>
+                  </div>
+                </div>
+
+                {displayedPasses.length === 0 ? (
+                  <div className="text-center py-20 rounded-2xl" style={{ backgroundColor: 'var(--bg-input)', border: '1.5px dashed var(--border)' }}>
+                    <Check size={40} className="mx-auto mb-3 text-passi-turquoise" />
+                    <p className="font-semibold" style={{ color: 'var(--text-muted)' }}>Aucune demande en attente</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {displayedPasses.map(pass => {
+                      const statusConfig: Record<string, { color: string; bg: string; label: string }> = {
+                        pending: { color: 'text-amber-500', bg: 'bg-amber-500/10', label: 'En attente' },
+                        awaiting_payment: { color: 'text-blue-500', bg: 'bg-blue-500/10', label: 'Att. paiement' },
+                        activated: { color: 'text-passi-turquoise', bg: 'bg-passi-turquoise/10', label: 'Activé' },
+                        rejected: { color: 'text-passi-corail', bg: 'bg-passi-corail/10', label: 'Rejeté' },
+                      };
+                      const sc = statusConfig[pass.entry_status] || { color: 'text-gray-500', bg: 'bg-gray-500/10', label: pass.entry_status };
+                      return (
+                        <div key={pass.id} className={`p-5 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-colors ${sc.bg === 'bg-passi-corail/10' ? 'opacity-70' : ''}`} style={{ backgroundColor: 'var(--bg-input)', border: '1.5px solid var(--border)' }}>
+                          <div className="flex items-center gap-4">
+                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl font-bold ${sc.bg} ${sc.color}`}>
+                              {pass.entry_status === 'pending' ? '!' : pass.entry_status === 'awaiting_payment' ? '$' : pass.entry_status === 'rejected' ? 'X' : '✓'}
+                            </div>
+                            <div>
+                              <p className="font-bold text-base" style={{ color: 'var(--text-primary)' }}>{pass.guest_first_name} {pass.guest_last_name}</p>
+                              <p className="text-sm truncate max-w-[200px]" title={pass.instagram_handle} style={{ color: 'var(--text-secondary)' }}>{pass.instagram_handle}</p>
+                              <p className="text-xs font-semibold mt-1" style={{ color: 'var(--text-muted)' }}>
+                                Événement: {pass.events?.title || 'Inconnu'}
+                              </p>
+                              {pass.drink_menus && (
+                                <p className="text-xs font-semibold text-passi-corail">
+                                  Boisson: {pass.drink_menus.name}
+                                </p>
+                              )}
+                              <span className={`badge mt-2 inline-block ${sc.bg} ${sc.color}`}>{sc.label}</span>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <a
+                              href={pass.instagram_handle || '#'}
+                              target="_blank" rel="noreferrer"
+                              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-pink-500 to-rose-500 hover:shadow-lg transition-all"
+                            >
+                              <ExternalLink size={15}/> Profil IG
+                            </a>
+                            {pass.entry_status === 'pending' && (
+                              <>
+                                <button onClick={() => handleApprove(pass.id)} className="btn-primary px-4 py-2 text-sm bg-green-500 hover:bg-green-600 border-none">Approuver Application</button>
+                                <button onClick={() => setRejectModalPass(pass)} className="btn-ghost px-4 py-2 text-sm border border-red-500 text-red-500">Rejeter</button>
+                              </>
+                            )}
+                            {pass.entry_status === 'awaiting_payment' && (
+                              <>
+                                <button onClick={() => handleMarkPaid(pass.id)} className="px-4 py-2 rounded-xl text-sm font-bold text-white bg-green-500 hover:bg-green-600 transition-all">Confirmer Paiement</button>
+                                <button onClick={() => setRejectModalPass(pass)} className="btn-ghost px-4 py-2 text-sm border border-red-500 text-red-500">Annuler / Rejeter</button>
+                              </>
+                            )}
+                            {['activated', 'scanned'].includes(pass.entry_status) && (
+                              <div className="flex items-center gap-2 px-4 py-2 bg-green-500/10 text-green-600 rounded-xl font-bold text-sm" title="Paid passes cannot be modified or revoked.">
+                                <Check size={16} /> Payé & Confirmé
+                              </div>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDeleteModalPass(pass);
+                                setDeleteConfirmationInput("");
+                                setDeleteError(null);
+                              }}
+                              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-bold text-red-500 hover:text-white bg-red-500/10 hover:bg-red-500 border border-red-500/20 hover:border-red-500 transition-all cursor-pointer"
+                              title="Supprimer définitivement ce pass"
+                            >
+                              <Trash2 size={15} /> Supprimer
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
-              {passes.length === 0 ? (
-                <div className="text-center py-20 rounded-2xl" style={{ backgroundColor: 'var(--bg-input)', border: '1.5px dashed var(--border)' }}>
-                  <Check size={40} className="mx-auto mb-3 text-passi-turquoise" />
-                  <p className="font-semibold" style={{ color: 'var(--text-muted)' }}>Aucune demande en attente</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {passes.map(pass => {
-                    const statusConfig: Record<string, { color: string; bg: string; label: string }> = {
-                      pending: { color: 'text-amber-500', bg: 'bg-amber-500/10', label: 'En attente' },
-                      awaiting_payment: { color: 'text-blue-500', bg: 'bg-blue-500/10', label: 'Att. paiement' },
-                      activated: { color: 'text-passi-turquoise', bg: 'bg-passi-turquoise/10', label: 'Activé' },
-                      rejected: { color: 'text-passi-corail', bg: 'bg-passi-corail/10', label: 'Rejeté' },
-                    };
-                    const sc = statusConfig[pass.entry_status] || { color: 'text-gray-500', bg: 'bg-gray-500/10', label: pass.entry_status };
-                    return (
-                      <div key={pass.id} className={`p-5 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-colors ${sc.bg === 'bg-passi-corail/10' ? 'opacity-70' : ''}`} style={{ backgroundColor: 'var(--bg-input)', border: '1.5px solid var(--border)' }}>
-                        <div className="flex items-center gap-4">
-                          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl font-bold ${sc.bg} ${sc.color}`}>
-                            {pass.entry_status === 'pending' ? '!' : pass.entry_status === 'awaiting_payment' ? '$' : pass.entry_status === 'rejected' ? 'X' : '✓'}
-                          </div>
-                          <div>
-                            <p className="font-bold text-base" style={{ color: 'var(--text-primary)' }}>{pass.guest_first_name} {pass.guest_last_name}</p>
-                            <p className="text-sm truncate max-w-[200px]" title={pass.instagram_handle} style={{ color: 'var(--text-secondary)' }}>{pass.instagram_handle}</p>
-                            <p className="text-xs font-semibold mt-1" style={{ color: 'var(--text-muted)' }}>
-                              Événement: {pass.events?.title || 'Inconnu'}
-                            </p>
-                            {pass.drink_menus && (
-                              <p className="text-xs font-semibold text-passi-corail">
-                                Boisson: {pass.drink_menus.name}
-                              </p>
-                            )}
-                            <span className={`badge mt-2 inline-block ${sc.bg} ${sc.color}`}>{sc.label}</span>
-                          </div>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          <a
-                            href={pass.instagram_handle || '#'}
-                            target="_blank" rel="noreferrer"
-                            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-pink-500 to-rose-500 hover:shadow-lg transition-all"
-                          >
-                            <ExternalLink size={15}/> Profil IG
-                          </a>
-                          {pass.entry_status === 'pending' && (
-                            <>
-                              <button onClick={() => handleApprove(pass.id)} className="btn-primary px-4 py-2 text-sm bg-green-500 hover:bg-green-600 border-none">Approuver Application</button>
-                              <button onClick={() => setRejectModalPass(pass)} className="btn-ghost px-4 py-2 text-sm border border-red-500 text-red-500">Rejeter</button>
-                            </>
-                          )}
-                          {pass.entry_status === 'awaiting_payment' && (
-                            <>
-                              <button onClick={() => handleMarkPaid(pass.id)} className="px-4 py-2 rounded-xl text-sm font-bold text-white bg-green-500 hover:bg-green-600 transition-all">Confirmer Paiement</button>
-                              <button onClick={() => setRejectModalPass(pass)} className="btn-ghost px-4 py-2 text-sm border border-red-500 text-red-500">Annuler / Rejeter</button>
-                            </>
-                          )}
-                          {['activated', 'scanned'].includes(pass.entry_status) && (
-                            <div className="flex items-center gap-2 px-4 py-2 bg-green-500/10 text-green-600 rounded-xl font-bold text-sm" title="Paid passes cannot be modified or revoked.">
-                              <Check size={16} /> Payé & Confirmé
-                            </div>
-                          )}
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setDeleteModalPass(pass);
-                              setDeleteConfirmationInput("");
-                              setDeleteError(null);
-                            }}
-                            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-bold text-red-500 hover:text-white bg-red-500/10 hover:bg-red-500 border border-red-500/20 hover:border-red-500 transition-all cursor-pointer"
-                            title="Supprimer définitivement ce pass"
-                          >
-                            <Trash2 size={15} /> Supprimer
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
+            );
+          })()}
 
           {/* ── PROFILE TAB ── */}
           {activeTab === 'profil' && (

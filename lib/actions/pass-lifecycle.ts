@@ -300,7 +300,7 @@ export async function getPassesForPaymentPoint(eventId?: string) {
 
   let query = supabaseAdmin
     .from('passes')
-    .select('*, events(title, base_price), drink_menus(name)')
+    .select('*, events(title, base_price)')
     .eq('entry_status', 'awaiting_payment')
     .order('created_at', { ascending: true });
 
@@ -322,6 +322,7 @@ export async function getPassesForPaymentPoint(eventId?: string) {
   return filtered.map((pass: any) => ({
     ...pass,
     status: 'PENDING_PAYMENT',
+    drink_menus: pass.drink_name ? { name: pass.drink_name } : (pass.drink_menus || null),
   }));
 }
 

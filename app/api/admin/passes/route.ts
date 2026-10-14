@@ -8,6 +8,94 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+export async function GET(req: NextRequest) {
+  const { error: authError } = await requireRole(['admin']);
+  if (authError) return authError;
+
+  const { searchParams } = new URL(req.url);
+  const statusFilter = searchParams.get('status');
+  const eventIdFilter = searchParams.get('eventId');
+
+  try {
+    let query = supabaseAdmin
+      .from('passes')
+      .select('*, event:events(*), user:profiles!passes_user_id_fkey(*)')
+      .order('created_at', { ascending: false });
+
+    if (statusFilter && statusFilter !== 'all') {
+      const lower = statusFilter.toLowerCase();
+      const upper = statusFilter.toUpperCase();
+      query = query.or(`entry_status.eq.${lower},entry_status.eq.${upper}`);
+    }
+
+    if (eventIdFilter && eventIdFilter !== 'all' && eventIdFilter.trim() !== '') {
+      query = query.eq('event_id', eventIdFilter);
+    }
+
+    let { data, error } = await query;
+
+    // Fallback if relationship embedding fails
+    if (error) {
+      console.warn("Foreign relationship select failed in GET /api/admin/passes, falling back:", error);
+      let fallbackQuery = supabaseAdmin
+        .from('passes')
+        .select('*, events(*)')
+        .order('created_at', { ascending: false });
+
+      if (statusFilter && statusFilter !== 'all') {
+        const lower = statusFilter.toLowerCase();
+        const upper = statusFilter.toUpperCase();
+        fallbackQuery = fallbackQuery.or(`entry_status.eq.${lower},entry_status.eq.${upper}`);
+      }
+      if (eventIdFilter && eventIdFilter !== 'all' && eventIdFilter.trim() !== '') {
+        fallbackQuery = fallbackQuery.eq('event_id', eventIdFilter);
+      }
+
+      const fallbackRes = await fallbackQuery;
+      data = fallbackRes.data;
+    }
+
+    if (!data) return NextResponse.json({ passes: [] });
+
+    // Ensure profiles data is mapped
+    const userIds = [...new Set(data.map((p: any) => p.user_id).filter(Boolean))];
+    let profilesMap: Record<string, any> = {};
+    if (userIds.length > 0) {
+      const { data: profs } = await supabaseAdmin
+        .from('profiles')
+        .select('id, email, full_name, instagram_handle')
+        .in('id', userIds);
+      if (profs) {
+        profs.forEach((pr: any) => { profilesMap[pr.id] = pr; });
+      }
+    }
+
+    const formattedPasses = data.map((pass: any) => {
+      const prof = profilesMap[pass.user_id] || pass.user || pass.profiles || {};
+      const evt = pass.event || pass.events || {};
+      return {
+        ...pass,
+        status: pass.entry_status || pass.status,
+        entry_status: pass.entry_status || pass.status,
+        events: evt,
+        event: evt,
+        profiles: prof,
+        user: prof,
+        instagram_handle: prof.instagram_handle || pass.instagram_handle || '@unknown',
+        drink_menus: pass.drink_name ? { name: pass.drink_name } : (pass.drink_menus || null),
+      };
+    });
+
+    return NextResponse.json({ passes: formattedPasses });
+  } catch (err: any) {
+    console.error("Error in GET /api/admin/passes:", err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
 export async function PATCH(req: NextRequest) {
   const { error: authError } = await requireRole(['admin']);
   if (authError) return authError;

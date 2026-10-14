@@ -49,6 +49,7 @@ export type Pass = {
   guest_last_name: string;
   entry_qr_uuid: string | null;
   entry_status: 'pending' | 'awaiting_payment' | 'activated' | 'scanned' | 'rejected';
+  status?: string;
   rejection_reason?: string | null;
   final_price?: number;
   promo_used?: string | null;
@@ -347,27 +348,155 @@ export const api = {
   },
 
   // --- ADMIN (Phase 2 & 3) ---
-  async getPendingPasses(): Promise<Pass[]> {
-    const supabase = createClient();
-    const { data } = await supabase.from('passes').select('*').in('entry_status', ['pending', 'awaiting_payment']);
-    return data || [];
-  },
+  async getPendingPasses(eventId?: string): Promise<Pass[]> {
+    // 1. Try server endpoint with service role (no caching)
+    try {
+      const url = '/api/admin/passes?status=pending' + (eventId && eventId !== 'all' ? `&eventId=${eventId}` : '');
+      const res = await fetch(url, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' }
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (Array.isArray(json.passes)) {
+          return json.passes;
+        }
+      }
+    } catch (e) {
+      console.warn("GET /api/admin/passes?status=pending failed, falling back to direct query:", e);
+    }
 
-  async getAllPasses(): Promise<Pass[]> {
+    // 2. Direct Supabase query as requested
     const supabase = createClient();
-    
-    // Fetch all passes
-    const { data: passesData } = await supabase.from('passes').select('*, drink_menus(name), events(title)');
-    if (!passesData) return [];
-    
-    // Fetch all profiles to map instagram handles manually
-    const { data: profilesData } = await supabase.from('profiles').select('id, instagram_handle');
-    
+    let query = supabase
+      .from('passes')
+      .select('*, event:events(*), user:profiles!passes_user_id_fkey(*)')
+      .order('created_at', { ascending: false });
+
+    query = query.or('entry_status.eq.pending,entry_status.eq.PENDING');
+
+    if (eventId && eventId !== 'all' && eventId.trim() !== '') {
+      query = query.eq('event_id', eventId);
+    }
+
+    let { data: passesData, error } = await query;
+
+    // Fallback if foreign key alias fails
+    if (error || !passesData) {
+      let fallbackQuery = supabase
+        .from('passes')
+        .select('*, events(*)')
+        .order('created_at', { ascending: false });
+
+      fallbackQuery = fallbackQuery.or('entry_status.eq.pending,entry_status.eq.PENDING');
+      if (eventId && eventId !== 'all' && eventId.trim() !== '') {
+        fallbackQuery = fallbackQuery.eq('event_id', eventId);
+      }
+      const fallbackRes = await fallbackQuery;
+      passesData = fallbackRes.data;
+    }
+
+    if (!passesData) {
+      const plainQuery = supabase
+        .from('passes')
+        .select('*')
+        .or('entry_status.eq.pending,entry_status.eq.PENDING')
+        .order('created_at', { ascending: false });
+      const plainRes = await plainQuery;
+      passesData = plainRes.data || [];
+    }
+
+    // Map profiles and relations
+    const { data: profilesData } = await supabase.from('profiles').select('id, instagram_handle, full_name, email');
+    const profilesMap = new Map((profilesData || []).map((p: any) => [p.id, p]));
+
     return passesData.map((pass: any) => {
-      const profile = profilesData?.find((p: any) => p.id === pass.user_id);
+      const profile = profilesMap.get(pass.user_id) || pass.user || pass.profiles;
+      const evt = pass.event || pass.events;
       return {
         ...pass,
-        instagram_handle: profile?.instagram_handle || '@unknown'
+        event: evt,
+        events: evt,
+        user: profile,
+        profiles: profile,
+        status: pass.entry_status || pass.status,
+        entry_status: pass.entry_status || pass.status,
+        instagram_handle: profile?.instagram_handle || pass.instagram_handle || '@unknown',
+        drink_menus: pass.drink_name ? { name: pass.drink_name } : (pass.drink_menus || null),
+      };
+    });
+  },
+
+  async getAllPasses(eventId?: string): Promise<Pass[]> {
+    // 1. Try server endpoint with service role (no caching)
+    try {
+      const url = '/api/admin/passes' + (eventId && eventId !== 'all' ? `&eventId=${eventId}` : '');
+      const res = await fetch(url, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' }
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (Array.isArray(json.passes)) {
+          return json.passes;
+        }
+      }
+    } catch (e) {
+      console.warn("GET /api/admin/passes failed, falling back to direct query:", e);
+    }
+
+    // 2. Direct Supabase query
+    const supabase = createClient();
+    let query = supabase
+      .from('passes')
+      .select('*, event:events(*), user:profiles!passes_user_id_fkey(*)')
+      .order('created_at', { ascending: false });
+
+    if (eventId && eventId !== 'all' && eventId.trim() !== '') {
+      query = query.eq('event_id', eventId);
+    }
+
+    let { data: passesData, error } = await query;
+
+    // Fallback if foreign key alias fails
+    if (error || !passesData) {
+      let fallbackQuery = supabase
+        .from('passes')
+        .select('*, events(*)')
+        .order('created_at', { ascending: false });
+      if (eventId && eventId !== 'all' && eventId.trim() !== '') {
+        fallbackQuery = fallbackQuery.eq('event_id', eventId);
+      }
+      const fallbackRes = await fallbackQuery;
+      passesData = fallbackRes.data;
+    }
+
+    if (!passesData) {
+      const plainQuery = supabase
+        .from('passes')
+        .select('*')
+        .order('created_at', { ascending: false });
+      const plainRes = await plainQuery;
+      passesData = plainRes.data || [];
+    }
+
+    // Map profiles and relations
+    const { data: profilesData } = await supabase.from('profiles').select('id, instagram_handle, full_name, email');
+    const profilesMap = new Map((profilesData || []).map((p: any) => [p.id, p]));
+
+    return passesData.map((pass: any) => {
+      const profile = profilesMap.get(pass.user_id) || pass.user || pass.profiles;
+      const evt = pass.event || pass.events;
+      return {
+        ...pass,
+        event: evt,
+        events: evt,
+        user: profile,
+        profiles: profile,
+        status: pass.entry_status || pass.status,
+        entry_status: pass.entry_status || pass.status,
+        instagram_handle: profile?.instagram_handle || pass.instagram_handle || '@unknown',
+        drink_menus: pass.drink_name ? { name: pass.drink_name } : (pass.drink_menus || null),
       };
     });
   },
@@ -615,7 +744,7 @@ export const api = {
     // Explicitly excludes 'pending' (waiting for admin), 'rejected', and 'activated'/'scanned' (already paid).
     let query = supabase
       .from('passes')
-      .select('*, events(title, base_price), drink_menus(name)')
+      .select('*, events(title, base_price)')
       .eq('entry_status', 'awaiting_payment')
       .order('created_at', { ascending: true });
 
@@ -629,7 +758,7 @@ export const api = {
     if (error && error.message?.includes('entry_status')) {
       let fallbackQuery = supabase
         .from('passes')
-        .select('*, events(title, base_price), drink_menus(name)')
+        .select('*, events(title, base_price)')
         .eq('status', 'PENDING_PAYMENT')
         .order('created_at', { ascending: true });
 
