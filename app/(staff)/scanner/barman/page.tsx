@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import QRScanner from '@/components/QRScanner'
 import { useRouter } from 'next/navigation'
@@ -42,6 +42,30 @@ export default function BarmanScannerPage() {
 
   const isProcessingRef = useRef(false)
 
+  const resetScanner = useCallback(() => {
+    setScanResult(null)
+    setMessage('')
+    setDrinkDetails(null)
+    setSelectedAromas([])
+    setGuestName(null)
+    // 500ms debounce to prevent immediate rescan of the exact same code
+    setTimeout(() => {
+      isProcessingRef.current = false
+    }, 500)
+  }, [])
+
+  // Auto-reset scan result after 5 seconds (with cleanup to prevent memory leaks)
+  useEffect(() => {
+    if (!scanResult) return
+
+    const timeoutDuration = scanResult === 'success' ? 5000 : 3000
+    const timer = setTimeout(() => {
+      resetScanner()
+    }, timeoutDuration)
+
+    return () => clearTimeout(timer)
+  }, [scanResult, resetScanner])
+
   const handleScan = async (decodedUuid: string) => {
     if (isProcessingRef.current) return
     isProcessingRef.current = true
@@ -63,31 +87,10 @@ export default function BarmanScannerPage() {
         setScanResult('error')
         setMessage(result.message)
       }
-      
-      // Auto close after 5 seconds to give the barman plenty of time to view aromas
-      setTimeout(() => {
-        resetScanner()
-      }, 5000)
-      
     } catch {
       setScanResult('error')
       setMessage('Erreur API')
-      setTimeout(() => {
-        resetScanner()
-      }, 3000)
     }
-  }
-
-  const resetScanner = () => {
-    setScanResult(null)
-    setMessage('')
-    setDrinkDetails(null)
-    setSelectedAromas([])
-    setGuestName(null)
-    // 500ms debounce to prevent immediate rescan of the exact same code
-    setTimeout(() => {
-      isProcessingRef.current = false
-    }, 500)
   }
 
   if (!isBarman) return null
@@ -201,8 +204,13 @@ export default function BarmanScannerPage() {
               )}
             </div>
 
-            <p className="text-xs text-slate-400 font-medium pt-2">
-              (Touchez l'écran pour scanner la prochaine boisson)
+            {/* Visual Countdown Progress Bar (5 seconds) */}
+            <div className="w-full bg-slate-800 h-1.5 mt-4 rounded-full overflow-hidden border border-slate-700/50">
+              <div className="bg-emerald-500 h-full animate-[shrink_5s_linear_forwards]"></div>
+            </div>
+
+            <p className="text-xs text-slate-400 font-medium pt-1">
+              Fermeture automatique dans 5s (ou touchez l'écran)
             </p>
           </div>
         </div>
@@ -214,12 +222,17 @@ export default function BarmanScannerPage() {
           className="fixed inset-0 flex flex-col items-center justify-center p-8 z-50 text-white cursor-pointer bg-passi-corail"
           onClick={resetScanner}
         >
-          <div className="text-center space-y-4 animate-fade-in-up">
+          <div className="text-center space-y-4 animate-fade-in-up max-w-md w-full">
             <div className="w-28 h-28 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-2">
               <span className="text-5xl">✕</span>
             </div>
             <h1 className="text-5xl font-extrabold tracking-tight uppercase">{message}</h1>
-            <p className="text-base opacity-70 mt-10">(Appuyez pour scanner la prochaine boisson)</p>
+            
+            {/* Visual Countdown Progress Bar (3 seconds) */}
+            <div className="w-48 max-w-full bg-white/20 h-1.5 mx-auto rounded-full overflow-hidden mt-6">
+              <div className="bg-white h-full animate-[shrink_3s_linear_forwards]"></div>
+            </div>
+            <p className="text-sm opacity-80 mt-3">(Fermeture automatique dans 3s ou touchez l'écran)</p>
           </div>
         </div>
       )}

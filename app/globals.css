@@ -173,3 +173,14 @@ select.input option {
 .animate-fade-in-up {
   animation: fade-in-up 0.4s ease forwards;
 }
+
+@keyframes shrink {
+  from { width: 100%; }
+  to   { width: 0%; }
+}
+.animate-shrink-5s {
+  animation: shrink 5s linear forwards;
+}
+.animate-shrink-3s {
+  animation: shrink 3s linear forwards;
+}
