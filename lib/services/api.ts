@@ -67,6 +67,9 @@ export type Pass = {
   drink_qr_uuid?: string | null;
   drink_status?: string | null;
   available_drinks?: DrinkItem[];
+  user?: { first_name?: string; last_name?: string; full_name?: string };
+  user_name?: string;
+  user_email?: string;
 };
 
 export type NewsItem = {
@@ -626,12 +629,12 @@ export const api = {
 
     // Fetch user profiles to display user identity
     const userIds = Array.from(new Set(preApprovedPasses.map((p: any) => p.user_id).filter(Boolean)));
-    let profilesMap: Record<string, { email?: string; instagram_handle?: string }> = {};
+    let profilesMap: Record<string, { email?: string; instagram_handle?: string; full_name?: string }> = {};
 
     if (userIds.length > 0) {
       const { data: profiles } = await supabase
         .from('profiles')
-        .select('id, email, instagram_handle')
+        .select('id, email, instagram_handle, full_name')
         .in('id', userIds);
       if (profiles) {
         profiles.forEach((pr: any) => {
@@ -642,11 +645,21 @@ export const api = {
 
     return preApprovedPasses.map((pass: any) => {
       const userProf = profilesMap[pass.user_id];
+      const guestFirst = pass.guest_first_name || '';
+      const guestLast = pass.guest_last_name || '';
+      const profileName = userProf?.full_name || '';
+      const parts = profileName.trim().split(' ');
       return {
         ...pass,
         status: 'PENDING_PAYMENT',
         instagram_handle: userProf?.instagram_handle || '@inconnu',
         user_email: userProf?.email || '',
+        user_name: profileName || [guestFirst, guestLast].filter(Boolean).join(' '),
+        user: {
+          first_name: guestFirst || parts[0] || '',
+          last_name: guestLast || parts.slice(1).join(' ') || '',
+          full_name: profileName || [guestFirst, guestLast].filter(Boolean).join(' ') || ''
+        }
       };
     });
   },

@@ -39,12 +39,43 @@ export async function GET(req: NextRequest) {
       return s === 'awaiting_payment' || s === 'PENDING_PAYMENT';
     });
 
+    // Fetch user profiles to attach full_name and identity
+    const userIds = Array.from(new Set(preApprovedPasses.map((p: any) => p.user_id).filter(Boolean)));
+    let profilesMap: Record<string, { email?: string; instagram_handle?: string; full_name?: string }> = {};
+
+    if (userIds.length > 0) {
+      const { data: profiles } = await supabaseAdmin
+        .from('profiles')
+        .select('id, email, instagram_handle, full_name')
+        .in('id', userIds);
+      if (profiles) {
+        profiles.forEach((pr: any) => {
+          profilesMap[pr.id] = pr;
+        });
+      }
+    }
+
     return NextResponse.json({
       success: true,
-      passes: preApprovedPasses.map((p: any) => ({
-        ...p,
-        status: 'PENDING_PAYMENT',
-      })),
+      passes: preApprovedPasses.map((p: any) => {
+        const userProf = profilesMap[p.user_id];
+        const guestFirst = p.guest_first_name || '';
+        const guestLast = p.guest_last_name || '';
+        const profileName = userProf?.full_name || '';
+        const parts = profileName.trim().split(' ');
+        return {
+          ...p,
+          status: 'PENDING_PAYMENT',
+          instagram_handle: userProf?.instagram_handle || '@inconnu',
+          user_email: userProf?.email || '',
+          user_name: profileName || [guestFirst, guestLast].filter(Boolean).join(' '),
+          user: {
+            first_name: guestFirst || parts[0] || '',
+            last_name: guestLast || parts.slice(1).join(' ') || '',
+            full_name: profileName || [guestFirst, guestLast].filter(Boolean).join(' ') || ''
+          }
+        };
+      }),
     });
   } catch (err: any) {
     console.error('Server error in /api/payment-point/passes:', err);

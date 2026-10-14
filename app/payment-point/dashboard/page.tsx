@@ -127,15 +127,17 @@ export default function PaymentPointDashboard() {
     }
   };
 
-  // Client-side search filter by user Instagram/Email or Pass ID
+  // Client-side search filter strictly by User's Name (First Name / Last Name) and Pass ID (Email search removed)
   const filteredPasses = useMemo(() => {
     if (!searchQuery.trim()) return passes;
-    const q = searchQuery.toLowerCase().trim();
-    return passes.filter(p => {
-      const idMatch = p.id.toLowerCase().includes(q);
-      const instaMatch = (p.instagram_handle || '').toLowerCase().includes(q);
-      const emailMatch = ((p as any).user_email || '').toLowerCase().includes(q);
-      return idMatch || instaMatch || emailMatch;
+    const searchTerm = searchQuery.toLowerCase().trim();
+    return passes.filter((pass) => {
+      const passId = pass.id.toLowerCase();
+      const guestFullName = `${pass.guest_first_name || ''} ${pass.guest_last_name || ''}`.trim().toLowerCase();
+      const userProfileName = ((pass as any).user?.full_name || (pass as any).user_name || `${(pass as any).user?.first_name || ''} ${(pass as any).user?.last_name || ''}`).trim().toLowerCase();
+      const fullName = `${guestFullName} ${userProfileName}`.trim().toLowerCase();
+      
+      return fullName.includes(searchTerm) || passId.includes(searchTerm);
     });
   }, [passes, searchQuery]);
 
@@ -259,13 +261,13 @@ export default function PaymentPointDashboard() {
           <div className="md:col-span-6 relative">
             <label className="text-xs font-semibold text-neutral-600 dark:text-neutral-400 mb-1.5 flex items-center gap-1.5">
               <Search className="w-3.5 h-3.5 text-neutral-500 dark:text-neutral-400" />
-              Recherche festivalier ou ID pass
+              Recherche par nom ou ID pass
             </label>
             <div className="relative">
               <Search className="w-4 h-4 text-neutral-400 dark:text-neutral-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Filtrer par @instagram, email ou ID pass..."
+                placeholder="Rechercher par nom ou ID pass..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-neutral-900 dark:text-white placeholder-neutral-400 dark:placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500/40 transition-colors shadow-xs"
@@ -344,10 +346,10 @@ export default function PaymentPointDashboard() {
                           </div>
                           <div>
                             <h4 className="text-sm font-bold text-neutral-900 dark:text-white truncate max-w-[170px]">
-                              {pass.instagram_handle || 'Client Inconnu'}
+                              {[pass.guest_first_name, pass.guest_last_name].filter(Boolean).join(' ') || (pass as any).user?.full_name || (pass as any).user_name || pass.instagram_handle || 'Client Inconnu'}
                             </h4>
                             <p className="text-xs text-neutral-500 dark:text-neutral-400 truncate max-w-[170px]">
-                              {(pass as any).user_email || `ID: ${pass.id.slice(0, 8)}...`}
+                              {pass.instagram_handle ? `${pass.instagram_handle} • ` : ''}ID: #{pass.id.slice(0, 8)}
                             </p>
                           </div>
                         </div>
