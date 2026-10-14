@@ -19,6 +19,8 @@ export default function BarmanScannerPage() {
   const [scanResult, setScanResult] = useState<'success' | 'error' | null>(null)
   const [message, setMessage] = useState('')
   const [drinkDetails, setDrinkDetails] = useState<string | null>(null)
+  const [selectedAromas, setSelectedAromas] = useState<string[]>([])
+  const [guestName, setGuestName] = useState<string | null>(null)
   const supabase = createClient()
 
   useEffect(() => {
@@ -53,17 +55,19 @@ export default function BarmanScannerPage() {
       const result = await res.json()
       if (result.success) {
         setScanResult('success')
-        setMessage(result.message)
-        setDrinkDetails(result.drinkDetails)
+        setMessage(result.message || 'BOISSON VALIDÉE')
+        setDrinkDetails(result.drink_name || result.drinkDetails || 'Boisson')
+        setSelectedAromas(result.selected_aromas || result.pass?.selected_aromas || [])
+        setGuestName(result.guest_name || result.pass?.guest_name || null)
       } else {
         setScanResult('error')
         setMessage(result.message)
       }
       
-      // Auto close after 3 seconds
+      // Auto close after 5 seconds to give the barman plenty of time to view aromas
       setTimeout(() => {
         resetScanner()
-      }, 3000)
+      }, 5000)
       
     } catch {
       setScanResult('error')
@@ -78,6 +82,8 @@ export default function BarmanScannerPage() {
     setScanResult(null)
     setMessage('')
     setDrinkDetails(null)
+    setSelectedAromas([])
+    setGuestName(null)
     // 500ms debounce to prevent immediate rescan of the exact same code
     setTimeout(() => {
       isProcessingRef.current = false
@@ -141,19 +147,63 @@ export default function BarmanScannerPage() {
       {/* ── SUCCESS ── */}
       {scanResult === 'success' && (
         <div
-          className="fixed inset-0 flex flex-col items-center justify-center p-8 z-50 text-white cursor-pointer"
-          style={{ backgroundColor: '#19C3B1' }}
+          className="fixed inset-0 flex flex-col items-center justify-center p-6 z-50 text-white cursor-pointer bg-slate-950/95 backdrop-blur-md"
           onClick={resetScanner}
         >
-          <div className="text-center space-y-4 animate-fade-in-up">
-            <div className="w-28 h-28 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-2">
-              <Wine size={52}/>
+          <div className="w-full max-w-md mx-auto text-center space-y-4 animate-fade-in-up bg-slate-900 border-2 border-emerald-500/40 rounded-3xl p-6 shadow-2xl shadow-emerald-500/20">
+            <div className="w-20 h-20 rounded-full bg-emerald-500/20 border-2 border-emerald-500 text-emerald-400 flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/30">
+              <Wine size={42} />
             </div>
-            <h1 className="text-5xl font-extrabold tracking-tight uppercase">{message}</h1>
-            {drinkDetails && (
-              <h2 className="text-3xl font-bold opacity-90">{drinkDetails}</h2>
-            )}
-            <p className="text-base opacity-70 mt-10">(Appuyez pour scanner la prochaine boisson)</p>
+
+            <div>
+              <span className="inline-block px-3 py-1 bg-emerald-500/20 text-emerald-300 font-bold text-xs uppercase tracking-wider rounded-full mb-1">
+                ✓ Consommation Validée
+              </span>
+              <h1 className="text-2xl font-black tracking-tight uppercase text-white">{message}</h1>
+              {guestName && (
+                <p className="text-xs font-semibold text-slate-400 mt-1">
+                  Titulaire : <span className="text-white font-bold">{guestName}</span>
+                </p>
+              )}
+            </div>
+
+            {/* Drink & Aromas Card */}
+            <div className="p-4 bg-slate-800/90 rounded-2xl border border-slate-700/80 text-left shadow-lg">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Boisson à servir</span>
+                <span className="text-xs bg-emerald-500/20 text-emerald-300 font-semibold px-2 py-0.5 rounded">1x Verre</span>
+              </div>
+              <p className="text-xl font-black text-white">Boisson : {drinkDetails || 'Boisson'}</p>
+
+              {/* New Aromas Display */}
+              {selectedAromas && selectedAromas.length > 0 ? (
+                <div className="mt-3 pt-3 border-t border-slate-700/60">
+                  <p className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                    <span>✨</span> Arômes choisis :
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedAromas.map((aroma, idx) => (
+                      <span
+                        key={idx}
+                        className="bg-amber-400/20 text-amber-300 border border-amber-400/30 px-2.5 py-1 rounded-lg text-sm font-extrabold shadow-sm"
+                      >
+                        {aroma}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-2 pt-2 border-t border-slate-700/40">
+                  <p className="text-xs text-slate-400 italic">
+                    Recette standard (aucun arôme spécifique sélectionné)
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <p className="text-xs text-slate-400 font-medium pt-2">
+              (Touchez l'écran pour scanner la prochaine boisson)
+            </p>
           </div>
         </div>
       )}

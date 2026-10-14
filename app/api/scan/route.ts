@@ -64,27 +64,54 @@ export async function POST(request: Request) {
       }
 
       // Query passes table directly using admin client
-      const { data: passDrink, error } = await supabaseAdmin
+      let { data: passDrink, error } = await supabaseAdmin
         .from('passes')
-        .select('id, drink_status, drink_menus(name)')
+        .select('id, entry_status, drink_status, drink_name, drink_id, selected_aromas, guest_first_name, guest_last_name, user_id, events(title)')
         .eq('drink_qr_uuid', qrUuid)
-        .single();
+        .maybeSingle();
 
-      if (error || !passDrink) return NextResponse.json({ success: false, message: "DENIED: Invalid QR Code" });
-      if (passDrink.drink_status === 'scanned') return NextResponse.json({ success: false, message: "DENIED: Déjà Scanné" });
-      if (passDrink.drink_status !== 'activated') return NextResponse.json({ success: false, message: `DENIED: Statut: ${passDrink.drink_status}` });
+      // Fallback matching by drink_qr_code if needed
+      if (!passDrink) {
+        const { data: byCode } = await supabaseAdmin
+          .from('passes')
+          .select('id, entry_status, drink_status, drink_name, drink_id, selected_aromas, guest_first_name, guest_last_name, user_id, events(title)')
+          .eq('drink_qr_code', qrUuid)
+          .maybeSingle();
+        passDrink = byCode;
+      }
+
+      if (error || !passDrink) return NextResponse.json({ success: false, message: "DENIED: QR Code Invalide" });
+      if (passDrink.drink_status === 'scanned') return NextResponse.json({ success: false, message: "DENIED: Déjà Scanné / Consommé" });
+      if (passDrink.drink_status !== 'activated') return NextResponse.json({ success: false, message: `DENIED: Non Activé (${passDrink.drink_status || 'en attente'})` });
 
       const { error: updateError } = await supabaseAdmin
         .from('passes')
-        .update({ drink_status: 'scanned' })
+        .update({ drink_status: 'scanned', updated_at: new Date().toISOString() })
         .eq('id', passDrink.id);
         
-      if (updateError) return NextResponse.json({ success: false, message: "DENIED: Database Error" });
+      if (updateError) return NextResponse.json({ success: false, message: "DENIED: Erreur de base de données" });
 
-      const drinkMenu: any = passDrink.drink_menus;
-      const drinkName = drinkMenu?.name || 'Inconnue';
+      const drinkName = passDrink.drink_name || passDrink.drink_id || 'Boisson';
+      const selectedAromas: string[] = Array.isArray(passDrink.selected_aromas)
+        ? passDrink.selected_aromas.filter((a: any) => typeof a === 'string' && a.trim().length > 0)
+        : [];
+      const guestName = [passDrink.guest_first_name, passDrink.guest_last_name].filter(Boolean).join(' ') || undefined;
 
-      return NextResponse.json({ success: true, message: "SUCCESS: BOISSON VALIDE", drinkDetails: drinkName });
+      return NextResponse.json({ 
+        success: true, 
+        message: "SUCCESS: BOISSON VALIDE", 
+        drinkDetails: drinkName,
+        drink_name: drinkName,
+        selected_aromas: selectedAromas,
+        guest_name: guestName,
+        pass: {
+          id: passDrink.id,
+          drink_name: drinkName,
+          selected_aromas: selectedAromas,
+          guest_name: guestName,
+          status: 'scanned'
+        }
+      });
     }
 
     return NextResponse.json({ success: false, message: "DENIED: Invalid Type" }, { status: 400 });
