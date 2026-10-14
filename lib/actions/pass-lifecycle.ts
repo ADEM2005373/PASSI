@@ -449,6 +449,7 @@ export async function selectPassDrinkAction(
 
   const updateData: Record<string, any> = {
     drink_id: drinkId,
+    drink_name: drinkId,
     selected_aromas: formattedAromas,
     updated_at: new Date().toISOString(),
   };

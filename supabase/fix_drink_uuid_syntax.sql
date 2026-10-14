@@ -1,26 +1,60 @@
 -- ==============================================================================
 -- Migration: Fix "Invalid input syntax for type uuid" on Pass Reservation
 -- Description:
---   Drinks on events are now JSONB objects [{ name: "Mojito", aromas: [...] }]
---   Drinks no longer have separate UUIDs from a drink_menus table.
---   This migration replaces drink_id (UUID) with drink_name (TEXT) on the passes table
---   and updates RPC functions create_pass_with_pricing and create_pass.
+--   1. Converts passes.drink_id to TEXT and drops any foreign key constraint.
+--   2. Adds passes.drink_name (TEXT) and passes.selected_aromas (JSONB).
+--   3. Recreates create_pass_with_pricing RPC accepting p_drink_name (TEXT).
+--   4. Recreates create_pass RPC accepting p_drink_name (TEXT).
+--   5. Stores drink in BOTH drink_id & drink_name for 100% backward/forward compatibility.
 -- ==============================================================================
 
--- 1. Table Schema: Update passes table to store drink_name as TEXT
-ALTER TABLE passes 
-DROP COLUMN IF EXISTS drink_id CASCADE;
+-- 1. Schema Updates (Idempotent block)
+DO $setup$
+BEGIN
+  -- Drop foreign key constraint on drink_id if it exists
+  IF EXISTS (
+    SELECT 1 FROM information_schema.table_constraints 
+    WHERE constraint_name = 'passes_drink_id_fkey' AND table_name = 'passes'
+  ) THEN
+    ALTER TABLE passes DROP CONSTRAINT passes_drink_id_fkey;
+  END IF;
 
-ALTER TABLE passes 
-ADD COLUMN IF NOT EXISTS drink_name TEXT;
+  -- If drink_id column exists, convert to TEXT so arbitrary drink strings can be stored
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'passes' AND column_name = 'drink_id'
+  ) THEN
+    ALTER TABLE passes ALTER COLUMN drink_id DROP DEFAULT;
+    ALTER TABLE passes ALTER COLUMN drink_id TYPE TEXT USING drink_id::text;
+  ELSE
+    ALTER TABLE passes ADD COLUMN drink_id TEXT;
+  END IF;
 
--- 2. Clean up any existing overloaded RPC definitions to avoid signature ambiguity
+  -- Ensure drink_name column exists as TEXT
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'passes' AND column_name = 'drink_name'
+  ) THEN
+    ALTER TABLE passes ADD COLUMN drink_name TEXT;
+  END IF;
+
+  -- Ensure selected_aromas column exists as JSONB
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'passes' AND column_name = 'selected_aromas'
+  ) THEN
+    ALTER TABLE passes ADD COLUMN selected_aromas JSONB DEFAULT '[]'::jsonb;
+  END IF;
+END;
+$setup$;
+
+-- 2. Clean up any existing overloaded RPC signatures
 DROP FUNCTION IF EXISTS create_pass_with_pricing(UUID, UUID, TEXT, TEXT, UUID, TEXT);
 DROP FUNCTION IF EXISTS create_pass_with_pricing(UUID, UUID, TEXT, TEXT, UUID, TEXT, JSONB);
 DROP FUNCTION IF EXISTS create_pass_with_pricing(UUID, UUID, TEXT, TEXT, TEXT, TEXT);
 DROP FUNCTION IF EXISTS create_pass_with_pricing(UUID, UUID, TEXT, TEXT, TEXT, TEXT, JSONB);
 
--- 3. Re-create create_pass_with_pricing RPC with p_drink_name TEXT
+-- 3. Re-create create_pass_with_pricing RPC
 CREATE OR REPLACE FUNCTION create_pass_with_pricing(
   p_user_id UUID,
   p_event_id UUID,
@@ -33,7 +67,7 @@ CREATE OR REPLACE FUNCTION create_pass_with_pricing(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-AS $$
+AS $func$
 DECLARE
   v_base_price NUMERIC(10, 2);
   v_promo_codes JSONB;
@@ -72,7 +106,7 @@ BEGIN
   -- Calculate final price (cannot be negative)
   v_final_price := GREATEST(0, v_base_price - v_discount);
 
-  -- 3. Insert Pass mapping p_drink_name (TEXT) to drink_name column
+  -- 3. Insert Pass storing drink into both drink_name and drink_id (both TEXT)
   INSERT INTO passes (
     user_id,
     event_id,
@@ -82,6 +116,7 @@ BEGIN
     final_price,
     promo_used,
     drink_name,
+    drink_id,
     drink_status,
     selected_aromas
   ) VALUES (
@@ -92,6 +127,7 @@ BEGIN
     'pending',
     v_final_price,
     v_promo_matched,
+    p_drink_name,
     p_drink_name,
     CASE WHEN p_drink_name IS NOT NULL AND TRIM(p_drink_name) <> '' THEN 'pending' ELSE NULL END,
     COALESCE(p_selected_aromas, '[]'::jsonb)
@@ -104,12 +140,11 @@ BEGIN
     'promo_used', v_promo_matched
   );
 END;
-$$;
+$func$;
 
--- Grant execution permissions
 GRANT EXECUTE ON FUNCTION create_pass_with_pricing(UUID, UUID, TEXT, TEXT, TEXT, TEXT, JSONB) TO authenticated, service_role;
 
--- 4. Re-create fallback create_pass RPC with p_drink_name TEXT
+-- 4. Re-create fallback create_pass RPC
 DROP FUNCTION IF EXISTS create_pass(UUID, UUID, TEXT, TEXT, UUID);
 DROP FUNCTION IF EXISTS create_pass(UUID, UUID, TEXT, TEXT, TEXT);
 
@@ -123,7 +158,7 @@ CREATE OR REPLACE FUNCTION create_pass(
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
-AS $$
+AS $func$
 BEGIN
   INSERT INTO passes (
     user_id,
@@ -132,6 +167,7 @@ BEGIN
     guest_last_name,
     entry_status,
     drink_name,
+    drink_id,
     drink_status
   ) VALUES (
     p_user_id,
@@ -140,12 +176,13 @@ BEGIN
     p_guest_last_name,
     'pending',
     p_drink_name,
+    p_drink_name,
     CASE WHEN p_drink_name IS NOT NULL AND TRIM(p_drink_name) <> '' THEN 'pending' ELSE NULL END
   );
 END;
-$$;
+$func$;
 
 GRANT EXECUTE ON FUNCTION create_pass(UUID, UUID, TEXT, TEXT, TEXT) TO authenticated, service_role;
 
--- 5. Notify PostgREST to reload schema cache
+-- 5. Reload PostgREST schema cache
 NOTIFY pgrst, 'reload schema';

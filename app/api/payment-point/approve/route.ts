@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
       .from('passes')
       .update(updatePayload)
       .eq('id', passId)
-      .select('id, entry_status, final_price, payment_point_id, payment_approved_at, drink_id, drink_status, drink_qr_uuid, drink_qr_code')
+      .select('id, entry_status, final_price, payment_point_id, payment_approved_at, drink_id, drink_name, drink_status, drink_qr_uuid, drink_qr_code')
       .single();
 
     if (updateError) {
