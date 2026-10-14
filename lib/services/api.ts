@@ -827,6 +827,124 @@ export const api = {
     };
   },
 
+  // --- FINANCIAL & PASS ANALYTICS (Admin) ---
+  async getDashboardAnalytics(timeframeDays: number = 30): Promise<{
+    dailyData: Array<{
+      date: string;
+      formattedDate: string;
+      passCount: number;
+      dailyRevenue: number;
+      volumeDiff: number;
+      revenueDiff: number;
+      volumeTrend: string;
+      revenueTrend: string;
+    }>;
+    totalRevenue: number;
+    totalPasses: number;
+    averageDailyRevenue: number;
+    startDate: string;
+    endDate: string;
+  }> {
+    const supabase = createClient();
+    const { data: passesData } = await supabase
+      .from('passes')
+      .select('id, final_price, payment_approved_at, created_at, entry_status')
+      .or('payment_approved_at.not.is.null,entry_status.in.(activated,scanned,PAID,paid)')
+      .order('payment_approved_at', { ascending: true });
+
+    const rawPasses = passesData || [];
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
+    const dailyMap = new Map<string, { passCount: number; dailyRevenue: number }>();
+    const daysToInclude = Math.max(7, Math.min(365, timeframeDays));
+
+    for (let i = daysToInclude - 1; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().split('T')[0];
+      dailyMap.set(dateStr, { passCount: 0, dailyRevenue: 0 });
+    }
+
+    for (const pass of rawPasses) {
+      const dateRaw = pass.payment_approved_at || pass.created_at;
+      if (!dateRaw) continue;
+      const dateStr = dateRaw.split('T')[0];
+      const price = Math.max(0, Number(pass.final_price) || 0);
+
+      if (!dailyMap.has(dateStr)) {
+        dailyMap.set(dateStr, { passCount: 0, dailyRevenue: 0 });
+      }
+      const current = dailyMap.get(dateStr)!;
+      current.passCount += 1;
+      current.dailyRevenue += price;
+    }
+
+    const sortedDates = Array.from(dailyMap.keys()).sort();
+    const windowDates = sortedDates.slice(-daysToInclude);
+
+    let totalRevenue = 0;
+    let totalPasses = 0;
+
+    const dailyData = windowDates.map((dateStr, index) => {
+      const entry = dailyMap.get(dateStr) || { passCount: 0, dailyRevenue: 0 };
+      totalRevenue += entry.dailyRevenue;
+      totalPasses += entry.passCount;
+
+      let volumeDiff = 0;
+      let revenueDiff = 0;
+
+      if (index > 0) {
+        const prevDate = windowDates[index - 1];
+        const prevEntry = dailyMap.get(prevDate) || { passCount: 0, dailyRevenue: 0 };
+        volumeDiff = entry.passCount - prevEntry.passCount;
+        revenueDiff = entry.dailyRevenue - prevEntry.dailyRevenue;
+      }
+
+      const volumeTrend = index === 0
+        ? "0 passes"
+        : volumeDiff > 0
+          ? `+${volumeDiff} passes`
+          : volumeDiff < 0
+            ? `${volumeDiff} passes`
+            : "0 passes";
+
+      const revenueTrend = index === 0
+        ? "0 TND"
+        : revenueDiff > 0
+          ? `+${revenueDiff.toFixed(2)} TND`
+          : revenueDiff < 0
+            ? `${revenueDiff.toFixed(2)} TND`
+            : "0 TND";
+
+      const dateObj = new Date(dateStr + "T00:00:00");
+      const formattedDate = dateObj.toLocaleDateString('fr-FR', {
+        day: 'numeric',
+        month: 'short'
+      });
+
+      return {
+        date: dateStr,
+        formattedDate,
+        passCount: entry.passCount,
+        dailyRevenue: Math.round(entry.dailyRevenue * 100) / 100,
+        volumeDiff,
+        revenueDiff: Math.round(revenueDiff * 100) / 100,
+        volumeTrend,
+        revenueTrend
+      };
+    });
+
+    return {
+      dailyData,
+      totalRevenue: Math.round(totalRevenue * 100) / 100,
+      totalPasses,
+      averageDailyRevenue: dailyData.length > 0 ? Math.round((totalRevenue / dailyData.length) * 100) / 100 : 0,
+      startDate: windowDates[0] || '',
+      endDate: windowDates[windowDates.length - 1] || ''
+    };
+  },
+
   // --- MANUAL PASS CREATION (Admin) ---
   async createManualPass(data: {
     userId: string;

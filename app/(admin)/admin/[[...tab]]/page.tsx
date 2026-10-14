@@ -13,6 +13,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { PassCreationSection } from "@/components/admin/PassCreationSection";
 import { NewsManagementSection } from "@/components/admin/NewsManagementSection";
+import { FinancialAnalyticsSection } from "@/components/admin/FinancialAnalyticsSection";
 import { formatImageUrl } from "@/lib/utils/url";
 
 export default function AdminDashboard() {
@@ -797,6 +798,9 @@ export default function AdminDashboard() {
                   <div className="absolute -bottom-6 right-0 text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Aujourd'hui</div>
                 </div>
               </div>
+
+              {/* ── NOUVELLE COURBE FINANCIÈRE & RAPPORTS EXPORTABLES (PDF & CSV) ── */}
+              <FinancialAnalyticsSection />
             </div>
           )}
 
