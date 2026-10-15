@@ -182,13 +182,3 @@ export async function claimPassDrink(
     };
   }
 }
-
-// Re-export other lifecycle actions for convenience
-export {
-  savePassAction,
-  selectPassDrinkAction,
-  approvePhase1PassAction,
-  rejectPassAction,
-  getPassesForPaymentPoint,
-  createAdminPassAction,
-} from "@/lib/actions/pass-lifecycle";
