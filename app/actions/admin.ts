@@ -130,3 +130,7 @@ export async function createStaffAccount(
     };
   }
 }
+
+export { createAdminPassAction } from '@/lib/actions/pass-lifecycle';
+export type { CreateAdminPassPayload } from '@/lib/actions/pass-lifecycle';
+

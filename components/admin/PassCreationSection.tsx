@@ -15,7 +15,8 @@ import {
   Sparkles, 
   ExternalLink, 
   ArrowRight,
-  X
+  X,
+  Wine
 } from 'lucide-react';
 import { api, User, Event } from '@/lib/services/api';
 
@@ -30,6 +31,8 @@ export function PassCreationSection({ users, events, onPassCreated }: PassCreati
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [selectedEventId, setSelectedEventId] = useState<string>('');
   const [selectedPassType, setSelectedPassType] = useState<'NORMAL' | 'GIFT' | 'INVITATION' | 'VIP'>('VIP');
+  const [selectedDrinkName, setSelectedDrinkName] = useState<string>('');
+  const [selectedAromas, setSelectedAromas] = useState<string[]>([]);
   const [guestFirstName, setGuestFirstName] = useState('');
   const [guestLastName, setGuestLastName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -52,6 +55,60 @@ export function PassCreationSection({ users, events, onPassCreated }: PassCreati
   const selectedEvent = useMemo(() => {
     return events.find(e => e.id === selectedEventId) || null;
   }, [events, selectedEventId]);
+
+  // Available drinks from selected event (JSONB drinks array or fallback drink_menus)
+  const availableDrinks = useMemo(() => {
+    if (!selectedEvent) return [];
+    const raw = (selectedEvent as any).drinks || (selectedEvent as any).drink_menus;
+    if (!raw) return [];
+    let list = raw;
+    if (typeof raw === 'string') {
+      try {
+        list = JSON.parse(raw);
+      } catch {
+        list = [];
+      }
+    }
+    if (!Array.isArray(list)) return [];
+    return list.map((d: any) => ({
+      id: d.id,
+      name: typeof d === 'string' ? d : (d.name || ''),
+      aromas: Array.isArray(d.aromas)
+        ? d.aromas.filter((a: any) => typeof a === 'string' && a.trim().length > 0)
+        : (typeof d.aromas === 'string' ? d.aromas.split(',').map((a: string) => a.trim()).filter(Boolean) : []),
+    })).filter(d => d.name && d.name.trim().length > 0);
+  }, [selectedEvent]);
+
+  // Currently selected drink details
+  const currentDrink = useMemo(() => {
+    if (!selectedDrinkName) return null;
+    return availableDrinks.find(d => d.name.toLowerCase() === selectedDrinkName.toLowerCase()) || null;
+  }, [availableDrinks, selectedDrinkName]);
+
+  // Available aromas for the selected drink
+  const availableAromas = useMemo(() => {
+    if (!currentDrink || !Array.isArray(currentDrink.aromas)) return [];
+    return currentDrink.aromas;
+  }, [currentDrink]);
+
+  const handleEventChange = (eventId: string) => {
+    setSelectedEventId(eventId);
+    setSelectedDrinkName('');
+    setSelectedAromas([]);
+  };
+
+  const handleDrinkChange = (drinkName: string) => {
+    setSelectedDrinkName(drinkName);
+    setSelectedAromas([]);
+  };
+
+  const handleAromaToggle = (aroma: string) => {
+    setSelectedAromas(prev => 
+      prev.includes(aroma) 
+        ? prev.filter(a => a !== aroma)
+        : [...prev, aroma]
+    );
+  };
 
   const handleSelectUser = (user: User) => {
     setSelectedUser(user);
@@ -87,6 +144,10 @@ export function PassCreationSection({ users, events, onPassCreated }: PassCreati
         passType: selectedPassType,
         guestFirstName: guestFirstName.trim() || undefined,
         guestLastName: guestLastName.trim() || undefined,
+        drink_name: selectedDrinkName.trim() || undefined,
+        drinkName: selectedDrinkName.trim() || undefined,
+        selected_aromas: selectedAromas,
+        selectedAromas: selectedAromas,
       });
 
       setStatusMessage({
@@ -94,6 +155,9 @@ export function PassCreationSection({ users, events, onPassCreated }: PassCreati
         text: result.message || `Pass ${selectedPassType} émis avec succès pour ${selectedUser.email} !`,
         pass: result.pass,
       });
+
+      setSelectedDrinkName('');
+      setSelectedAromas([]);
 
       if (onPassCreated) {
         onPassCreated();
@@ -319,7 +383,7 @@ export function PassCreationSection({ users, events, onPassCreated }: PassCreati
               <div className="relative">
                 <select
                   value={selectedEventId}
-                  onChange={(e) => setSelectedEventId(e.target.value)}
+                  onChange={(e) => handleEventChange(e.target.value)}
                   required
                   className="input text-sm appearance-none cursor-pointer"
                   aria-label="Sélectionner l'événement"
@@ -443,6 +507,107 @@ export function PassCreationSection({ users, events, onPassCreated }: PassCreati
               </div>
             </div>
 
+            {/* Drink & Aroma Selection (VIP / Gift / Invitation) */}
+            <div className="p-4 rounded-xl bg-black/20 border border-slate-800 space-y-3">
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="label text-xs uppercase tracking-wider font-extrabold text-gray-400 flex items-center gap-1.5 m-0">
+                    <Wine size={14} className="text-passi-turquoise" />
+                    <span>Boisson Incluse (VIP, Cadeau, Invitation)</span>
+                  </label>
+                  {selectedDrinkName && (
+                    <button
+                      type="button"
+                      onClick={() => handleDrinkChange('')}
+                      className="text-[11px] text-gray-400 hover:text-white transition-colors underline"
+                    >
+                      Désélectionner
+                    </button>
+                  )}
+                </div>
+
+                {!selectedEventId ? (
+                  <p className="text-xs text-gray-500 italic py-1">
+                    Sélectionnez d'abord un événement pour afficher ses boissons disponibles.
+                  </p>
+                ) : availableDrinks.length === 0 ? (
+                  <p className="text-xs text-gray-500 italic py-1">
+                    Aucune boisson n'est configurée pour cet événement.
+                  </p>
+                ) : (
+                  <div className="relative">
+                    <select
+                      value={selectedDrinkName}
+                      onChange={(e) => handleDrinkChange(e.target.value)}
+                      className="input text-sm appearance-none cursor-pointer bg-slate-900 border-slate-700 text-white pr-10"
+                      aria-label="Sélectionner la boisson"
+                    >
+                      <option value="">-- Aucune boisson / Choisir une boisson --</option>
+                      {availableDrinks.map((drink, idx) => (
+                        <option key={`${drink.name}-${idx}`} value={drink.name}>
+                          {drink.name} {drink.aromas && drink.aromas.length > 0 ? `(${drink.aromas.length} arôme${drink.aromas.length > 1 ? 's' : ''} disponible${drink.aromas.length > 1 ? 's' : ''})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <Wine size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400" />
+                  </div>
+                )}
+              </div>
+
+              {/* Conditional Aroma Selection Checkboxes */}
+              {currentDrink && availableAromas.length > 0 && (
+                <div className="pt-3 border-t border-slate-800 space-y-2.5 animate-fadeIn">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-passi-turquoise flex items-center gap-1.5">
+                      <Sparkles size={13} />
+                      Arômes / Goûts pour {currentDrink.name} :
+                    </span>
+                    {selectedAromas.length > 0 && (
+                      <span className="text-[11px] text-emerald-400 font-semibold">
+                        {selectedAromas.length} sélectionné{selectedAromas.length > 1 ? 's' : ''}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                    {availableAromas.map((aroma, idx) => {
+                      const isChecked = selectedAromas.includes(aroma);
+                      const checkboxId = `admin-pass-aroma-${idx}`;
+                      return (
+                        <label
+                          key={aroma}
+                          htmlFor={checkboxId}
+                          className={`flex items-center gap-2.5 p-2.5 rounded-lg border text-xs cursor-pointer transition-all select-none ${
+                            isChecked
+                              ? 'bg-passi-turquoise/15 border-passi-turquoise/60 text-passi-turquoise font-bold ring-1 ring-passi-turquoise/40 shadow-sm'
+                              : 'bg-black/30 border-slate-800 text-gray-300 hover:bg-black/50 hover:border-slate-700'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            id={checkboxId}
+                            name="selected_aromas"
+                            value={aroma}
+                            checked={isChecked}
+                            onChange={() => handleAromaToggle(aroma)}
+                            className="w-4 h-4 rounded border-slate-700 text-passi-turquoise focus:ring-passi-turquoise focus:ring-offset-slate-950 cursor-pointer accent-teal-500"
+                          />
+                          <span className="flex-1 truncate">{aroma}</span>
+                          {isChecked && <Check size={14} className="text-passi-turquoise shrink-0" />}
+                        </label>
+                      );
+                    })}
+                  </div>
+
+                  {selectedAromas.length > 0 && (
+                    <p className="text-[11px] text-gray-400 italic">
+                      Arômes retenus : <span className="text-white font-medium">{selectedAromas.join(', ')}</span>
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* Guest First / Last Name (Optional) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
@@ -477,6 +642,14 @@ export function PassCreationSection({ users, events, onPassCreated }: PassCreati
                     : selectedPassType === 'INVITATION'
                     ? '⏳ EN ATTENTE (Invitation)' 
                     : '⏳ EN ATTENTE (Paiement)'}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400">Boisson incluse :</span>
+                <span className="font-bold text-passi-turquoise text-right">
+                  {selectedDrinkName 
+                    ? `${selectedDrinkName}${selectedAromas.length > 0 ? ` (${selectedAromas.join(', ')})` : ''}` 
+                    : 'Aucune boisson'}
                 </span>
               </div>
               <div className="flex justify-between items-center">

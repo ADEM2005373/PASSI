@@ -5,7 +5,9 @@ export {
   selectPassDrinkAction, 
   approvePhase1PassAction, 
   rejectPassAction,
-  getPassesForPaymentPoint 
+  getPassesForPaymentPoint,
+  createAdminPassAction
 } from './pass-lifecycle';
 
-export type { SavePassPayload } from './pass-lifecycle';
+export type { SavePassPayload, CreateAdminPassPayload } from './pass-lifecycle';
+

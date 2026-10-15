@@ -15,9 +15,14 @@ export async function POST(req: NextRequest) {
     const { 
       userId, 
       eventId, 
-      passType = 'NORMAL', 
+      passType,
+      status, 
       guestFirstName, 
-      guestLastName 
+      guestLastName,
+      drink_name,
+      drinkName,
+      selected_aromas,
+      selectedAromas
     } = body || {};
 
     if (!userId || !eventId) {
@@ -27,9 +32,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const normalizedPassType = ['NORMAL', 'GIFT', 'INVITATION', 'VIP'].includes(String(passType).toUpperCase())
-      ? String(passType).toUpperCase()
-      : 'NORMAL';
+    const rawType = String(passType || status || 'NORMAL').toUpperCase().trim();
+    const normalizedPassType = rawType === 'CADEAU' 
+      ? 'GIFT' 
+      : ['NORMAL', 'GIFT', 'INVITATION', 'VIP'].includes(rawType) 
+        ? rawType 
+        : 'NORMAL';
 
     // 1. Fetch target user profile
     const { data: profile, error: profileError } = await supabaseAdmin
@@ -79,35 +87,76 @@ export async function POST(req: NextRequest) {
       invitationStatus = null;
     }
 
+    // 4. Resolve Drink & Aromas
+    const resolvedDrinkName = (drink_name || drinkName || '').trim() || null;
+    const rawAromas = selected_aromas || selectedAromas || [];
+    const formattedAromas: string[] = Array.isArray(rawAromas)
+      ? rawAromas.filter((a: any) => typeof a === 'string' && a.trim().length > 0).map((a: string) => a.trim())
+      : [];
+
+    let drinkStatus: 'activated' | 'pending' | null = null;
+    let drinkQrUuid: string | null = null;
+
+    if (resolvedDrinkName) {
+      if (normalizedPassType === 'GIFT' || normalizedPassType === 'VIP') {
+        // Special passes get instantly activated drink with QR code
+        drinkStatus = 'activated';
+        drinkQrUuid = crypto.randomUUID();
+      } else {
+        // Normal/Invitation passes await entry activation / acceptance
+        drinkStatus = 'pending';
+        drinkQrUuid = null;
+      }
+    }
+
     // Determine guest first/last names
     const resolvedFirstName = guestFirstName?.trim() 
       || (profile.full_name ? profile.full_name.split(' ')[0] : (profile.instagram_handle || 'Invité'));
     const resolvedLastName = guestLastName?.trim() 
       || (profile.full_name && profile.full_name.split(' ').length > 1 ? profile.full_name.split(' ').slice(1).join(' ') : '');
 
-    // 4. Insert pass
-    const { data: newPass, error: insertError } = await supabaseAdmin
+    // 5. Insert pass with drink_name and selected_aromas
+    const insertPayload: Record<string, any> = {
+      user_id: userId,
+      event_id: eventId,
+      guest_first_name: resolvedFirstName,
+      guest_last_name: resolvedLastName,
+      pass_type: normalizedPassType,
+      invitation_status: invitationStatus,
+      entry_status: entryStatus,
+      entry_qr_uuid: entryQrUuid,
+      final_price: finalPrice,
+      drink_name: resolvedDrinkName,
+      drink_id: resolvedDrinkName,
+      selected_aromas: formattedAromas,
+      drink_status: drinkStatus,
+      drink_qr_uuid: drinkQrUuid,
+      drink_qr_code: drinkQrUuid,
+    };
+
+    let { data: newPass, error: insertError } = await supabaseAdmin
       .from('passes')
-      .insert({
-        user_id: userId,
-        event_id: eventId,
-        guest_first_name: resolvedFirstName,
-        guest_last_name: resolvedLastName,
-        pass_type: normalizedPassType,
-        invitation_status: invitationStatus,
-        entry_status: entryStatus,
-        entry_qr_uuid: entryQrUuid,
-        final_price: finalPrice,
-      })
+      .insert(insertPayload)
       .select('*, events(title, date, location)')
       .single();
 
     if (insertError) {
-      console.error('Error creating manual pass:', insertError);
-      return NextResponse.json(
-        { error: 'Erreur lors de la création du pass: ' + insertError.message }, 
-        { status: 500 }
-      );
+      console.warn('Initial pass insert failed, retrying without drink_qr_code:', insertError);
+      delete insertPayload.drink_qr_code;
+      const { data: retryPass, error: retryError } = await supabaseAdmin
+        .from('passes')
+        .insert(insertPayload)
+        .select('*, events(title, date, location)')
+        .single();
+
+      if (retryError) {
+        console.error('Error creating manual pass:', retryError);
+        return NextResponse.json(
+          { error: 'Erreur lors de la création du pass: ' + retryError.message }, 
+          { status: 500 }
+        );
+      }
+      newPass = retryPass;
     }
 
     return NextResponse.json({

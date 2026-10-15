@@ -1243,14 +1243,25 @@ export const api = {
   async createManualPass(data: {
     userId: string;
     eventId: string;
-    passType: 'NORMAL' | 'GIFT' | 'INVITATION' | 'VIP';
+    passType: 'NORMAL' | 'GIFT' | 'INVITATION' | 'VIP' | 'CADEAU';
     guestFirstName?: string;
     guestLastName?: string;
+    drink_name?: string;
+    drinkName?: string;
+    selected_aromas?: string[];
+    selectedAromas?: string[];
   }): Promise<{ success: boolean; pass: Pass; message?: string }> {
+    const payload = {
+      ...data,
+      drink_name: data.drink_name || data.drinkName,
+      drinkName: data.drinkName || data.drink_name,
+      selected_aromas: data.selected_aromas || data.selectedAromas || [],
+      selectedAromas: data.selectedAromas || data.selected_aromas || [],
+    };
     const res = await fetch('/api/admin/passes/manual', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
+      body: JSON.stringify(payload),
     });
     const result = await res.json();
     if (!res.ok) throw new Error(result.error || 'Erreur lors de la création du pass');

@@ -477,3 +477,179 @@ export async function selectPassDrinkAction(
 
   return { success: true, pass: updatedPass };
 }
+
+export interface CreateAdminPassPayload {
+  userId: string;
+  eventId: string;
+  passType?: 'NORMAL' | 'GIFT' | 'INVITATION' | 'VIP' | 'CADEAU';
+  status?: 'NORMAL' | 'GIFT' | 'INVITATION' | 'VIP' | 'CADEAU';
+  guestFirstName?: string;
+  guestLastName?: string;
+  drink_name?: string | null;
+  drinkName?: string | null;
+  selected_aromas?: string[];
+  selectedAromas?: string[];
+}
+
+/**
+ * Server Action: createAdminPassAction
+ * Creates a manual admin pass (VIP, GIFT/CADEAU, INVITATION, NORMAL)
+ * with selected drink and aromas.
+ */
+export async function createAdminPassAction(payload: CreateAdminPassPayload) {
+  const { error: authError } = await requireRole(['admin']);
+  if (authError) {
+    throw new Error('Action non autorisée : droits administrateur requis');
+  }
+
+  const {
+    userId,
+    eventId,
+    passType,
+    status,
+    guestFirstName,
+    guestLastName,
+    drink_name,
+    drinkName,
+    selected_aromas,
+    selectedAromas,
+  } = payload || {};
+
+  if (!userId || !eventId) {
+    throw new Error("L'identifiant de l'utilisateur et de l'événement sont obligatoires");
+  }
+
+  const rawType = String(passType || status || 'NORMAL').toUpperCase().trim();
+  const normalizedPassType = rawType === 'CADEAU'
+    ? 'GIFT'
+    : ['NORMAL', 'GIFT', 'INVITATION', 'VIP'].includes(rawType)
+      ? rawType
+      : 'NORMAL';
+
+  // 1. Fetch user profile
+  const { data: profile, error: profileError } = await supabaseAdmin
+    .from('profiles')
+    .select('id, email, instagram_handle, full_name')
+    .eq('id', userId)
+    .single();
+
+  if (profileError || !profile) {
+    throw new Error('Utilisateur destinataire introuvable');
+  }
+
+  // 2. Fetch event
+  const { data: event, error: eventError } = await supabaseAdmin
+    .from('events')
+    .select('id, title, base_price, date')
+    .eq('id', eventId)
+    .single();
+
+  if (eventError || !event) {
+    throw new Error('Événement introuvable');
+  }
+
+  // 3. Entry status & QR logic
+  let entryStatus: 'pending' | 'awaiting_payment' | 'activated' = 'pending';
+  let entryQrUuid: string | null = null;
+  let invitationStatus: 'PENDING' | 'ACCEPTED' | 'DECLINED' | null = null;
+  let finalPrice = event.base_price ?? 0;
+
+  if (normalizedPassType === 'GIFT' || normalizedPassType === 'VIP') {
+    entryStatus = 'activated';
+    entryQrUuid = crypto.randomUUID();
+    finalPrice = 0;
+    invitationStatus = null;
+  } else if (normalizedPassType === 'INVITATION') {
+    entryStatus = 'pending';
+    entryQrUuid = null;
+    finalPrice = 0;
+    invitationStatus = 'PENDING';
+  } else {
+    entryStatus = 'pending';
+    entryQrUuid = null;
+    finalPrice = event.base_price ?? 0;
+    invitationStatus = null;
+  }
+
+  // 4. Resolve Drink & Aromas
+  const resolvedDrinkName = (drink_name || drinkName || '').trim() || null;
+  const rawAromas = selected_aromas || selectedAromas || [];
+  const formattedAromas: string[] = Array.isArray(rawAromas)
+    ? rawAromas.filter((a: any) => typeof a === 'string' && a.trim().length > 0).map((a: string) => a.trim())
+    : [];
+
+  let drinkStatus: 'activated' | 'pending' | null = null;
+  let drinkQrUuid: string | null = null;
+
+  if (resolvedDrinkName) {
+    if (normalizedPassType === 'GIFT' || normalizedPassType === 'VIP') {
+      drinkStatus = 'activated';
+      drinkQrUuid = crypto.randomUUID();
+    } else {
+      drinkStatus = 'pending';
+      drinkQrUuid = null;
+    }
+  }
+
+  const resolvedFirstName = guestFirstName?.trim() 
+    || (profile.full_name ? profile.full_name.split(' ')[0] : (profile.instagram_handle || 'Invité'));
+  const resolvedLastName = guestLastName?.trim() 
+    || (profile.full_name && profile.full_name.split(' ').length > 1 ? profile.full_name.split(' ').slice(1).join(' ') : '');
+
+  // 5. Try RPC create_admin_pass first if it exists
+  const { data: rpcData, error: rpcError } = await supabaseAdmin.rpc('create_admin_pass', {
+    p_user_id: userId,
+    p_event_id: eventId,
+    p_pass_type: normalizedPassType,
+    p_guest_first_name: resolvedFirstName,
+    p_guest_last_name: resolvedLastName,
+    p_drink_name: resolvedDrinkName,
+    p_selected_aromas: formattedAromas,
+  });
+
+  if (!rpcError && rpcData?.success) {
+    return { success: true, pass: rpcData.pass, passId: rpcData.pass_id };
+  }
+
+  // 6. Direct DB insertion
+  const insertPayload: Record<string, any> = {
+    user_id: userId,
+    event_id: eventId,
+    guest_first_name: resolvedFirstName,
+    guest_last_name: resolvedLastName,
+    pass_type: normalizedPassType,
+    invitation_status: invitationStatus,
+    entry_status: entryStatus,
+    entry_qr_uuid: entryQrUuid,
+    final_price: finalPrice,
+    drink_name: resolvedDrinkName,
+    drink_id: resolvedDrinkName,
+    selected_aromas: formattedAromas,
+    drink_status: drinkStatus,
+    drink_qr_uuid: drinkQrUuid,
+    drink_qr_code: drinkQrUuid,
+  };
+
+  let { data: newPass, error: insertError } = await supabaseAdmin
+    .from('passes')
+    .insert(insertPayload)
+    .select('*, events(title, date, location)')
+    .single();
+
+  if (insertError) {
+    delete insertPayload.drink_qr_code;
+    const { data: retryPass, error: retryError } = await supabaseAdmin
+      .from('passes')
+      .insert(insertPayload)
+      .select('*, events(title, date, location)')
+      .single();
+
+    if (retryError || !retryPass) {
+      throw new Error("Impossible d'enregistrer le pass administrateur: " + (retryError?.message || insertError.message));
+    }
+    newPass = retryPass;
+  }
+
+  return { success: true, pass: newPass, passId: newPass.id };
+}
+
