@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { 
   Ticket, 
@@ -14,10 +14,19 @@ import {
   Wine, 
   Loader2, 
   Sparkles,
-  AlertCircle
+  AlertCircle,
+  ArrowRight
 } from "lucide-react";
 import { api, Pass } from "@/lib/services/api";
-import { DrinkSelector } from "@/components/DrinkSelector";
+import { claimPassDrink } from "@/app/actions/passes";
+
+export interface DrinkOptionItem {
+  id?: string;
+  name: string;
+  aromas?: string[];
+  category?: string;
+  price?: number;
+}
 
 type PassCardProps = {
   pass: Pass;
@@ -28,11 +37,11 @@ export function PassCard({ pass, onUpdate }: PassCardProps) {
   const [localPass, setLocalPass] = useState<Pass>(pass);
   const [activeTab, setActiveTab] = useState<"entry" | "drink">("entry");
 
-  // Drink Selection state
-  const [selectedDrinkId, setSelectedDrinkId] = useState<string>("");
+  // Drink Selection Form State for Admin-Granted / Special Passes
+  const [selectedDrinkName, setSelectedDrinkName] = useState<string>("");
   const [selectedAromas, setSelectedAromas] = useState<string[]>([]);
-  const [isSubmittingDrink, setIsSubmittingDrink] = useState(false);
-  const [drinkError, setDrinkError] = useState<string | null>(null);
+  const [isClaimingDrink, setIsClaimingDrink] = useState<boolean>(false);
+  const [claimError, setClaimError] = useState<string | null>(null);
 
   // Invitation response state
   const [isRespondingInvitation, setIsRespondingInvitation] = useState(false);
@@ -43,17 +52,41 @@ export function PassCard({ pass, onUpdate }: PassCardProps) {
     setLocalPass(pass);
   }, [pass]);
 
-  // Auto-heal: If pass is activated, has drink_name or drink_id, but no drink QR code generated yet, auto-generate it
+  // Pass type classification
+  const passType = (localPass.pass_type || "NORMAL").toUpperCase();
+  const isVip = passType === "VIP";
+  const isGift = passType === "GIFT" || passType === "CADEAU";
+  const isInvitation = passType === "INVITATION";
+  const isSpecialPass = isVip || isGift || (isInvitation && localPass.invitation_status === "ACCEPTED");
+
+  // Active status of pass
+  const isPassActive =
+    localPass.entry_status === "activated" ||
+    localPass.entry_status === "scanned" ||
+    (localPass as any).status === "PAID" ||
+    (localPass as any).status === "ACTIVATED" ||
+    isSpecialPass;
+
+  // Has a drink been selected?
+  const hasDrink = Boolean(
+    (localPass.drink_name && localPass.drink_name.trim().length > 0) ||
+    (localPass.drink_id && localPass.drink_id.trim().length > 0)
+  );
+
+  // QR Code values
+  const drinkQrValue = localPass.drink_qr_code || localPass.drink_qr_uuid;
+  const entryQrValue = localPass.entry_qr_uuid;
+
+  // Auto-heal: If pass is active, has drink_name/drink_id, but no drink QR code generated yet, auto-heal it
   useEffect(() => {
     if (
-      localPass.entry_status === "activated" &&
-      (localPass.drink_name || localPass.drink_id) &&
-      !localPass.drink_qr_uuid &&
-      !localPass.drink_qr_code &&
-      !isSubmittingDrink
+      isPassActive &&
+      hasDrink &&
+      !drinkQrValue &&
+      !isClaimingDrink
     ) {
-      setIsSubmittingDrink(true);
-      api.selectPassDrink(localPass.id, localPass.drink_name || localPass.drink_id!)
+      setIsClaimingDrink(true);
+      claimPassDrink(localPass.id, localPass.drink_name || localPass.drink_id!, localPass.selected_aromas || [])
         .then((res) => {
           if (res.pass) {
             setLocalPass(res.pass);
@@ -64,32 +97,99 @@ export function PassCard({ pass, onUpdate }: PassCardProps) {
           console.warn("Auto-healing drink QR code failed:", err);
         })
         .finally(() => {
-          setIsSubmittingDrink(false);
+          setIsClaimingDrink(false);
         });
     }
-  }, [localPass.id, localPass.entry_status, localPass.drink_name, localPass.drink_id, localPass.drink_qr_uuid, localPass.drink_qr_code]);
+  }, [isPassActive, hasDrink, drinkQrValue, localPass.id, localPass.drink_name, localPass.drink_id, localPass.selected_aromas]);
 
-  const passType = (localPass.pass_type || "NORMAL").toUpperCase();
-  const isVip = passType === "VIP";
-  const isGift = passType === "GIFT";
-  const isInvitation = passType === "INVITATION";
-  const isSpecialPass = isVip || isGift || (isInvitation && localPass.invitation_status === "ACCEPTED");
+  // Resolve available drinks from pass.available_drinks or pass.events.drinks
+  const rawDrinks = useMemo(() => {
+    if (localPass.available_drinks && localPass.available_drinks.length > 0) {
+      return localPass.available_drinks;
+    }
+    if (localPass.events && Array.isArray((localPass.events as any).drinks)) {
+      return (localPass.events as any).drinks;
+    }
+    return [];
+  }, [localPass.available_drinks, localPass.events]);
 
-  // Check if invitation is pending
+  const [fetchedDrinks, setFetchedDrinks] = useState<any[]>([]);
+  const [isLoadingDrinks, setIsLoadingDrinks] = useState<boolean>(false);
+
+  // Fallback: If no drinks pre-populated on pass, fetch from event
+  useEffect(() => {
+    if (rawDrinks.length > 0) return;
+    if (!localPass.event_id) return;
+
+    let isMounted = true;
+    setIsLoadingDrinks(true);
+    api.getEvent(localPass.event_id)
+      .then((event) => {
+        if (!isMounted || !event) return;
+        const drinks = (event.drinks && event.drinks.length > 0)
+          ? event.drinks
+          : (event.drink_menus && event.drink_menus.length > 0)
+          ? event.drink_menus
+          : [];
+        setFetchedDrinks(drinks);
+      })
+      .catch((err) => {
+        console.warn("Failed to fetch event drinks for pass:", err);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoadingDrinks(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [localPass.event_id, rawDrinks.length]);
+
+  const availableDrinksList: DrinkOptionItem[] = useMemo(() => {
+    const list = rawDrinks.length > 0 ? rawDrinks : fetchedDrinks;
+    return list.map((d: any, idx: number): DrinkOptionItem => ({
+      id: d.id || d.name || `drink-${idx}`,
+      name: d.name,
+      aromas: Array.isArray(d.aromas) ? d.aromas : [],
+      category: d.category || 'Boisson',
+      price: d.price || 0,
+    }));
+  }, [rawDrinks, fetchedDrinks]);
+
+  // Currently selected drink object
+  const currentSelectedDrinkObj = useMemo(() => {
+    if (!selectedDrinkName) return null;
+    return availableDrinksList.find(
+      (d: DrinkOptionItem) => d.name === selectedDrinkName || d.id === selectedDrinkName
+    ) || null;
+  }, [availableDrinksList, selectedDrinkName]);
+
+  // Aromas for the chosen drink
+  const currentAromas = useMemo(() => {
+    if (!currentSelectedDrinkObj || !Array.isArray(currentSelectedDrinkObj.aromas)) {
+      return [];
+    }
+    return currentSelectedDrinkObj.aromas.filter(
+      (a: any) => typeof a === "string" && a.trim().length > 0
+    );
+  }, [currentSelectedDrinkObj]);
+
+  // Check if invitation is pending or declined
   const isPendingInvitation = isInvitation && localPass.invitation_status === "PENDING";
   const isDeclinedInvitation = isInvitation && localPass.invitation_status === "DECLINED";
 
-  // Check email notification banners (Phase 1 pre-approval & Rejection)
+  // Check email notification banners
   const isAwaitingPayment = localPass.entry_status === "awaiting_payment" || (localPass as any).status === "PENDING_PAYMENT";
   const isRejected = localPass.entry_status === "rejected" || (localPass as any).status === "REJECTED";
 
-  // Check if drink tab should be available:
-  // 1. Pass already has a drink attached (drink_id or drink_status)
-  // 2. OR Pass is eligible for asynchronous drink selection (VIP, GIFT, ACCEPTED INVITATION) and available drinks exist
-  const hasAvailableDrinks = (localPass.available_drinks && localPass.available_drinks.length > 0) || false;
-  const hasDrinkTab = 
-    Boolean(localPass.drink_name || localPass.drink_id || (localPass.drink_status && localPass.drink_status !== "none")) ||
-    (isSpecialPass && hasAvailableDrinks);
+  // Drink Tab is available if:
+  // 1. Pass has a drink (assigned or active)
+  // 2. OR Pass is active (user can claim their drink)
+  // 3. OR Pass has drink_status set
+  const hasDrinkTab =
+    hasDrink ||
+    Boolean(localPass.drink_status && localPass.drink_status !== "none") ||
+    isPassActive;
 
   // Handle invitation accept or decline
   const handleInvitationResponse = async (action: "accept" | "decline") => {
@@ -109,32 +209,54 @@ export function PassCard({ pass, onUpdate }: PassCardProps) {
     }
   };
 
-  // Handle drink selection submission with explicit drink ID
-  const handleSelectDrinkWithId = async (drinkId: string, aromas: string[] = []) => {
-    setIsSubmittingDrink(true);
-    setDrinkError(null);
+  // Handle drink selection change
+  const handleDrinkChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    setSelectedDrinkName(val);
+    setSelectedAromas([]); // Reset aromas when drink changes
+    setClaimError(null);
+  };
+
+  // Handle aroma checkbox toggle
+  const handleAromaToggle = (aroma: string) => {
+    setSelectedAromas((prev) =>
+      prev.includes(aroma)
+        ? prev.filter((a) => a !== aroma)
+        : [...prev, aroma]
+    );
+  };
+
+  // Handle drink confirmation submission
+  const handleConfirmDrink = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const drinkNameToSubmit = selectedDrinkName || localPass.drink_name || localPass.drink_id;
+    if (!drinkNameToSubmit) {
+      setClaimError("Veuillez choisir une boisson.");
+      return;
+    }
+
+    setIsClaimingDrink(true);
+    setClaimError(null);
     try {
-      const res = await api.selectPassDrink(localPass.id, drinkId, aromas);
+      const actualDrinkName = currentSelectedDrinkObj?.name || drinkNameToSubmit;
+      const res = await claimPassDrink(localPass.id, actualDrinkName, selectedAromas);
+
+      if (!res.success) {
+        setClaimError(res.error || "Impossible d'enregistrer votre boisson.");
+        return;
+      }
+
       if (res.pass) {
         setLocalPass(res.pass);
         if (onUpdate) onUpdate(res.pass);
       }
     } catch (err: any) {
-      console.error("Select drink error:", err);
-      setDrinkError(err.message || "Erreur lors de la génération");
+      console.error("Drink claim error:", err);
+      setClaimError(err.message || "Une erreur est survenue lors de l'enregistrement.");
     } finally {
-      setIsSubmittingDrink(false);
+      setIsClaimingDrink(false);
     }
   };
-
-  // Handle drink selection submission from form
-  const handleSelectDrink = async () => {
-    if (!selectedDrinkId) return;
-    await handleSelectDrinkWithId(selectedDrinkId, selectedAromas);
-  };
-
-  const drinkQrValue = localPass.drink_qr_code || localPass.drink_qr_uuid;
-  const entryQrValue = localPass.entry_qr_uuid;
 
   return (
     <div
@@ -234,7 +356,7 @@ export function PassCard({ pass, onUpdate }: PassCardProps) {
           <p className="text-xs text-neutral-500">Vous avez décliné l'invitation à cet événement.</p>
         </div>
       ) : (
-        /* STANDARD & ACCEPTED PASS VIEW: DUAL TABS (ENTRY / DRINK) */
+        /* STANDARD & ACTIVE PASS VIEW: DUAL TABS (ENTRY / DRINK) */
         <>
           {/* Condition 1: PENDING_PAYMENT Info Banner */}
           {isAwaitingPayment && (
@@ -272,7 +394,7 @@ export function PassCard({ pass, onUpdate }: PassCardProps) {
           >
             <button
               onClick={() => setActiveTab("entry")}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-full text-xs sm:text-sm font-bold transition-all duration-300 ${
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-full text-xs sm:text-sm font-bold transition-all duration-300 cursor-pointer ${
                 activeTab === "entry"
                   ? isVip
                     ? "bg-gradient-to-r from-amber-500 to-yellow-500 text-neutral-950 shadow-lg shadow-amber-500/30"
@@ -291,7 +413,7 @@ export function PassCard({ pass, onUpdate }: PassCardProps) {
             {hasDrinkTab && (
               <button
                 onClick={() => setActiveTab("drink")}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-full text-xs sm:text-sm font-bold transition-all duration-300 ${
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-full text-xs sm:text-sm font-bold transition-all duration-300 cursor-pointer ${
                   activeTab === "drink"
                     ? isVip
                       ? "bg-gradient-to-r from-amber-500 to-yellow-500 text-neutral-950 shadow-lg shadow-amber-500/30"
@@ -305,6 +427,11 @@ export function PassCard({ pass, onUpdate }: PassCardProps) {
               >
                 <Beer size={16} />
                 <span>Consommation</span>
+                {!hasDrink && isPassActive && (
+                  <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-amber-400 text-neutral-950 animate-pulse">
+                    À choisir
+                  </span>
+                )}
               </button>
             )}
           </div>
@@ -338,10 +465,32 @@ export function PassCard({ pass, onUpdate }: PassCardProps) {
                         fgColor="#0F172A"
                       />
                     </div>
-                    <p className="mt-6 text-neutral-400 text-xs font-bold tracking-widest uppercase flex items-center gap-1.5">
-                      <Ticket size={14} className={isVip ? "text-amber-400" : "text-passi-corail"} />
+                    <p className="mt-5 text-neutral-400 text-xs font-bold tracking-widest uppercase flex items-center gap-1.5">
+                      <Ticket size={14} className={isVip ? "text-amber-400" : "text-[#DC143C]"} />
                       <span>Présenter à l'entrée de l'événement</span>
                     </p>
+
+                    {/* Unclaimed Drink Call-to-Action Banner */}
+                    {!hasDrink && isPassActive && (
+                      <div
+                        onClick={() => setActiveTab("drink")}
+                        className="mt-5 w-full p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/15 via-yellow-500/10 to-amber-500/15 border border-amber-500/30 flex items-center justify-between gap-3 cursor-pointer hover:border-amber-500/60 transition-all group shadow-sm"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
+                            <Wine size={16} />
+                          </div>
+                          <div className="text-left">
+                            <p className="text-xs font-bold text-amber-300">Boisson offerte disponible !</p>
+                            <p className="text-[11px] text-neutral-400">Cliquez pour choisir votre boisson</p>
+                          </div>
+                        </div>
+                        <span className="text-[11px] font-extrabold text-amber-300 bg-amber-500/20 px-2.5 py-1 rounded-lg group-hover:bg-amber-400 group-hover:text-black transition-all flex items-center gap-1">
+                          <span>Choisir</span>
+                          <ArrowRight size={12} />
+                        </span>
+                      </div>
+                    )}
                   </>
                 ) : (
                   <div className="w-[210px] h-[210px] bg-neutral-900 rounded-[2rem] flex flex-col items-center justify-center text-neutral-400 text-xs p-4 border border-neutral-800">
@@ -363,8 +512,8 @@ export function PassCard({ pass, onUpdate }: PassCardProps) {
                     <h3 className="text-2xl font-black text-white">Boisson Récupérée</h3>
                     <p className="text-neutral-400 mt-1 font-medium text-sm">Santé et bonne soirée !</p>
                   </div>
-                ) : drinkQrValue ? (
-                  /* Drink QR Code Already Generated & Active */
+                ) : (hasDrink && drinkQrValue) ? (
+                  /* DRINK QR CODE ALREADY GENERATED & ACTIVE */
                   <>
                     <div
                       className={`p-5 rounded-[2rem] shadow-2xl transition-all duration-300 ${
@@ -383,7 +532,7 @@ export function PassCard({ pass, onUpdate }: PassCardProps) {
                     <div className="mt-6 text-neutral-200 text-xs font-bold tracking-wide uppercase flex flex-col items-center gap-1">
                       <div className="flex items-center gap-2">
                         <Wine size={15} className="text-amber-400" />
-                        <span>{localPass.drink_menus?.name || "Boisson réservée"}</span>
+                        <span>{localPass.drink_name || localPass.drink_menus?.name || "Boisson réservée"}</span>
                       </div>
                       {localPass.selected_aromas && localPass.selected_aromas.length > 0 && (
                         <span className="text-[11px] text-amber-300 font-medium normal-case">
@@ -391,12 +540,143 @@ export function PassCard({ pass, onUpdate }: PassCardProps) {
                         </span>
                       )}
                     </div>
-                    <p className="text-[11px] text-neutral-400 mt-1">
+                    <p className="text-[11px] text-neutral-400 mt-1 font-medium">
                       Présentez ce QR Code directement au barman
                     </p>
                   </>
-                ) : (localPass.drink_name || localPass.drink_id) ? (
-                  /* Pass ALREADY has a drink assigned (e.g. normal pass booked with a drink) */
+                ) : (!hasDrink && isPassActive) ? (
+                  /* DRINK SELECTION FORM FOR ACTIVE PASSES MISSING DRINK */
+                  <div className="w-full flex flex-col items-center text-center p-1">
+                    <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mb-3 shadow-lg shadow-amber-500/10">
+                      <Wine size={26} />
+                    </div>
+                    <h3 className="text-lg font-extrabold text-white mb-1">
+                      Choisissez votre boisson incluse
+                    </h3>
+                    <p className="text-xs text-neutral-400 mb-4 max-w-xs leading-relaxed">
+                      Sélectionnez votre consommation offerte avec votre pass pour débloquer votre QR Code Barman :
+                    </p>
+
+                    {claimError && (
+                      <div className="mb-4 text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 px-3.5 py-2.5 rounded-xl flex items-center gap-2 w-full text-left">
+                        <AlertCircle size={15} className="shrink-0" />
+                        <span>{claimError}</span>
+                      </div>
+                    )}
+
+                    {isLoadingDrinks ? (
+                      <div className="py-8 flex flex-col items-center justify-center gap-2 text-neutral-400 text-xs">
+                        <Loader2 size={24} className="animate-spin text-amber-400" />
+                        <span>Chargement des boissons de l'événement...</span>
+                      </div>
+                    ) : availableDrinksList.length > 0 ? (
+                      <form onSubmit={handleConfirmDrink} className="w-full space-y-4 text-left">
+                        {/* 1. Drink Dropdown */}
+                        <div>
+                          <label 
+                            htmlFor={`drink-select-${localPass.id}`}
+                            className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-neutral-300 mb-2"
+                          >
+                            <Wine size={14} className="text-amber-400" />
+                            <span>Boisson au choix</span>
+                            <span className="text-rose-400">*</span>
+                          </label>
+                          <select
+                            id={`drink-select-${localPass.id}`}
+                            value={selectedDrinkName}
+                            onChange={handleDrinkChange}
+                            disabled={isClaimingDrink}
+                            className="w-full px-3.5 py-3 rounded-xl bg-neutral-900 border border-neutral-700 text-white font-medium text-sm focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition-colors cursor-pointer"
+                            required
+                          >
+                            <option value="">-- Choisir une boisson --</option>
+                            {availableDrinksList.map((drink: DrinkOptionItem, idx: number) => {
+                              const aromaCount = drink.aromas && drink.aromas.length > 0 
+                                ? ` (${drink.aromas.length} saveurs disponibles)` 
+                                : '';
+                              return (
+                                <option key={drink.id || `drink-${idx}`} value={drink.name}>
+                                  {drink.name}{aromaCount}
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </div>
+
+                        {/* 2. Conditional Aromas Checkboxes */}
+                        {selectedDrinkName && currentAromas.length > 0 && (
+                          <div className="p-3.5 rounded-xl bg-neutral-900/90 border border-neutral-800 space-y-2.5 animate-in fade-in slide-in-from-top-1 duration-200">
+                            <div className="flex items-center gap-1.5 text-xs font-bold text-amber-400">
+                              <Sparkles size={13} />
+                              <span>Arômes / Goûts disponibles :</span>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                              {currentAromas.map((aroma: string, idx: number) => {
+                                const isChecked = selectedAromas.includes(aroma);
+                                const checkboxId = `aroma-${localPass.id}-${idx}`;
+
+                                return (
+                                  <label
+                                    key={aroma}
+                                    htmlFor={checkboxId}
+                                    className={`flex items-center gap-2.5 p-2 rounded-lg border text-xs cursor-pointer transition-all select-none ${
+                                      isChecked
+                                        ? 'bg-amber-500/15 border-amber-500/40 text-amber-300 font-bold'
+                                        : 'bg-neutral-800/60 border-neutral-700/60 text-neutral-300 hover:bg-neutral-800 hover:text-white'
+                                    }`}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      id={checkboxId}
+                                      value={aroma}
+                                      checked={isChecked}
+                                      disabled={isClaimingDrink}
+                                      onChange={() => handleAromaToggle(aroma)}
+                                      className="w-4 h-4 rounded border-neutral-600 text-amber-500 focus:ring-amber-400 focus:ring-offset-neutral-900 cursor-pointer accent-amber-500"
+                                    />
+                                    <span className="flex-1">{aroma}</span>
+                                    {isChecked && <Check size={12} className="text-amber-400 shrink-0" />}
+                                  </label>
+                                );
+                              })}
+                            </div>
+
+                            {selectedAromas.length > 0 && (
+                              <p className="text-[11px] text-amber-300/80 italic pt-1">
+                                Sélectionné(s) : {selectedAromas.join(', ')}
+                              </p>
+                            )}
+                          </div>
+                        )}
+
+                        {/* 3. Submit Button */}
+                        <button
+                          type="submit"
+                          disabled={!selectedDrinkName || isClaimingDrink}
+                          className="w-full mt-2 py-3.5 px-4 rounded-xl font-extrabold text-xs uppercase tracking-wider bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-neutral-950 shadow-lg shadow-amber-500/25 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                        >
+                          {isClaimingDrink ? (
+                            <>
+                              <Loader2 size={16} className="animate-spin" />
+                              <span>Enregistrement...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Check size={16} />
+                              <span>Confirmer ma boisson</span>
+                            </>
+                          )}
+                        </button>
+                      </form>
+                    ) : (
+                      <div className="py-6 text-xs text-neutral-400">
+                        Aucune boisson disponible pour cet événement.
+                      </div>
+                    )}
+                  </div>
+                ) : hasDrink ? (
+                  /* Has drink assigned but QR code is still pending / auto-healing */
                   <div className="w-full flex flex-col items-center text-center p-3">
                     <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mb-3">
                       <Wine size={26} />
@@ -405,17 +685,17 @@ export function PassCard({ pass, onUpdate }: PassCardProps) {
                       {localPass.drink_name || localPass.drink_menus?.name || "Boisson réservée"}
                     </h3>
                     <p className="text-xs text-neutral-400 mb-4 max-w-xs leading-relaxed">
-                      {localPass.entry_status === "activated"
+                      {isPassActive
                         ? "Votre consommation a été confirmée avec votre pass. Chargement de votre QR Code..."
                         : "Votre QR Code de consommation sera débloqué dès la validation de votre règlement."}
                     </p>
-                    {localPass.entry_status === "activated" && (
+                    {isPassActive && (
                       <button
-                        onClick={() => handleSelectDrinkWithId(localPass.drink_name || localPass.drink_id!)}
-                        disabled={isSubmittingDrink}
+                        onClick={() => handleConfirmDrink()}
+                        disabled={isClaimingDrink}
                         className="py-2.5 px-4 rounded-xl font-bold text-xs bg-amber-500 hover:bg-amber-400 text-neutral-950 shadow-lg shadow-amber-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
                       >
-                        {isSubmittingDrink ? (
+                        {isClaimingDrink ? (
                           <>
                             <Loader2 size={16} className="animate-spin" />
                             <span>Génération du QR Code...</span>
@@ -430,67 +710,17 @@ export function PassCard({ pass, onUpdate }: PassCardProps) {
                     )}
                   </div>
                 ) : (
-                  /* ASYNCHRONOUS DRINK SELECTION FORM */
-                  <div className="w-full flex flex-col items-center text-center p-1">
-                    <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mb-3">
+                  /* Inactive pass with no drink yet */
+                  <div className="w-full flex flex-col items-center text-center p-3">
+                    <div className="w-14 h-14 rounded-2xl bg-neutral-800 flex items-center justify-center text-neutral-400 mb-3">
                       <Wine size={26} />
                     </div>
                     <h3 className="text-lg font-extrabold text-white mb-1">
-                      Choisissez votre boisson
+                      Boisson incluse
                     </h3>
-                    <p className="text-xs text-neutral-400 mb-4 max-w-xs leading-relaxed">
-                      {isSpecialPass
-                        ? "Boisson offerte avec votre pass. Sélectionnez votre consommation ci-dessous :"
-                        : "Sélectionnez votre consommation pour cet événement :"}
+                    <p className="text-xs text-neutral-400 max-w-xs leading-relaxed">
+                      Votre QR Code de consommation sera débloqué dès la validation de votre pass.
                     </p>
-
-                    {drinkError && (
-                      <div className="mb-3 text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 px-3 py-2 rounded-xl flex items-center gap-2 w-full">
-                        <AlertCircle size={14} />
-                        <span>{drinkError}</span>
-                      </div>
-                    )}
-
-                    {/* Drink Selection via DrinkSelector */}
-                    {hasAvailableDrinks ? (
-                      <div className="w-full text-left mb-4">
-                        <DrinkSelector
-                          drinks={localPass.available_drinks || []}
-                          selectedDrinkId={selectedDrinkId}
-                          selectedAromas={selectedAromas}
-                          label="Boisson au choix"
-                          onChange={(drinkId, aromas) => {
-                            setSelectedDrinkId(drinkId);
-                            setSelectedAromas(aromas);
-                          }}
-                        />
-                      </div>
-                    ) : (
-                      <div className="py-6 text-xs text-neutral-400">
-                        Aucune consommation disponible pour cet événement.
-                      </div>
-                    )}
-
-                    {/* Submit Drink Selection */}
-                    {hasAvailableDrinks && (
-                      <button
-                        onClick={handleSelectDrink}
-                        disabled={!selectedDrinkId || isSubmittingDrink}
-                        className="w-full py-3 px-4 rounded-xl font-bold text-xs bg-amber-500 hover:bg-amber-400 text-neutral-950 shadow-lg shadow-amber-500/25 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer active:scale-95"
-                      >
-                        {isSubmittingDrink ? (
-                          <>
-                            <Loader2 size={16} className="animate-spin" />
-                            <span>Génération du QR Code...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Check size={16} />
-                            <span>Générer mon QR Boisson</span>
-                          </>
-                        )}
-                      </button>
-                    )}
                   </div>
                 )}
               </div>

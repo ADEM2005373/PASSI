@@ -273,10 +273,10 @@ export const api = {
   async getUserPasses(userId: string): Promise<Pass[]> {
     const supabase = createClient();
     
-    // First, fetch the passes with their events
+    // First, fetch the passes with their events (including drinks JSONB)
     const { data: passes, error } = await supabase
       .from('passes')
-      .select('*, events(id, title, date, location)')
+      .select('*, events(id, title, date, location, drinks)')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
 
@@ -290,7 +290,7 @@ export const api = {
     if (isSimulating && activePasses.length === 0) {
       const { data: samplePasses } = await supabase
         .from('passes')
-        .select('*, events(id, title, date, location)')
+        .select('*, events(id, title, date, location, drinks)')
         .limit(10)
         .order('created_at', { ascending: false });
       if (samplePasses && samplePasses.length > 0) {
@@ -341,7 +341,24 @@ export const api = {
         } else if (pass.drink_id && menusMap[pass.drink_id]) {
           pass.drink_menus = menusMap[pass.drink_id];
         }
-        pass.available_drinks = drinksByEvent[pass.event_id] || [];
+
+        const rawEventDrinks = pass.events?.drinks;
+        let eventDrinks: any[] = [];
+        if (Array.isArray(rawEventDrinks)) {
+          eventDrinks = rawEventDrinks;
+        } else if (typeof rawEventDrinks === 'string') {
+          try {
+            eventDrinks = JSON.parse(rawEventDrinks);
+          } catch {
+            eventDrinks = [];
+          }
+        }
+
+        if (eventDrinks.length > 0) {
+          pass.available_drinks = eventDrinks;
+        } else {
+          pass.available_drinks = drinksByEvent[pass.event_id] || [];
+        }
       });
     }
     return validPasses as Pass[];

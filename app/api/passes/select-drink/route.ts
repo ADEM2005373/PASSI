@@ -48,26 +48,48 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Accès non autorisé à ce pass.' }, { status: 403 });
     }
 
-    // 3. Verify drink menu belongs to this event (select '*' to avoid schema mismatches)
+    // 3. Verify drink menu or event drinks
+    let resolvedDrinkName = drinkId;
+    let matchedDrink: any = null;
+
+    // Check drink_menus first
     const { data: drink, error: drinkError } = await supabaseAdmin
       .from('drink_menus')
       .select('*')
       .eq('id', drinkId)
       .maybeSingle();
 
-    if (drinkError) {
-      console.error('Error fetching drink menu:', drinkError);
-    }
+    if (drink && drink.event_id === pass.event_id) {
+      matchedDrink = drink;
+      resolvedDrinkName = drink.name;
+    } else {
+      // Check event drinks JSONB
+      const { data: eventData } = await supabaseAdmin
+        .from('events')
+        .select('drinks')
+        .eq('id', pass.event_id)
+        .single();
 
-    if (!drink) {
-      return NextResponse.json({ error: 'Consommation introuvable.' }, { status: 404 });
-    }
+      let eventDrinksList: any[] = [];
+      if (Array.isArray(eventData?.drinks)) {
+        eventDrinksList = eventData.drinks;
+      } else if (typeof eventData?.drinks === 'string') {
+        try { eventDrinksList = JSON.parse(eventData.drinks); } catch {}
+      }
 
-    if (drink.event_id !== pass.event_id) {
-      return NextResponse.json(
-        { error: 'Cette boisson n\'appartient pas à l\'événement de ce pass.' }, 
-        { status: 400 }
+      const found = eventDrinksList.find(d => 
+        (d.name && d.name.toLowerCase() === drinkId.toLowerCase()) || 
+        (d.id && d.id === drinkId)
       );
+
+      if (found) {
+        matchedDrink = found;
+        resolvedDrinkName = found.name;
+      } else if (!drink) {
+        // Fallback: accept drinkId directly as drink_name
+        resolvedDrinkName = drinkId;
+        matchedDrink = { name: drinkId };
+      }
     }
 
     // 4. Drink QR & Status determination
@@ -82,7 +104,8 @@ export async function POST(req: NextRequest) {
       : [];
 
     const updateData: any = {
-      drink_id: drinkId,
+      drink_id: resolvedDrinkName,
+      drink_name: resolvedDrinkName,
       selected_aromas: formattedAromas,
       updated_at: new Date().toISOString(),
     };
