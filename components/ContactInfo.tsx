@@ -306,39 +306,70 @@ export function ContactInfo({
 
   // ── VARIANT 3: FOOTER ROW / COMPACT ──
   return (
-    <div className={`flex flex-wrap items-center justify-center gap-y-3 gap-x-6 text-sm text-passi-text-sec ${className}`}>
+    <div className={`flex flex-wrap items-center justify-center gap-y-3.5 gap-x-6 text-sm text-passi-text-sec ${className}`}>
       {/* Email */}
       <a
         href={CONTACT_DATA.email.href}
         className="flex items-center gap-2 hover:text-passi-corail transition-colors font-medium"
+        title="Envoyer un e-mail à Passi"
       >
-        <Mail size={16} className="text-passi-corail" />
+        <Mail size={16} className="text-passi-corail shrink-0" />
         <span>{CONTACT_DATA.email.address}</span>
       </a>
 
       <span className="hidden sm:inline text-gray-300 dark:text-gray-700">•</span>
 
-      {/* Phone 1 */}
-      <a
-        href={CONTACT_DATA.phones[0].href}
-        className="flex items-center gap-2 hover:text-passi-turquoise transition-colors font-medium"
-      >
-        <Phone size={16} className="text-passi-turquoise" />
-        <span>{CONTACT_DATA.phones[0].number}</span>
-      </a>
+      {/* Téléphone (Both numbers with / separator) */}
+      <div className="flex items-center gap-1.5 flex-wrap justify-center">
+        <span className="flex items-center gap-1.5 font-bold text-passi-bleu dark:text-white mr-0.5">
+          <Phone size={15} className="text-passi-turquoise shrink-0" />
+          <span>Tél :</span>
+        </span>
+        <a
+          href={CONTACT_DATA.phones[0].href}
+          className="hover:text-passi-turquoise transition-colors font-medium hover:underline whitespace-nowrap"
+          title={`Appeler ${CONTACT_DATA.phones[0].number}`}
+        >
+          {CONTACT_DATA.phones[0].number}
+        </a>
+        <span className="text-gray-400 dark:text-gray-600 font-semibold mx-1">/</span>
+        <a
+          href={CONTACT_DATA.phones[1].href}
+          className="hover:text-passi-turquoise transition-colors font-medium hover:underline whitespace-nowrap"
+          title={`Appeler ${CONTACT_DATA.phones[1].number}`}
+        >
+          {CONTACT_DATA.phones[1].number}
+        </a>
+      </div>
 
       <span className="hidden sm:inline text-gray-300 dark:text-gray-700">•</span>
 
-      {/* WhatsApp 1 */}
-      <a
-        href={CONTACT_DATA.whatsapp[0].href}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="flex items-center gap-2 hover:text-emerald-400 transition-colors font-medium"
-      >
-        <WhatsAppIcon className="w-4 h-4 text-emerald-500" />
-        <span>WhatsApp ({CONTACT_DATA.whatsapp[0].number})</span>
-      </a>
+      {/* WhatsApp (Both numbers with / separator) */}
+      <div className="flex items-center gap-1.5 flex-wrap justify-center">
+        <span className="flex items-center gap-1.5 font-bold text-passi-bleu dark:text-white mr-0.5">
+          <WhatsAppIcon className="w-4 h-4 text-emerald-500 shrink-0" />
+          <span>WhatsApp :</span>
+        </span>
+        <a
+          href={CONTACT_DATA.whatsapp[0].href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hover:text-emerald-500 dark:hover:text-emerald-400 transition-colors font-medium hover:underline whitespace-nowrap"
+          title={`Discuter sur WhatsApp avec ${CONTACT_DATA.whatsapp[0].number}`}
+        >
+          {CONTACT_DATA.whatsapp[0].number}
+        </a>
+        <span className="text-gray-400 dark:text-gray-600 font-semibold mx-1">/</span>
+        <a
+          href={CONTACT_DATA.whatsapp[1].href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hover:text-emerald-500 dark:hover:text-emerald-400 transition-colors font-medium hover:underline whitespace-nowrap"
+          title={`Discuter sur WhatsApp avec ${CONTACT_DATA.whatsapp[1].number}`}
+        >
+          {CONTACT_DATA.whatsapp[1].number}
+        </a>
+      </div>
     </div>
   );
 }
