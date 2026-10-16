@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useTheme } from "next-themes";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { getURL } from "@/lib/utils/url";
@@ -101,6 +101,7 @@ const PROVIDERS: {
 // ── Component ───────────────────────────────────────────────────────────────
 
 function LoginContent() {
+  const router = useRouter();
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [loadingProvider, setLoadingProvider] = useState<Provider | null>(null);
@@ -200,8 +201,13 @@ function LoginContent() {
           setInfoMessage("");
         } else {
           setError("");
-          setInfoMessage("Veuillez vérifier vos emails pour confirmer votre inscription.");
+          setInfoMessage("");
+          router.push(`/verify-email?email=${encodeURIComponent(email)}`);
+          return;
         }
+      } else if (signInError.message.toLowerCase().includes("email not confirmed")) {
+        router.push(`/verify-email?email=${encodeURIComponent(email)}`);
+        return;
       } else {
         setError(signInError.message || "La connexion a échoué.");
       }

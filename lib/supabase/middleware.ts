@@ -47,6 +47,7 @@ export async function updateSession(request: NextRequest) {
     !path.startsWith('/register') &&
     !path.startsWith('/forgot-password') &&
     !path.startsWith('/update-password') &&
+    !path.startsWith('/verify-email') &&
     path !== '/'
   ) {
     if (path.startsWith('/api')) {
