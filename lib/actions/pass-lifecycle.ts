@@ -2,8 +2,10 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@supabase/supabase-js';
+import crypto from 'crypto';
 import { sendTransactionalEmail, buildPassiEmailTemplate } from '@/lib/mailer';
 import { requireRole } from '@/lib/supabase/api-security';
+import { createClient as createServerClient } from '@/lib/supabase/server';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -326,6 +328,142 @@ export async function getPassesForPaymentPoint(eventId?: string) {
     drink_menus: pass.drink_name ? { name: pass.drink_name } : (pass.drink_menus || null),
   }));
 }
+
+/**
+ * Server Action: Approve Pass Payment (Real POS or Simulation Mode)
+ * Explicitly records the currently authenticated Admin or Cashier ID in `approved_by`
+ * and `payment_point_id`, updates status to 'activated' (and 'PAID'), generates the entry QR,
+ * and records the exact approval timestamp in `payment_approved_at`.
+ */
+export async function approvePassPaymentAction(passId: string) {
+  if (!passId || typeof passId !== 'string') {
+    throw new Error('Identifiant de pass manquant ou invalide');
+  }
+
+  // 1. Authenticate user directly using Supabase Auth (Step B of Directive)
+  const supabase = await createServerClient();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) {
+    throw new Error("Utilisateur non authentifié.");
+  }
+
+  // Verify role: allow 'admin' (even in simulation) or 'payment_point'
+  const { data: profile, error: profileError } = await supabaseAdmin
+    .from('profiles')
+    .select('id, role, is_suspended, full_name, first_name, last_name, email')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  if (profileError || !profile) {
+    throw new Error("Profil utilisateur introuvable.");
+  }
+
+  if (profile.is_suspended) {
+    throw new Error("Compte suspendu. Veuillez contacter un administrateur.");
+  }
+
+  const role = (profile.role || '').toLowerCase();
+  if (!['payment_point', 'admin'].includes(role)) {
+    throw new Error("Droits insuffisants pour approuver le paiement.");
+  }
+
+  // 2. Fetch pass to ensure it exists
+  const { data: pass, error: fetchError } = await supabaseAdmin
+    .from('passes')
+    .select('*')
+    .eq('id', passId)
+    .single();
+
+  if (fetchError || !pass) {
+    throw new Error('Pass introuvable');
+  }
+
+  const isPreApproved = pass.entry_status === 'awaiting_payment' || (pass as any).status === 'PENDING_PAYMENT';
+  if (!isPreApproved && pass.entry_status !== 'pending') {
+    if (['activated', 'scanned'].includes(pass.entry_status)) {
+      return { success: true, pass, message: 'Pass déjà activé et payé.' };
+    }
+  }
+
+  // 3. Generate QR codes and timestamp
+  const now = new Date().toISOString();
+  const entryQr = pass.entry_qr_uuid || crypto.randomUUID();
+
+  // Explicitly update status, approved_by and payment_approved_at
+  const updatePayload: Record<string, any> = {
+    entry_status: 'activated',
+    status: 'PAID',
+    payment_point_id: user.id,
+    approved_by: user.id, // Explicitly tracking the Admin/Cashier ID
+    payment_approved_at: now,
+    entry_qr_uuid: entryQr,
+    updated_at: now,
+  };
+
+  if ((pass as any).drink_name || (pass as any).drink_id) {
+    const drinkQr = pass.drink_qr_uuid || crypto.randomUUID();
+    updatePayload.drink_status = 'activated';
+    updatePayload.drink_qr_uuid = drinkQr;
+    updatePayload.drink_qr_code = drinkQr;
+  }
+
+  // 4. Update the pass record
+  let updatedPass: any = null;
+  const updateResult = await supabaseAdmin
+    .from('passes')
+    .update(updatePayload)
+    .eq('id', passId)
+    .select('id, entry_status, status, final_price, payment_point_id, approved_by, payment_approved_at, drink_id, drink_name, drink_status, drink_qr_uuid, drink_qr_code')
+    .single();
+
+  updatedPass = updateResult.data;
+  let updateError = updateResult.error;
+
+  // Fallback if approved_by schema column issue arises
+  if (updateError && (updateError.message?.includes('approved_by') || updateError.details?.includes('approved_by'))) {
+    delete updatePayload.approved_by;
+    const fallbackResult = await supabaseAdmin
+      .from('passes')
+      .update(updatePayload)
+      .eq('id', passId)
+      .select('id, entry_status, status, final_price, payment_point_id, payment_approved_at, drink_id, drink_name, drink_status, drink_qr_uuid, drink_qr_code')
+      .single();
+    updatedPass = fallbackResult.data;
+    updateError = fallbackResult.error;
+  }
+
+  if (updateError) {
+    console.error('Error approving pass payment:', updateError);
+    throw new Error("Échec de l'approbation du paiement: " + updateError.message);
+  }
+
+  try {
+    revalidatePath('/admin');
+    revalidatePath('/admin/approbations');
+    revalidatePath('/payment-point/dashboard');
+  } catch (e) {
+    // Safe ignore when executed outside Next request cycle
+  }
+
+  const approverDisplayName = [profile.first_name, profile.last_name].filter(Boolean).join(' ') 
+    || profile.full_name 
+    || profile.email?.split('@')[0] 
+    || 'Administrateur';
+
+  return {
+    success: true,
+    pass: updatedPass,
+    message: 'Paiement approuvé avec succès. Le pass est désormais activé.',
+    approverId: user.id,
+    approverName: approverDisplayName,
+    isSimulation: role === 'admin'
+  };
+}
+
+// Aliases for standard naming conventions
+export const markPassAsPaidAction = approvePassPaymentAction;
+export const approvePassPayment = approvePassPaymentAction;
+export const markPassAsPaid = approvePassPaymentAction;
 
 export interface SavePassPayload {
   eventId: string;

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@supabase/supabase-js';
 import { requireRole } from '@/lib/supabase/api-security';
-import { approvePhase1PassAction, rejectPassAction } from '@/lib/actions/pass-lifecycle';
+import { approvePhase1PassAction, rejectPassAction, approvePassPaymentAction } from '@/lib/actions/pass-lifecycle';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
   try {
     let query = supabaseAdmin
       .from('passes')
-      .select('*, event:events(*), user:profiles!passes_user_id_fkey(*)')
+      .select('*, event:events(*), user:profiles!passes_user_id_fkey(*), approver:profiles!passes_approved_by_fkey(id, email, full_name, first_name, last_name, role)')
       .order('created_at', { ascending: false });
 
     if (statusFilter && statusFilter !== 'all') {
@@ -61,14 +61,17 @@ export async function GET(req: NextRequest) {
 
     if (!data) return NextResponse.json({ passes: [] });
 
-    // Ensure profiles data is mapped
+    // Ensure profiles data is mapped for both pass owners and approvers
     const userIds = [...new Set(data.map((p: any) => p.user_id).filter(Boolean))];
+    const approverIds = [...new Set(data.map((p: any) => p.approved_by || p.payment_point_id).filter(Boolean))];
+    const allProfileIds = [...new Set([...userIds, ...approverIds])];
+
     let profilesMap: Record<string, any> = {};
-    if (userIds.length > 0) {
+    if (allProfileIds.length > 0) {
       const { data: profs } = await supabaseAdmin
         .from('profiles')
-        .select('id, email, full_name, instagram_handle')
-        .in('id', userIds);
+        .select('id, email, full_name, first_name, last_name, instagram_handle, role')
+        .in('id', allProfileIds);
       if (profs) {
         profs.forEach((pr: any) => { profilesMap[pr.id] = pr; });
       }
@@ -76,6 +79,7 @@ export async function GET(req: NextRequest) {
 
     const formattedPasses = data.map((pass: any) => {
       const prof = profilesMap[pass.user_id] || pass.user || pass.profiles || {};
+      const approverProf = pass.approver || profilesMap[pass.approved_by] || profilesMap[pass.payment_point_id] || null;
       const evt = pass.event || pass.events || {};
       return {
         ...pass,
@@ -85,6 +89,7 @@ export async function GET(req: NextRequest) {
         event: evt,
         profiles: prof,
         user: prof,
+        approver: approverProf,
         instagram_handle: prof.instagram_handle || pass.instagram_handle || '@unknown',
         drink_menus: pass.drink_name ? { name: pass.drink_name } : (pass.drink_menus || null),
       };
@@ -136,33 +141,9 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json(result);
 
     } else if (action === 'mark_paid') {
-      // Step 2: Mark Paid -> Activated & Generate QR
-      const qrUuid = existingPass.entry_qr_uuid || crypto.randomUUID();
-      
-      const updateData: any = { 
-        entry_status: 'activated',
-        entry_qr_uuid: qrUuid,
-        updated_at: new Date().toISOString()
-      };
-      
-      if ((existingPass as any).drink_name || (existingPass as any).drink_id) {
-        const drinkQr = existingPass.drink_qr_uuid || crypto.randomUUID();
-        updateData.drink_status = 'activated';
-        updateData.drink_qr_uuid = drinkQr;
-        updateData.drink_qr_code = drinkQr;
-      }
-
-      const { error } = await supabaseAdmin
-        .from('passes')
-        .update(updateData)
-        .eq('id', passId);
-
-      if (error) {
-        console.error("Database error in passes PATCH mark_paid:", error);
-        return NextResponse.json({ error: "Impossible d'activer le pass" }, { status: 500 });
-      }
-      
-      return NextResponse.json({ success: true, status: 'activated' });
+      // Step 2: Mark Paid -> Delegate to approvePassPaymentAction to capture Admin/Cashier approver
+      const result = await approvePassPaymentAction(passId);
+      return NextResponse.json(result);
 
     } else if (action === 'reject') {
       const result = await rejectPassAction(passId, rejectionReason);

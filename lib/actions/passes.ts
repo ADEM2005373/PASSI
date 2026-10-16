@@ -4,7 +4,11 @@ export {
   approvePhase1PassAction, 
   rejectPassAction,
   getPassesForPaymentPoint,
-  createAdminPassAction
+  createAdminPassAction,
+  approvePassPaymentAction,
+  markPassAsPaidAction,
+  approvePassPayment,
+  markPassAsPaid
 } from './pass-lifecycle';
 
 export { claimPassDrink } from '@/app/actions/passes';

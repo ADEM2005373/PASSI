@@ -18,12 +18,36 @@ export async function GET(req: NextRequest) {
   if (authError) return authError;
 
   try {
-    // 1. Fetch all profiles with payment_point role
-    const { data: cashiers, error: cashiersErr } = await supabaseAdmin
+    // 1. Fetch all approved passes to compute per-cashier/admin live drawer balances and today stats
+    const { data: allPasses, error: passesErr } = await supabaseAdmin
+      .from('passes')
+      .select('id, final_price, payment_approved_at, approved_by, payment_point_id')
+      .in('entry_status', ['activated', 'scanned', 'PAID', 'paid'])
+      .not('payment_approved_at', 'is', null);
+
+    if (passesErr) {
+      console.error('Error fetching passes for cash management:', passesErr);
+    }
+
+    const approvedPasses = allPasses || [];
+    const activeStaffIds = [
+      ...new Set([
+        ...approvedPasses.map((p: any) => p.approved_by || p.payment_point_id),
+      ].filter(Boolean))
+    ];
+
+    // Fetch all profiles with payment_point role OR who have approved passes (e.g. admins in simulation mode)
+    let cashiersQuery = supabaseAdmin
       .from('profiles')
-      .select('id, email, full_name, role, is_suspended, created_at')
-      .ilike('role', 'payment_point')
-      .order('email', { ascending: true });
+      .select('id, email, full_name, first_name, last_name, role, is_suspended, created_at');
+
+    if (activeStaffIds.length > 0) {
+      cashiersQuery = cashiersQuery.or(`role.ilike.payment_point,id.in.(${activeStaffIds.join(',')})`);
+    } else {
+      cashiersQuery = cashiersQuery.ilike('role', 'payment_point');
+    }
+
+    const { data: cashiers, error: cashiersErr } = await cashiersQuery.order('email', { ascending: true });
 
     if (cashiersErr) {
       console.error('Error fetching cashier profiles:', cashiersErr);
@@ -31,7 +55,17 @@ export async function GET(req: NextRequest) {
 
     const cashierList = cashiers || [];
     const cashierMap = new Map<string, any>();
-    cashierList.forEach(c => cashierMap.set(c.id, c));
+    cashierList.forEach(c => {
+      const isSimulation = (c.role || '').toLowerCase() === 'admin';
+      const cleanName = [c.first_name, c.last_name].filter(Boolean).join(' ') || c.full_name || c.email?.split('@')[0] || 'Guichetier';
+      cashierMap.set(c.id, {
+        ...c,
+        cleanName,
+        isSimulation,
+        email: isSimulation ? `${cleanName} (Mode Simulation)` : c.email,
+        full_name: isSimulation ? `${cleanName} (Mode Simulation)` : (c.full_name || cleanName),
+      });
+    });
 
     // 2. Fetch all cash_collections (Audit log Tab 2 & for calculating live drawer balances)
     let collectionsList: any[] = [];
@@ -71,19 +105,6 @@ export async function GET(req: NextRequest) {
 
     // Filter discrepancy alerts
     const discrepancyAlerts = closuresList.filter((c: any) => c.status === 'DISCREPANCY_ALERT');
-
-    // 4. Fetch all approved passes to compute per-cashier live drawer balances and today stats
-    const { data: allPasses, error: passesErr } = await supabaseAdmin
-      .from('passes')
-      .select('id, final_price, payment_approved_at, approved_by, payment_point_id')
-      .in('entry_status', ['activated', 'scanned', 'PAID', 'paid'])
-      .not('payment_approved_at', 'is', null);
-
-    if (passesErr) {
-      console.error('Error fetching passes for cash management:', passesErr);
-    }
-
-    const approvedPasses = allPasses || [];
 
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
@@ -137,10 +158,14 @@ export async function GET(req: NextRequest) {
       totalTodayRevenueAll += roundedToday;
       totalTodayPassesAll += todayPassesCount;
 
+      const cleanName = [cashier.first_name, cashier.last_name].filter(Boolean).join(' ') || cashier.full_name || cashier.email?.split('@')[0] || 'Guichetier';
+      const isSimulation = (cashier.role || '').toLowerCase() === 'admin';
+
       return {
         id: cashier.id,
-        email: cashier.email,
-        full_name: cashier.full_name || 'Guichetier',
+        email: isSimulation ? `${cleanName} (Mode Simulation)` : cashier.email,
+        full_name: isSimulation ? `${cleanName} (Mode Simulation)` : (cashier.full_name || cleanName),
+        is_simulation: isSimulation,
         is_suspended: Boolean(cashier.is_suspended),
         liveDrawerBalance: roundedLive,
         todayRevenue: roundedToday,

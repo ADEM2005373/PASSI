@@ -54,7 +54,16 @@ export type Pass = {
   final_price?: number;
   promo_used?: string | null;
   payment_point_id?: string | null;
+  approved_by?: string | null;
   payment_approved_at?: string | null;
+  approver?: {
+    id?: string;
+    first_name?: string | null;
+    last_name?: string | null;
+    full_name?: string | null;
+    email?: string | null;
+    role?: string | null;
+  } | null;
   updated_at?: string;
   instagram_handle?: string;
   drink_menus?: { id?: string; name: string; price?: number; image_url?: string; aromas?: string[] } | null;
@@ -466,7 +475,7 @@ export const api = {
     const supabase = createClient();
     let query = supabase
       .from('passes')
-      .select('*, event:events(*), user:profiles!passes_user_id_fkey(*)')
+      .select('*, event:events(*), user:profiles!passes_user_id_fkey(*), approver:profiles!passes_approved_by_fkey(id, email, full_name, first_name, last_name, role)')
       .order('created_at', { ascending: false });
 
     if (eventId && eventId !== 'all' && eventId.trim() !== '') {
@@ -497,12 +506,15 @@ export const api = {
       passesData = plainRes.data || [];
     }
 
-    // Map profiles and relations
-    const { data: profilesData } = await supabase.from('profiles').select('id, instagram_handle, full_name, email');
+    // Map profiles and relations for both users and approvers
+    const { data: profilesData } = await supabase
+      .from('profiles')
+      .select('id, instagram_handle, full_name, first_name, last_name, email, role');
     const profilesMap = new Map((profilesData || []).map((p: any) => [p.id, p]));
 
     return passesData.map((pass: any) => {
       const profile = profilesMap.get(pass.user_id) || pass.user || pass.profiles;
+      const approverProfile = pass.approver || profilesMap.get(pass.approved_by) || profilesMap.get(pass.payment_point_id) || null;
       const evt = pass.event || pass.events;
       return {
         ...pass,
@@ -510,6 +522,7 @@ export const api = {
         events: evt,
         user: profile,
         profiles: profile,
+        approver: approverProfile,
         status: pass.entry_status || pass.status,
         entry_status: pass.entry_status || pass.status,
         instagram_handle: profile?.instagram_handle || pass.instagram_handle || '@unknown',
@@ -875,8 +888,8 @@ export const api = {
     const supabase = createClient();
     let query = supabase
       .from('passes')
-      .select('id, event_id, user_id, final_price, payment_point_id, payment_approved_at, events(title)')
-      .not('payment_point_id', 'is', null)
+      .select('id, event_id, user_id, final_price, payment_point_id, approved_by, payment_approved_at, events(title)')
+      .or('payment_point_id.not.is.null,approved_by.not.is.null')
       .in('entry_status', ['activated', 'scanned', 'PAID', 'paid'])
       .order('payment_approved_at', { ascending: false });
 
@@ -895,7 +908,7 @@ export const api = {
       : passesData;
 
     // Get profiles for workers and pass owners
-    const { data: allProfiles } = await supabase.from('profiles').select('id, email, instagram_handle, role');
+    const { data: allProfiles } = await supabase.from('profiles').select('id, email, full_name, first_name, last_name, instagram_handle, role');
     const profilesMap = new Map<string, any>((allProfiles || []).map((p: any) => [p.id, p]));
 
     const workerMap = new Map<string, {
@@ -918,9 +931,17 @@ export const api = {
     let overallTotalCollected = 0;
 
     for (const pass of filteredPasses) {
-      const workerId = pass.payment_point_id;
+      const workerId = pass.approved_by || pass.payment_point_id;
+      if (!workerId) continue;
       const workerProfile = profilesMap.get(workerId);
-      const workerEmail = workerProfile?.email || `Worker ${workerId.slice(0, 6)}`;
+      const isSimulation = (workerProfile?.role || '').toLowerCase() === 'admin';
+      const workerName = [workerProfile?.first_name, workerProfile?.last_name].filter(Boolean).join(' ') 
+        || workerProfile?.full_name 
+        || workerProfile?.email?.split('@')[0] 
+        || `Guichet ${workerId.slice(0, 6)}`;
+      const workerEmail = isSimulation 
+        ? `${workerName} (Mode Simulation)` 
+        : (workerProfile?.email || workerName);
       const price = Number(pass.final_price) || 0;
       const passOwner = profilesMap.get(pass.user_id);
 
