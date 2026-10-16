@@ -969,6 +969,151 @@ export const api = {
     };
   },
 
+  // ─── SYSTÈME CAISSIER (POS CASH MANAGEMENT) ───
+  async getCashierPosData(): Promise<{
+    liveDrawerBalance: number;
+    todayRevenue: number;
+    todayPassesCount: number;
+    lastCollection: {
+      id: string;
+      supervisor_name: string;
+      collected_amount: number;
+      collection_time: string;
+      notes?: string;
+    } | null;
+    todayPasses: Array<{
+      id: string;
+      guestName: string;
+      eventTitle: string;
+      price: number;
+      approvedAt: string;
+    }>;
+    closuresHistory: Array<{
+      id: string;
+      closure_date: string;
+      passes_approved_count: number;
+      expected_amount: number;
+      declared_amount: number;
+      discrepancy: number;
+      status: 'MATCHED' | 'DISCREPANCY_ALERT';
+      notes?: string;
+      created_at: string;
+    }>;
+    collectionsHistory: Array<{
+      id: string;
+      supervisor_name: string;
+      collected_amount: number;
+      collection_time: string;
+      notes?: string;
+    }>;
+  }> {
+    const res = await fetch('/api/payment-point/cash-management', {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store'
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Erreur lors du chargement des données de caisse');
+    }
+    return res.json();
+  },
+
+  async submitCashClosure(declared_amount: number, notes?: string): Promise<{
+    success: boolean;
+    closure: any;
+    status: 'MATCHED' | 'DISCREPANCY_ALERT';
+    discrepancy: number;
+    expectedAmount: number;
+    declaredAmount: number;
+    message: string;
+  }> {
+    const res = await fetch('/api/payment-point/cash-management', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'close', declared_amount, notes }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const error: any = new Error(data.error || 'Erreur lors de la clôture de caisse');
+      error.requiresNotes = data.requiresNotes;
+      error.discrepancy = data.discrepancy;
+      error.expectedAmount = data.expectedAmount;
+      error.declaredAmount = data.declaredAmount;
+      throw error;
+    }
+    return data;
+  },
+
+  async submitSupervisorCollection(supervisor_name: string, collected_amount: number, notes?: string): Promise<{
+    success: boolean;
+    collection: any;
+    message: string;
+  }> {
+    const res = await fetch('/api/payment-point/cash-management', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'collect', supervisor_name, collected_amount, notes }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Erreur lors de la remise de fonds au superviseur');
+    }
+    return data;
+  },
+
+  async getAdminCashSupervision(): Promise<{
+    success: boolean;
+    discrepancyAlerts: Array<{
+      id: string;
+      cashier_id: string;
+      closure_date: string;
+      passes_approved_count: number;
+      expected_amount: number;
+      declared_amount: number;
+      discrepancy: number;
+      status: 'DISCREPANCY_ALERT';
+      notes?: string;
+      created_at: string;
+      cashier?: { email: string; full_name?: string };
+    }>;
+    cashiersOverview: Array<{
+      id: string;
+      email: string;
+      full_name: string;
+      is_suspended: boolean;
+      liveDrawerBalance: number;
+      todayRevenue: number;
+      todayPassesCount: number;
+      lastCollection: {
+        amount: number;
+        supervisor_name: string;
+        collection_time: string;
+        notes?: string;
+      } | null;
+    }>;
+    allClosures: any[];
+    allCollections: any[];
+    summary: {
+      totalLiveBalance: number;
+      totalTodayRevenue: number;
+      totalTodayPasses: number;
+      alertsCount: number;
+      cashiersCount: number;
+    };
+  }> {
+    const res = await fetch('/api/admin/cash-management', {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store'
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Erreur lors du chargement de la supervision de caisse');
+    }
+    return res.json();
+  },
+
   async getStats(): Promise<{ totalUsers: number, totalEvents: number, totalPasses: number, revenue: number, chartData: number[] }> {
     const supabase = createClient();
     const [{ count: userCount }, { count: eventCount }, { data: passes }] = await Promise.all([

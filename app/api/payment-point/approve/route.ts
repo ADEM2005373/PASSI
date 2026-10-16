@@ -46,6 +46,7 @@ export async function POST(req: NextRequest) {
     const updatePayload: any = {
       entry_status: 'activated',
       payment_point_id: user.id,
+      approved_by: user.id,
       payment_approved_at: now,
       entry_qr_uuid: entryQr,
       updated_at: now,
@@ -60,12 +61,31 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. Update the pass to activated with payment approval metadata
-    const { data: updatedPass, error: updateError } = await supabaseAdmin
+    let updatedPass: any = null;
+    let updateError: any = null;
+
+    const initialResult = await supabaseAdmin
       .from('passes')
       .update(updatePayload)
       .eq('id', passId)
-      .select('id, entry_status, final_price, payment_point_id, payment_approved_at, drink_id, drink_name, drink_status, drink_qr_uuid, drink_qr_code')
+      .select('id, entry_status, final_price, payment_point_id, approved_by, payment_approved_at, drink_id, drink_name, drink_status, drink_qr_uuid, drink_qr_code')
       .single();
+
+    updatedPass = initialResult.data;
+    updateError = initialResult.error;
+
+    // Graceful fallback if approved_by column is not yet migrated in database
+    if (updateError && (updateError.message?.includes('approved_by') || updateError.details?.includes('approved_by'))) {
+      delete updatePayload.approved_by;
+      const fallbackResult = await supabaseAdmin
+        .from('passes')
+        .update(updatePayload)
+        .eq('id', passId)
+        .select('id, entry_status, final_price, payment_point_id, payment_approved_at, drink_id, drink_name, drink_status, drink_qr_uuid, drink_qr_code')
+        .single();
+      updatedPass = fallbackResult.data;
+      updateError = fallbackResult.error;
+    }
 
     if (updateError) {
       console.error('Error approving pass payment:', updateError);

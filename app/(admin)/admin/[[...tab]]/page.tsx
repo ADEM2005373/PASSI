@@ -15,6 +15,7 @@ import { PassCreationSection } from "@/components/admin/PassCreationSection";
 import { NewsManagementSection } from "@/components/admin/NewsManagementSection";
 import { FinancialAnalyticsSection } from "@/components/admin/FinancialAnalyticsSection";
 import { PassesActivityChart } from "@/components/admin/PassesActivityChart";
+import { PaymentPointSupervisionSection } from "@/components/admin/PaymentPointSupervisionSection";
 import { formatImageUrl } from "@/lib/utils/url";
 
 export default function AdminDashboard({ initialTab }: { initialTab?: string } = {}) {
@@ -51,15 +52,6 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
   const [newUserInsta, setNewUserInsta] = useState("");
   const [newUserRole, setNewUserRole] = useState("user");
   const [userMsg, setUserMsg] = useState("");
-
-  // Payment Point state
-  const [ppWorkerEmail, setPpWorkerEmail] = useState("");
-  const [ppWorkerPassword, setPpWorkerPassword] = useState("");
-  const [ppWorkerMsg, setPpWorkerMsg] = useState("");
-  const [ppFilterEventId, setPpFilterEventId] = useState("");
-  const [ppFilterDate, setPpFilterDate] = useState("");
-  const [ppStats, setPpStats] = useState<any>({ workers: [], dailyBreakdown: [], overallTotalPasses: 0, overallTotalCollected: 0 });
-  const [loadingPpStats, setLoadingPpStats] = useState(false);
 
   const [adminFullName, setAdminFullName] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
@@ -123,22 +115,6 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
     setEvents(allEvts);
     const dbStats = await api.getStats();
     setStats(dbStats);
-    await fetchPpStats(ppFilterEventId, ppFilterDate);
-  };
-
-  const fetchPpStats = async (eventId?: string, date?: string) => {
-    setLoadingPpStats(true);
-    try {
-      const data = await api.getPaymentPointFinancialStats({
-        eventId: eventId || undefined,
-        date: date || undefined,
-      });
-      setPpStats(data);
-    } catch (e) {
-      console.error("Error fetching PP stats:", e);
-    } finally {
-      setLoadingPpStats(false);
-    }
   };
 
   const handleToggleSuspend = async (userToToggle: User) => {
@@ -149,94 +125,6 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
     } catch (err: any) {
       alert("Erreur: " + err.message);
     }
-  };
-
-  const handleCreatePaymentPointWorker = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setPpWorkerMsg("Création en cours...");
-    try {
-      await api.adminCreateUser(ppWorkerEmail, ppWorkerPassword, "", "payment_point");
-      setPpWorkerMsg("✓ Compte Point de Paiement créé avec succès !");
-      setPpWorkerEmail("");
-      setPpWorkerPassword("");
-      await fetchData();
-      setTimeout(() => setPpWorkerMsg(""), 3500);
-    } catch (err: any) {
-      setPpWorkerMsg("Erreur: " + err.message);
-    }
-  };
-
-  const handleExportCSV = () => {
-    const headers = ["Date Approbation", "Point de Paiement", "Pass ID Approuve", "Evenement", "Montant Collecte (DT)"];
-    const rows: string[][] = [];
-
-    ppStats.workers.forEach((w: any) => {
-      w.passes.forEach((p: any) => {
-        rows.push([
-          p.approvedAt ? p.approvedAt.split('T')[0] : 'N/A',
-          `"${(w.email || '').replace(/"/g, '""')}"`,
-          `"${p.id}"`,
-          `"${(p.eventTitle || '').replace(/"/g, '""')}"`,
-          String(p.finalPrice)
-        ]);
-      });
-    });
-
-    if (rows.length === 0) {
-      alert("Aucune donnée financière à exporter.");
-      return;
-    }
-
-    const csvContent = "\uFEFF" + [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `rapport_points_paiement_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const handleExportPDF = () => {
-    if (!ppStats.workers || ppStats.workers.length === 0) {
-      alert("Aucune donnée financière à exporter.");
-      return;
-    }
-
-    const doc = new jsPDF();
-    doc.setFontSize(16);
-    doc.text("Rapport Financier - Points de Paiement Passi", 14, 20);
-    
-    doc.setFontSize(10);
-    doc.setTextColor(100);
-    doc.text(`Généré le: ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR')}`, 14, 28);
-    doc.text(`Total passes approuvés: ${ppStats.overallTotalPasses} | Total encaissé: ${ppStats.overallTotalCollected} DT`, 14, 34);
-
-    const tableRows: any[] = [];
-    ppStats.workers.forEach((w: any) => {
-      w.passes.forEach((p: any) => {
-        tableRows.push([
-          p.approvedAt ? p.approvedAt.replace('T', ' ').slice(0, 16) : 'N/A',
-          w.email,
-          p.id.slice(0, 8) + '...',
-          p.eventTitle,
-          `${p.finalPrice} DT`
-        ]);
-      });
-    });
-
-    autoTable(doc, {
-      startY: 40,
-      head: [["Date", "Point de Paiement", "Pass ID", "Événement", "Montant"]],
-      body: tableRows,
-      foot: [["Total", "", `${ppStats.overallTotalPasses} pass`, "", `${ppStats.overallTotalCollected} DT`]],
-      theme: 'striped',
-      headStyles: { fillColor: [255, 107, 94] },
-      footStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold' },
-    });
-
-    doc.save(`rapport_points_paiement_${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
   useEffect(() => {
@@ -549,7 +437,7 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
 
   useEffect(() => {
     if (initialTab) {
-      setActiveTab(initialTab);
+      setActiveTab(initialTab === 'points-de-paiement' ? 'payment-points' : initialTab);
       return;
     }
     const path = window.location.pathname;
@@ -558,7 +446,9 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
     } else {
       const pathParts = path.split('/');
       const tabName = pathParts[2]; // /admin/[tabName]
-      if (tabName && navItems.some(n => n.id === tabName)) {
+      if (tabName === 'points-de-paiement') {
+        setActiveTab('payment-points');
+      } else if (tabName && navItems.some(n => n.id === tabName)) {
         setActiveTab(tabName);
       } else {
         setActiveTab('dashboard');
@@ -568,7 +458,7 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
 
   const handleTabClick = (id: string) => {
     setActiveTab(id);
-    const newPath = id === 'dashboard' ? '/admin' : (id === 'passes-creation' ? '/admin/passes/create' : `/admin/${id}`);
+    const newPath = id === 'dashboard' ? '/admin' : (id === 'passes-creation' ? '/admin/passes/create' : (id === 'payment-points' ? '/admin/payment-points' : `/admin/${id}`));
     window.history.pushState(null, '', newPath);
   };
 
@@ -1185,365 +1075,15 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
             </div>
           )}
 
-          {/* ── PAYMENT POINTS TAB ── */}
+          {/* ── PAYMENT POINTS TAB (SYSTÈME CAISSIER & SUPERVISION) ── */}
           {activeTab === 'payment-points' && (
-            <div className="space-y-8">
-              {/* Top Section: Worker Account Management & Worker Table */}
-              <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-                {/* Form to create restricted Payment Point Worker Account */}
-                <div className="lg:col-span-2 card p-7 shadow-sm self-start">
-                  <div className="flex items-center gap-2.5 mb-2">
-                    <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center">
-                      <Banknote size={18} />
-                    </div>
-                    <h3 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>
-                      Nouveau Guichetier
-                    </h3>
-                  </div>
-                  <p className="text-xs text-neutral-400 mb-5">
-                    Créez un compte restreint dédié au personnel de terrain pour collecter les paiements en espèces.
-                  </p>
-
-                  <form onSubmit={handleCreatePaymentPointWorker} className="space-y-4">
-                    <div>
-                      <label className="label">Email du travailleur</label>
-                      <input 
-                        type="email" 
-                        required 
-                        value={ppWorkerEmail} 
-                        onChange={e => setPpWorkerEmail(e.target.value)} 
-                        placeholder="point1@passi.com" 
-                        className="input" 
-                      />
-                    </div>
-                    <div>
-                      <label className="label">Mot de passe provisoire</label>
-                      <input 
-                        type="password" 
-                        required 
-                        value={ppWorkerPassword} 
-                        onChange={e => setPpWorkerPassword(e.target.value)} 
-                        placeholder="••••••••" 
-                        className="input" 
-                      />
-                    </div>
-
-                    <button type="submit" className="btn-primary w-full flex items-center justify-center gap-2">
-                      <Plus size={16} />
-                      Créer le compte Guichet
-                    </button>
-
-                    {ppWorkerMsg && (
-                      <p className={`text-xs font-semibold px-3 py-2 rounded-xl ${ppWorkerMsg.startsWith('✓') ? 'bg-passi-turquoise/10 text-passi-turquoise' : 'bg-passi-corail/10 text-passi-corail'}`}>
-                        {ppWorkerMsg}
-                      </p>
-                    )}
-                  </form>
-                </div>
-
-                {/* Table listing all Payment Point Workers */}
-                <div className="lg:col-span-3 card p-7 shadow-sm">
-                  <div className="flex justify-between items-center mb-6">
-                    <div>
-                      <h3 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>
-                        Travailleurs "Point de Paiement"
-                      </h3>
-                      <p className="text-xs text-neutral-400 mt-0.5">
-                        Personnel autorisé à encaisser et valider des pass physiques
-                      </p>
-                    </div>
-                    <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20">
-                      {profiles.filter(p => (p.role || '').toLowerCase() === 'payment_point').length} guichetier(s)
-                    </span>
-                  </div>
-
-                  <div className="space-y-3 max-h-[450px] overflow-y-auto hide-scrollbar">
-                    {profiles.filter(p => (p.role || '').toLowerCase() === 'payment_point').length === 0 ? (
-                      <div className="text-center py-12 rounded-2xl" style={{ backgroundColor: 'var(--bg-input)', border: '1.5px dashed var(--border)' }}>
-                        <Banknote size={32} className="mx-auto mb-2 text-neutral-500 opacity-60" />
-                        <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>
-                          Aucun compte Point de Paiement pour l'instant.
-                        </p>
-                      </div>
-                    ) : (
-                      profiles
-                        .filter(p => (p.role || '').toLowerCase() === 'payment_point')
-                        .map(worker => (
-                          <div 
-                            key={worker.id} 
-                            className="flex items-center justify-between p-4 rounded-2xl transition-colors gap-3" 
-                            style={{ backgroundColor: 'var(--bg-input)', border: '1.5px solid var(--border)' }}
-                          >
-                            <div className="flex items-center gap-3 min-w-0">
-                              <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm ${worker.is_suspended ? 'bg-rose-500/10 text-rose-400' : 'bg-amber-500/10 text-amber-400'}`}>
-                                <Banknote size={18} />
-                              </div>
-                              <div className="min-w-0">
-                                <p className="font-bold text-sm truncate" style={{ color: 'var(--text-primary)' }}>
-                                  {worker.email}
-                                </p>
-                                <div className="flex items-center gap-2 mt-0.5">
-                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${worker.is_suspended ? 'bg-rose-500/15 text-rose-400 border border-rose-500/20' : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'}`}>
-                                    {worker.is_suspended ? 'Suspendu' : 'Actif'}
-                                  </span>
-                                  <span className="text-[11px] text-neutral-500 font-mono">
-                                    ID: {worker.id.slice(0, 8)}...
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-2 shrink-0">
-                              <button
-                                onClick={() => handleToggleSuspend(worker)}
-                                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                                  worker.is_suspended
-                                    ? 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 border border-emerald-500/30'
-                                    : 'bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 border border-amber-500/30'
-                                }`}
-                              >
-                                {worker.is_suspended ? (
-                                  <>
-                                    <ShieldCheck size={14} />
-                                    <span>Réactiver</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <ShieldAlert size={14} />
-                                    <span>Suspendre</span>
-                                  </>
-                                )}
-                              </button>
-                              <button
-                                onClick={() => handleDeleteUser(worker.id)}
-                                className="p-2 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-colors"
-                                title="Supprimer ce compte guichetier"
-                              >
-                                <Trash2 size={15}/>
-                              </button>
-                            </div>
-                          </div>
-                        ))
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Financial Reporting & Export Section */}
-              <div className="card p-7 shadow-sm space-y-6">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div>
-                    <h3 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>
-                      Rapport Financier des Encaissements
-                    </h3>
-                    <p className="text-xs text-neutral-400 mt-0.5">
-                      Suivi en temps réel des encaissements en espèces par travailleur et par date.
-                    </p>
-                  </div>
-
-                  {/* Export Buttons */}
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={handleExportCSV}
-                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-neutral-800 hover:bg-neutral-700 text-white border border-neutral-700 transition-colors cursor-pointer"
-                    >
-                      <FileSpreadsheet size={15} className="text-emerald-400" />
-                      <span>Exporter CSV</span>
-                    </button>
-                    <button
-                      onClick={handleExportPDF}
-                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-passi-corail hover:bg-passi-corail/90 text-white shadow-md shadow-passi-corail/20 transition-all cursor-pointer"
-                    >
-                      <FileText size={15} />
-                      <span>Exporter PDF</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Filters */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 rounded-2xl" style={{ backgroundColor: 'var(--bg-input)', border: '1.5px solid var(--border)' }}>
-                  <div>
-                    <label className="label">Filtrer par Événement</label>
-                    <select
-                      value={ppFilterEventId}
-                      onChange={(e) => {
-                        setPpFilterEventId(e.target.value);
-                        fetchPpStats(e.target.value, ppFilterDate);
-                      }}
-                      className="input text-sm"
-                    >
-                      <option value="">Tous les événements</option>
-                      {events.map(ev => (
-                        <option key={ev.id} value={ev.id}>{ev.title}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="label">Filtrer par Date d'approbation</label>
-                    <input
-                      type="date"
-                      value={ppFilterDate}
-                      onChange={(e) => {
-                        setPpFilterDate(e.target.value);
-                        fetchPpStats(ppFilterEventId, e.target.value);
-                      }}
-                      className="input text-sm"
-                    />
-                  </div>
-
-                  <div className="flex items-end">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPpFilterEventId("");
-                        setPpFilterDate("");
-                        fetchPpStats("", "");
-                      }}
-                      className="w-full btn-ghost text-xs font-bold py-3"
-                    >
-                      Réinitialiser les filtres
-                    </button>
-                  </div>
-                </div>
-
-                {/* Summary Metrics Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div className="p-5 rounded-2xl bg-amber-500/10 border border-amber-500/20">
-                    <p className="text-xs font-semibold text-amber-400">Total Espèces Collectées</p>
-                    <p className="text-2xl font-black text-amber-300 mt-1">
-                      {ppStats.overallTotalCollected} DT
-                    </p>
-                  </div>
-                  <div className="p-5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
-                    <p className="text-xs font-semibold text-emerald-400">Total Passes Validés</p>
-                    <p className="text-2xl font-black text-emerald-300 mt-1">
-                      {ppStats.overallTotalPasses} pass
-                    </p>
-                  </div>
-                  <div className="p-5 rounded-2xl bg-purple-500/10 border border-purple-500/20">
-                    <p className="text-xs font-semibold text-purple-400">Guichetiers Actifs</p>
-                    <p className="text-2xl font-black text-purple-300 mt-1">
-                      {ppStats.workers.length}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Detailed Breakdown per Payment Point Worker */}
-                <div>
-                  <h4 className="text-base font-bold mb-4" style={{ color: 'var(--text-primary)' }}>
-                    Détail par Guichetier & Encaissements
-                  </h4>
-
-                  {loadingPpStats ? (
-                    <div className="text-center py-12 text-sm text-neutral-400">
-                      Calcul des statistiques en cours...
-                    </div>
-                  ) : ppStats.workers.length === 0 ? (
-                    <div className="text-center py-12 rounded-2xl" style={{ backgroundColor: 'var(--bg-input)', border: '1.5px dashed var(--border)' }}>
-                      <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>
-                        Aucune transaction validée pour ces critères.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {ppStats.workers.map((worker: any) => (
-                        <div 
-                          key={worker.id}
-                          className="p-5 rounded-2xl space-y-3"
-                          style={{ backgroundColor: 'var(--bg-input)', border: '1.5px solid var(--border)' }}
-                        >
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b" style={{ borderColor: 'var(--border)' }}>
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-amber-500/15 text-amber-400 flex items-center justify-center font-bold text-xs">
-                                {worker.email[0]?.toUpperCase()}
-                              </div>
-                              <div>
-                                <h5 className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>{worker.email}</h5>
-                                <p className="text-xs text-neutral-400">ID: {worker.id}</p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-4 text-xs font-bold">
-                              <span className="text-neutral-400">
-                                Passes: <strong className="text-white">{worker.totalPasses}</strong>
-                              </span>
-                              <span className="px-2.5 py-1 rounded-lg bg-amber-500/15 text-amber-400 border border-amber-500/25">
-                                Total: {worker.totalCollected} DT
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Passes list preview */}
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-left text-xs">
-                              <thead>
-                                <tr className="text-neutral-400 border-b border-neutral-800">
-                                  <th className="py-2 pr-3 font-semibold">Date</th>
-                                  <th className="py-2 px-3 font-semibold">Pass ID</th>
-                                  <th className="py-2 px-3 font-semibold">Événement</th>
-                                  <th className="py-2 px-3 font-semibold">Client</th>
-                                  <th className="py-2 pl-3 font-semibold text-right">Montant</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-neutral-800/60">
-                                {worker.passes.map((p: any) => (
-                                  <tr key={p.id} className="text-neutral-300 hover:bg-neutral-800/30">
-                                    <td className="py-2 pr-3 font-mono text-neutral-400">
-                                      {p.approvedAt ? p.approvedAt.replace('T', ' ').slice(0, 16) : 'N/A'}
-                                    </td>
-                                    <td className="py-2 px-3 font-mono font-medium text-amber-400">
-                                      #{p.id.slice(0, 8)}
-                                    </td>
-                                    <td className="py-2 px-3">{p.eventTitle}</td>
-                                    <td className="py-2 px-3 text-neutral-400 truncate max-w-[150px]">
-                                      {p.instagramHandle || p.userEmail || 'Inconnu'}
-                                    </td>
-                                    <td className="py-2 pl-3 text-right font-bold text-white">
-                                      {p.finalPrice} DT
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Daily Breakdown Table */}
-                {ppStats.dailyBreakdown.length > 0 && (
-                  <div className="pt-4 border-t" style={{ borderColor: 'var(--border)' }}>
-                    <h4 className="text-base font-bold mb-3" style={{ color: 'var(--text-primary)' }}>
-                      Récapitulatif Journalier (Groupé par DATE)
-                    </h4>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left text-xs">
-                        <thead>
-                          <tr className="text-neutral-400 border-b border-neutral-800">
-                            <th className="py-2.5 pr-4 font-semibold">Date</th>
-                            <th className="py-2.5 px-4 font-semibold">Passes Encaissés</th>
-                            <th className="py-2.5 pl-4 font-semibold text-right">Total Collecté</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-neutral-800/60">
-                          {ppStats.dailyBreakdown.map((day: any) => (
-                            <tr key={day.date} className="text-neutral-300">
-                              <td className="py-2.5 pr-4 font-mono font-bold text-white">{day.date}</td>
-                              <td className="py-2.5 px-4">{day.totalPasses} pass</td>
-                              <td className="py-2.5 pl-4 text-right font-mono font-bold text-amber-400">
-                                {day.totalCollected} DT
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
+            <PaymentPointSupervisionSection
+              events={events}
+              profiles={profiles}
+              onRefreshProfiles={fetchData}
+              onToggleSuspend={handleToggleSuspend}
+              onDeleteUser={handleDeleteUser}
+            />
           )}
 
           {/* ── PASSES TAB ── */}
