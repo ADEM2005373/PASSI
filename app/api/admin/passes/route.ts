@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { createClient } from '@supabase/supabase-js';
 import { requireRole } from '@/lib/supabase/api-security';
 import { approvePhase1PassAction, rejectPassAction } from '@/lib/actions/pass-lifecycle';
@@ -195,15 +196,31 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    // 1. Fetch pass to inspect holder identity
+    // 1. Fetch pass without ambiguous relationship embedding
     const { data: pass, error: fetchError } = await supabaseAdmin
       .from('passes')
-      .select('id, guest_first_name, guest_last_name, user_id, entry_status, profiles(full_name)')
+      .select('id, guest_first_name, guest_last_name, user_id, entry_status')
       .eq('id', passId)
-      .single();
+      .maybeSingle();
 
-    if (fetchError || !pass) {
+    if (fetchError) {
+      console.error('Error fetching pass for deletion:', fetchError);
+      return NextResponse.json({ error: 'Erreur lors de la recherche du pass: ' + fetchError.message }, { status: 500 });
+    }
+
+    if (!pass) {
       return NextResponse.json({ error: 'Pass introuvable' }, { status: 404 });
+    }
+
+    // Fetch user profile name separately if user_id is present
+    let profileFullName = '';
+    if (pass.user_id) {
+      const { data: profile } = await supabaseAdmin
+        .from('profiles')
+        .select('full_name')
+        .eq('id', pass.user_id)
+        .maybeSingle();
+      profileFullName = (profile?.full_name || '').trim();
     }
 
     // 2. Compute expected holder names with whitespace normalization
@@ -213,7 +230,7 @@ export async function DELETE(req: NextRequest) {
       .map(s => (s || '').trim())
       .filter(Boolean)
       .join(' ');
-    const profileFullName = ((pass.profiles as any)?.full_name || '').trim();
+    
     const expectedCandidates = [guestFullName, profileFullName]
       .filter(n => n.length > 0)
       .map(normalize);
@@ -230,11 +247,18 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    // 3. Delete pass from database
-    const { error: deleteError } = await supabaseAdmin
+    // 3. Delete associated pass_drinks first to prevent foreign key errors
+    await supabaseAdmin
+      .from('pass_drinks')
+      .delete()
+      .eq('pass_id', passId);
+
+    // 4. Delete pass strictly by id without status filter (allows ACTIVATED, PENDING, PAID, etc.)
+    const { data: deletedData, error: deleteError } = await supabaseAdmin
       .from('passes')
       .delete()
-      .eq('id', passId);
+      .eq('id', passId)
+      .select('id');
 
     if (deleteError) {
       console.error('Error deleting pass in admin DELETE:', deleteError);
@@ -248,6 +272,20 @@ export async function DELETE(req: NextRequest) {
         );
       }
       return NextResponse.json({ error: 'Impossible de supprimer le pass: ' + deleteError.message }, { status: 500 });
+    }
+
+    if (!deletedData || deletedData.length === 0) {
+      return NextResponse.json(
+        { error: "Pass introuvable ou suppression bloquée par les permissions (RLS)." },
+        { status: 404 }
+      );
+    }
+
+    try {
+      revalidatePath('/admin');
+      revalidatePath('/admin/approbations');
+    } catch (e) {
+      // safe fallback if outside server action context
     }
 
     return NextResponse.json({ success: true, message: 'Pass supprimé avec succès' });

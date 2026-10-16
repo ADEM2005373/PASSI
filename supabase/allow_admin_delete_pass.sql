@@ -2,17 +2,32 @@
 -- PASSI: ALLOW ADMIN TO DELETE ANY PASS (EVEN ACTIVATED / PAID PASSES)
 -- ==============================================================================
 -- Instructions: Exécutez ce script dans Supabase SQL Editor (Dashboard -> SQL Editor).
--- Il met à jour le trigger prevent_paid_pass_modification() pour autoriser
--- les administrateurs authentifiés ainsi que le service_role API à supprimer
--- définitivement n'importe quel pass avec confirmation.
+-- Il met à jour les règles RLS et le trigger prevent_paid_pass_modification()
+-- pour autoriser les administrateurs authentifiés ainsi que le service_role API
+-- à supprimer définitivement n'importe quel pass avec confirmation.
 
+-- 1. Activer RLS sur la table des passes
+ALTER TABLE passes ENABLE ROW LEVEL SECURITY;
+
+-- 2. Créer / Remplacer la politique de suppression RLS pour les administrateurs
+DROP POLICY IF EXISTS "Admins can delete all passes" ON passes;
+CREATE POLICY "Admins can delete all passes" 
+ON passes FOR DELETE 
+USING (
+  EXISTS (
+    SELECT 1 FROM profiles 
+    WHERE id = auth.uid() AND (LOWER(role::text) = 'admin' OR role = 'ADMIN')
+  )
+);
+
+-- 3. Mettre à jour le trigger de verrouillage des passes payés / activés
 CREATE OR REPLACE FUNCTION prevent_paid_pass_modification()
 RETURNS TRIGGER AS $$
 BEGIN
     -- Si tentative de suppression d'un pass
     IF TG_OP = 'DELETE' THEN
-        -- 1. Autoriser la suppression si l'utilisateur est administrateur
-        IF (SELECT role FROM profiles WHERE id = auth.uid()) = 'admin' THEN
+        -- 1. Autoriser la suppression si l'utilisateur est administrateur (insensible à la casse)
+        IF LOWER((SELECT role::text FROM profiles WHERE id = auth.uid())) = 'admin' THEN
             RETURN OLD;
         END IF;
 
@@ -32,7 +47,7 @@ BEGIN
     IF TG_OP = 'UPDATE' THEN
         IF OLD.entry_status IN ('activated', 'scanned') THEN
             -- Autoriser l'administrateur ou l'API backend à modifier
-            IF (SELECT role FROM profiles WHERE id = auth.uid()) = 'admin' OR auth.uid() IS NULL THEN
+            IF LOWER((SELECT role::text FROM profiles WHERE id = auth.uid())) = 'admin' OR auth.uid() IS NULL THEN
                 RETURN NEW;
             END IF;
 
@@ -61,5 +76,5 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Recharger le cache schéma PostgREST
+-- 4. Recharger le cache schéma PostgREST
 NOTIFY pgrst, 'reload schema';

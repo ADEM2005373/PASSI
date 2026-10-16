@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from 'next/cache';
 import { createClient } from '@supabase/supabase-js';
 import { sendTransactionalEmail, buildPassiEmailTemplate } from '@/lib/mailer';
 import { requireRole } from '@/lib/supabase/api-security';
@@ -651,5 +652,90 @@ export async function createAdminPassAction(payload: CreateAdminPassPayload) {
   }
 
   return { success: true, pass: newPass, passId: newPass.id };
+}
+
+/**
+ * Server Action: Permanently delete a pass strictly by id (Admin only)
+ */
+export async function deletePassAction(passId: string, holderNameConfirmation?: string) {
+  const { error: authError } = await requireRole(['admin']);
+  if (authError) {
+    throw new Error('Action non autorisée : droits administrateur requis');
+  }
+
+  if (!passId || typeof passId !== 'string') {
+    throw new Error('Identifiant du pass requis');
+  }
+
+  // 1. Fetch pass without ambiguous relationship embedding
+  const { data: pass, error: fetchError } = await supabaseAdmin
+    .from('passes')
+    .select('id, guest_first_name, guest_last_name, user_id, entry_status')
+    .eq('id', passId)
+    .maybeSingle();
+
+  if (fetchError || !pass) {
+    throw new Error('Pass introuvable');
+  }
+
+  // Validate holder name if confirmation was passed
+  if (holderNameConfirmation && holderNameConfirmation.trim()) {
+    let profileFullName = '';
+    if (pass.user_id) {
+      const { data: profile } = await supabaseAdmin
+        .from('profiles')
+        .select('full_name')
+        .eq('id', pass.user_id)
+        .maybeSingle();
+      profileFullName = (profile?.full_name || '').trim();
+    }
+
+    const normalize = (s: string) => (s || '').trim().replace(/\s+/g, ' ').toLowerCase();
+    const guestFullName = [pass.guest_first_name, pass.guest_last_name]
+      .map(s => (s || '').trim())
+      .filter(Boolean)
+      .join(' ');
+    
+    const expectedCandidates = [guestFullName, profileFullName]
+      .filter(n => n.length > 0)
+      .map(normalize);
+
+    const inputClean = normalize(holderNameConfirmation);
+    const isMatched = expectedCandidates.includes(inputClean);
+
+    if (!isMatched) {
+      throw new Error(`Le nom saisi ne correspond pas. Nom attendu : "${guestFullName || profileFullName || 'Inconnu'}"`);
+    }
+  }
+
+  // 2. Delete associated pass_drinks first
+  await supabaseAdmin
+    .from('pass_drinks')
+    .delete()
+    .eq('pass_id', passId);
+
+  // 3. Delete pass strictly by id without status restriction
+  const { data: deletedData, error: deleteError } = await supabaseAdmin
+    .from('passes')
+    .delete()
+    .eq('id', passId)
+    .select('id');
+
+  if (deleteError) {
+    throw new Error(`Erreur SQL: ${deleteError.message}`);
+  }
+
+  if (!deletedData || deletedData.length === 0) {
+    throw new Error('Pass introuvable ou suppression bloquée par les permissions (RLS).');
+  }
+
+  try {
+    revalidatePath('/admin');
+    revalidatePath('/admin/approbations');
+  } catch (e) {
+    // Safe ignore outside Next request cycle
+  }
+
+  return { success: true, message: 'Pass supprimé avec succès' };
 }
 

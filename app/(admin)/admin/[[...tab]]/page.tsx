@@ -195,7 +195,7 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
       .map(s => (s || '').trim())
       .filter(Boolean)
       .join(' ');
-    const expectedProfileName = ((deleteModalPass as any).profiles?.full_name || '').trim();
+    const expectedProfileName = ((deleteModalPass as any).profiles?.full_name || (deleteModalPass as any).user?.full_name || '').trim();
     const expectedCandidates = [expectedGuestName, expectedProfileName]
       .filter(Boolean)
       .map(normalize);
@@ -1328,7 +1328,7 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
               .map(s => (s || '').trim())
               .filter(Boolean)
               .join(' ');
-            const expectedProfileName = ((deleteModalPass as any).profiles?.full_name || '').trim();
+            const expectedProfileName = ((deleteModalPass as any).profiles?.full_name || (deleteModalPass as any).user?.full_name || '').trim();
             const targetName = expectedGuestName || expectedProfileName || 'Inconnu';
             const expectedCandidates = [expectedGuestName, expectedProfileName].filter(Boolean).map(normalize);
 
