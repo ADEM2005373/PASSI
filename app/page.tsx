@@ -5,6 +5,7 @@ import { useTheme } from 'next-themes'
 import { ArrowRight, Moon, Sun, Ticket, ShieldCheck, Zap, Sparkles } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Logo } from '@/components/Logo'
+import { ContactInfo } from '@/components/ContactInfo'
 
 export default function LandingPage() {
   const { setTheme, resolvedTheme } = useTheme()
@@ -36,6 +37,9 @@ export default function LandingPage() {
                 {resolvedTheme === 'dark' ? <Sun size={18} className="md:w-5 md:h-5" /> : <Moon size={18} className="md:w-5 md:h-5" />}
               </button>
             )}
+            <Link href="#contact" className="text-sm md:text-base font-bold text-passi-bleu dark:text-passi-creme hover:text-passi-corail transition-colors hidden md:block">
+              Contact
+            </Link>
             <Link href="/login" className="text-sm md:text-base font-bold text-passi-bleu dark:text-passi-creme hover:text-passi-corail transition-colors">
               Connexion
             </Link>
@@ -172,23 +176,35 @@ export default function LandingPage() {
         </Link>
       </section>
 
+      {/* Contact & Support Section */}
+      <ContactInfo variant="landing" />
+
       {/* Footer */}
       <footer className="bg-white dark:bg-passi-surface py-12 border-t border-gray-100 dark:border-gray-800 transition-colors">
-        <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-6">
-          <Link href="/">
-            <Logo className="w-[120px] h-[35px]" />
-          </Link>
-          <div className="flex flex-col md:flex-row items-center gap-4 md:gap-8">
-            <a 
-              href="https://www.instagram.com/passi_community_216?stkn=MWNwYzB1NzdmdTZ6ag==" 
-              target="_blank" 
-              rel="noopener noreferrer" 
-              className="flex items-center gap-2 text-passi-text-sec hover:text-passi-corail transition-colors font-medium text-sm"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="20" x="2" y="2" rx="5" ry="5" /><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" /><line x1="17.5" x2="17.51" y1="6.5" y2="6.5" /></svg>
-              <span>Visiter notre Instagram</span>
-            </a>
-            <p className="text-passi-text-sec font-medium text-sm">© {new Date().getFullYear()} Passi. Tous droits réservés.</p>
+        <div className="max-w-7xl mx-auto px-6 space-y-8">
+          <div className="flex flex-col lg:flex-row justify-between items-center gap-6">
+            <Link href="/" className="shrink-0">
+              <Logo className="w-[120px] h-[35px]" />
+            </Link>
+
+            {/* Quick Contact Links in Footer */}
+            <ContactInfo variant="footer" />
+
+            <div className="flex items-center gap-4 shrink-0">
+              <a 
+                href="https://www.instagram.com/passi_community_216?stkn=MWNwYzB1NzdmdTZ6ag==" 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="flex items-center gap-2 text-passi-text-sec hover:text-passi-corail transition-colors font-medium text-sm"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="20" x="2" y="2" rx="5" ry="5" /><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" /><line x1="17.5" x2="17.51" y1="6.5" y2="6.5" /></svg>
+                <span>Instagram</span>
+              </a>
+            </div>
+          </div>
+
+          <div className="pt-6 border-t border-gray-100 dark:border-gray-800/80 text-center">
+            <p className="text-passi-text-sec font-medium text-xs">© {new Date().getFullYear()} Passi. Tous droits réservés.</p>
           </div>
         </div>
       </footer>

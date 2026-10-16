@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { QRCodeSVG } from 'qrcode.react'
-import { Search, Calendar, MapPin, Heart, Ticket, User, Home, Compass, LogOut, FileText, ChevronRight, Settings, Moon, ChevronLeft, MoreHorizontal, Clock, Info, Shirt, Mail, AlertCircle } from 'lucide-react'
+import { Search, Calendar, MapPin, Heart, Ticket, User, Home, Compass, LogOut, FileText, ChevronRight, Settings, Moon, ChevronLeft, MoreHorizontal, Clock, Info, Shirt, Mail, AlertCircle, Headphones } from 'lucide-react'
 import { api } from '@/lib/services/api'
 import { Logo } from '@/components/Logo'
 import { createClient } from '@/lib/supabase/client'
@@ -16,6 +16,7 @@ import { SearchBarWithSuggestions } from '@/components/SearchBarWithSuggestions'
 import { searchEventsFaultTolerant } from '@/lib/utils/search'
 import { EventCard } from '@/components/EventCard'
 import { NewsFeed } from '@/components/NewsFeed'
+import { ContactInfo } from '@/components/ContactInfo'
 
 export default function UserDashboard() {
   const router = useRouter()
@@ -271,9 +272,17 @@ export default function UserDashboard() {
           <NavItem icon={<FileText size={22} />} label="Actualités" id="news" />
           <NavItem icon={<User size={22} />} label="Mon Profil" id="profile" />
         </nav>
-        <div className="p-8 border-t border-white/10 mt-auto">
-          <button onClick={handleLogout} className="flex items-center space-x-3 text-gray-400 hover:text-passi-corail transition-colors w-full p-3 rounded-xl font-bold">
-            <LogOut size={22} />
+        <div className="p-6 border-t border-white/10 mt-auto space-y-2">
+          <button 
+            onClick={() => setActiveTab('profile')} 
+            className="flex items-center space-x-3 text-gray-400 hover:text-passi-turquoise transition-colors w-full p-2.5 rounded-xl font-bold text-sm"
+            title="Besoin d'aide ? Contactez notre support"
+          >
+            <Headphones size={20} className="text-passi-turquoise shrink-0" />
+            <span>Support & Aide</span>
+          </button>
+          <button onClick={handleLogout} className="flex items-center space-x-3 text-gray-400 hover:text-passi-corail transition-colors w-full p-2.5 rounded-xl font-bold text-sm">
+            <LogOut size={20} className="shrink-0" />
             <span>Déconnexion</span>
           </button>
         </div>
@@ -495,66 +504,75 @@ export default function UserDashboard() {
           )}
 
           {activeTab === 'profile' && (
-            <div className="animate-in fade-in slide-in-from-right-4 duration-500 max-w-3xl mx-auto bg-white dark:bg-passi-surface rounded-[3rem] shadow-xl shadow-gray-100/50 border border-gray-100 dark:border-slate-700 overflow-hidden">
-              {/* Top Banner */}
-              <div className="h-48 md:h-64 bg-gradient-to-br from-passi-turquoise/20 to-passi-bleu/10 w-full relative"></div>
-              
-              <div className="relative z-10 px-6 md:px-14 pb-14 flex flex-col items-center -mt-20 md:-mt-24">
-                {/* Profile Picture */}
-                <div className="w-32 h-32 md:w-40 md:h-40 rounded-full border-8 border-white overflow-hidden bg-white dark:bg-passi-surface mb-6 shadow-xl flex-shrink-0">
-                  <div className="w-full h-full bg-gradient-to-br from-passi-turquoise to-passi-bleu flex items-center justify-center">
-                    <User size={64} className="text-white" />
-                  </div>
-                </div>
+            <div className="animate-in fade-in slide-in-from-right-4 duration-500 max-w-3xl mx-auto space-y-8 pb-10">
+              <div className="bg-white dark:bg-passi-surface rounded-[3rem] shadow-xl shadow-gray-100/50 border border-gray-100 dark:border-slate-700 overflow-hidden">
+                {/* Top Banner */}
+                <div className="h-48 md:h-64 bg-gradient-to-br from-passi-turquoise/20 to-passi-bleu/10 w-full relative"></div>
                 
-                <h1 className="text-3xl md:text-4xl font-extrabold text-passi-bleu dark:text-white mb-10 text-center">{authUser?.email?.split('@')[0] || 'Utilisateur'}</h1>
-                
-                {/* Contact Info */}
-                <div className="w-full space-y-4 mb-8 px-4">
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-passi-text-sec font-medium">Phone</span>
-                    <span className="text-passi-bleu dark:text-white font-extrabold"></span>
-                  </div>
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-passi-text-sec font-medium">Mail</span>
-                    <span className="text-passi-bleu dark:text-white font-medium">{authUser?.email || ''}</span>
-                  </div>
-                </div>
-                
-                {/* Divider */}
-                <div className="w-full h-px bg-gray-100 dark:bg-slate-700 mb-2 -mx-6 w-[calc(100%+3rem)]"></div>
-                
-                {/* Menu Options */}
-                <div className="w-full max-w-xl mx-auto flex flex-col px-4 md:px-0">
-                  {/* Dark mode */}
-                  <div className="flex items-center justify-between py-6 border-b border-gray-100 dark:border-slate-700">
-                    <div className="flex items-center gap-4">
-                      <Moon size={24} className="text-passi-bleu dark:text-white" />
-                      <span className="text-passi-bleu dark:text-white text-base md:text-lg font-bold">Dark mode</span>
-                    </div>
-                    {/* Toggle switch */}
-                    <div 
-                      onClick={toggleDarkMode}
-                      className={`w-12 h-6 border-2 rounded-full relative cursor-pointer transition-colors duration-300 ${isDarkMode ? 'bg-passi-bleu border-passi-bleu dark:bg-passi-turquoise dark:border-passi-turquoise' : 'bg-white border-passi-bleu hover:bg-gray-50'}`}
-                    >
-                      <div className={`w-4 h-4 rounded-full absolute top-0.5 transition-transform duration-300 ${isDarkMode ? 'bg-white translate-x-[1.4rem]' : 'bg-passi-bleu translate-x-[0.1rem]'}`}></div>
+                <div className="relative z-10 px-6 md:px-14 pb-14 flex flex-col items-center -mt-20 md:-mt-24">
+                  {/* Profile Picture */}
+                  <div className="w-32 h-32 md:w-40 md:h-40 rounded-full border-8 border-white overflow-hidden bg-white dark:bg-passi-surface mb-6 shadow-xl flex-shrink-0">
+                    <div className="w-full h-full bg-gradient-to-br from-passi-turquoise to-passi-bleu flex items-center justify-center">
+                      <User size={64} className="text-white" />
                     </div>
                   </div>
                   
-                  {/* Profile details */}
-                  <button onClick={() => setActiveTab('settings')} className="flex items-center gap-4 py-6 border-b border-gray-100 dark:border-slate-700 w-full text-left hover:bg-passi-creme dark:bg-passi-bleu transition-colors -mx-4 px-4 md:-mx-6 md:px-6 w-[calc(100%+2rem)] md:w-[calc(100%+3rem)] rounded-xl mt-2">
-                    <User size={24} className="text-passi-bleu dark:text-white" />
-                    <span className="text-passi-bleu dark:text-white text-base md:text-lg font-bold">Profile details</span>
-                  </button>
+                  <h1 className="text-3xl md:text-4xl font-extrabold text-passi-bleu dark:text-white mb-10 text-center">{authUser?.email?.split('@')[0] || 'Utilisateur'}</h1>
                   
+                  {/* Contact Info */}
+                  <div className="w-full space-y-4 mb-8 px-4">
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-passi-text-sec font-medium">Phone</span>
+                      <span className="text-passi-bleu dark:text-white font-extrabold"></span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-passi-text-sec font-medium">Mail</span>
+                      <span className="text-passi-bleu dark:text-white font-medium">{authUser?.email || ''}</span>
+                    </div>
+                  </div>
+                  
+                  {/* Divider */}
+                  <div className="w-full h-px bg-gray-100 dark:bg-slate-700 mb-2 -mx-6 w-[calc(100%+3rem)]"></div>
+                  
+                  {/* Menu Options */}
+                  <div className="w-full max-w-xl mx-auto flex flex-col px-4 md:px-0">
+                    {/* Dark mode */}
+                    <div className="flex items-center justify-between py-6 border-b border-gray-100 dark:border-slate-700">
+                      <div className="flex items-center gap-4">
+                        <Moon size={24} className="text-passi-bleu dark:text-white" />
+                        <span className="text-passi-bleu dark:text-white text-base md:text-lg font-bold">Dark mode</span>
+                      </div>
+                      {/* Toggle switch */}
+                      <div 
+                        onClick={toggleDarkMode}
+                        className={`w-12 h-6 border-2 rounded-full relative cursor-pointer transition-colors duration-300 ${isDarkMode ? 'bg-passi-bleu border-passi-bleu dark:bg-passi-turquoise dark:border-passi-turquoise' : 'bg-white border-passi-bleu hover:bg-gray-50'}`}
+                      >
+                        <div className={`w-4 h-4 rounded-full absolute top-0.5 transition-transform duration-300 ${isDarkMode ? 'bg-white translate-x-[1.4rem]' : 'bg-passi-bleu translate-x-[0.1rem]'}`}></div>
+                      </div>
+                    </div>
+                    
+                    {/* Profile details */}
+                    <button onClick={() => setActiveTab('settings')} className="flex items-center gap-4 py-6 border-b border-gray-100 dark:border-slate-700 w-full text-left hover:bg-passi-creme dark:bg-passi-bleu transition-colors -mx-4 px-4 md:-mx-6 md:px-6 w-[calc(100%+2rem)] md:w-[calc(100%+3rem)] rounded-xl mt-2">
+                      <User size={24} className="text-passi-bleu dark:text-white" />
+                      <span className="text-passi-bleu dark:text-white text-base md:text-lg font-bold">Profile details</span>
+                    </button>
+                    
 
-                  {/* Log out */}
-                  <button onClick={handleLogout} className="flex items-center gap-4 py-6 border-b border-gray-100 dark:border-slate-700 w-full text-left hover:bg-red-50 transition-colors -mx-4 px-4 md:-mx-6 md:px-6 w-[calc(100%+2rem)] md:w-[calc(100%+3rem)] rounded-xl text-passi-corail">
-                    <LogOut size={24} className="text-passi-corail" />
-                    <span className="text-passi-corail text-base md:text-lg font-bold">Log out</span>
-                  </button>
+                    {/* Log out */}
+                    <button onClick={handleLogout} className="flex items-center gap-4 py-6 border-b border-gray-100 dark:border-slate-700 w-full text-left hover:bg-red-50 transition-colors -mx-4 px-4 md:-mx-6 md:px-6 w-[calc(100%+2rem)] md:w-[calc(100%+3rem)] rounded-xl text-passi-corail">
+                      <LogOut size={24} className="text-passi-corail" />
+                      <span className="text-passi-corail text-base md:text-lg font-bold">Log out</span>
+                    </button>
+                  </div>
                 </div>
               </div>
+
+              {/* Support & Contact Card */}
+              <ContactInfo 
+                variant="card"
+                title="Besoin d'aide ? Contactez-nous"
+                className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800"
+              />
             </div>
           )}
           {activeTab === 'settings' && (
