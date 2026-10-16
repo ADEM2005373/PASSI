@@ -490,6 +490,11 @@ export interface CreateAdminPassPayload {
   drinkName?: string | null;
   selected_aromas?: string[];
   selectedAromas?: string[];
+  promo_code?: string;
+  promoCode?: string;
+  promo_used?: string;
+  final_price?: number;
+  finalPrice?: number;
 }
 
 /**
@@ -514,6 +519,11 @@ export async function createAdminPassAction(payload: CreateAdminPassPayload) {
     drinkName,
     selected_aromas,
     selectedAromas,
+    promo_code,
+    promoCode,
+    promo_used,
+    final_price,
+    finalPrice: clientFinalPrice,
   } = payload || {};
 
   if (!userId || !eventId) {
@@ -538,10 +548,10 @@ export async function createAdminPassAction(payload: CreateAdminPassPayload) {
     throw new Error('Utilisateur destinataire introuvable');
   }
 
-  // 2. Fetch event
+  // 2. Fetch event with promo_codes
   const { data: event, error: eventError } = await supabaseAdmin
     .from('events')
-    .select('id, title, base_price, date')
+    .select('id, title, base_price, date, promo_codes')
     .eq('id', eventId)
     .single();
 
@@ -549,11 +559,12 @@ export async function createAdminPassAction(payload: CreateAdminPassPayload) {
     throw new Error('Événement introuvable');
   }
 
-  // 3. Entry status & QR logic
+  // 3. Entry status, promo discount & QR logic
   let entryStatus: 'pending' | 'awaiting_payment' | 'activated' = 'pending';
   let entryQrUuid: string | null = null;
   let invitationStatus: 'PENDING' | 'ACCEPTED' | 'DECLINED' | null = null;
   let finalPrice = event.base_price ?? 0;
+  let promoUsed: string | null = null;
 
   if (normalizedPassType === 'GIFT' || normalizedPassType === 'VIP') {
     entryStatus = 'activated';
@@ -566,10 +577,30 @@ export async function createAdminPassAction(payload: CreateAdminPassPayload) {
     finalPrice = 0;
     invitationStatus = 'PENDING';
   } else {
+    // NORMAL pass
     entryStatus = 'pending';
     entryQrUuid = null;
-    finalPrice = event.base_price ?? 0;
     invitationStatus = null;
+
+    const rawPromo = (promo_code || promoCode || promo_used || '').trim().toUpperCase();
+    const basePrice = Number(event.base_price) || 0;
+    let discount = 0;
+
+    if (rawPromo && event.promo_codes && Array.isArray(event.promo_codes)) {
+      const matched = event.promo_codes.find(
+        (p: any) => p && typeof p.code === 'string' && p.code.trim().toUpperCase() === rawPromo
+      );
+      if (matched) {
+        promoUsed = matched.code.trim().toUpperCase();
+        if (matched.discount_type === 'percentage') {
+          discount = (basePrice * Number(matched.discount_amount || 0)) / 100;
+        } else {
+          discount = Number(matched.discount_amount) || 0;
+        }
+      }
+    }
+
+    finalPrice = Math.max(0, basePrice - discount);
   }
 
   // 4. Resolve Drink & Aromas
@@ -606,6 +637,7 @@ export async function createAdminPassAction(payload: CreateAdminPassPayload) {
     p_guest_last_name: resolvedLastName,
     p_drink_name: resolvedDrinkName,
     p_selected_aromas: formattedAromas,
+    p_promo_code: promoUsed,
   });
 
   if (!rpcError && rpcData?.success) {
@@ -623,6 +655,7 @@ export async function createAdminPassAction(payload: CreateAdminPassPayload) {
     entry_status: entryStatus,
     entry_qr_uuid: entryQrUuid,
     final_price: finalPrice,
+    promo_used: promoUsed,
     drink_name: resolvedDrinkName,
     drink_id: resolvedDrinkName,
     selected_aromas: formattedAromas,

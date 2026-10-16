@@ -1412,6 +1412,11 @@ export const api = {
     drinkName?: string;
     selected_aromas?: string[];
     selectedAromas?: string[];
+    promo_code?: string;
+    promoCode?: string;
+    promo_used?: string;
+    final_price?: number;
+    finalPrice?: number;
   }): Promise<{ success: boolean; pass: Pass; message?: string }> {
     const payload = {
       ...data,
@@ -1419,6 +1424,8 @@ export const api = {
       drinkName: data.drinkName || data.drink_name,
       selected_aromas: data.selected_aromas || data.selectedAromas || [],
       selectedAromas: data.selectedAromas || data.selected_aromas || [],
+      promo_used: data.promo_used || data.promoCode || data.promo_code,
+      promo_code: data.promo_code || data.promoCode || data.promo_used,
     };
     const res = await fetch('/api/admin/passes/manual', {
       method: 'POST',

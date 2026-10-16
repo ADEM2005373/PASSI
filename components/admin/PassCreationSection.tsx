@@ -16,7 +16,8 @@ import {
   ExternalLink, 
   ArrowRight,
   X,
-  Wine
+  Wine,
+  Tag
 } from 'lucide-react';
 import { api, User, Event } from '@/lib/services/api';
 
@@ -35,6 +36,7 @@ export function PassCreationSection({ users, events, onPassCreated }: PassCreati
   const [selectedAromas, setSelectedAromas] = useState<string[]>([]);
   const [guestFirstName, setGuestFirstName] = useState('');
   const [guestLastName, setGuestLastName] = useState('');
+  const [promoCodeInput, setPromoCodeInput] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string; pass?: any } | null>(null);
 
@@ -55,6 +57,53 @@ export function PassCreationSection({ users, events, onPassCreated }: PassCreati
   const selectedEvent = useMemo(() => {
     return events.find(e => e.id === selectedEventId) || null;
   }, [events, selectedEventId]);
+
+  // Available promo codes from selected event
+  const availablePromoCodes = useMemo(() => {
+    if (!selectedEvent) return [];
+    const raw = (selectedEvent as any).promo_codes;
+    if (!raw) return [];
+    let list = raw;
+    if (typeof raw === 'string') {
+      try {
+        list = JSON.parse(raw);
+      } catch {
+        list = [];
+      }
+    }
+    if (!Array.isArray(list)) return [];
+    return list
+      .filter((p: any) => p && typeof p.code === 'string' && p.code.trim().length > 0)
+      .map((p: any) => ({
+        code: p.code.trim().toUpperCase(),
+        discount_amount: Number(p.discount_amount) || 0,
+        discount_type: p.discount_type || 'fixed',
+      }));
+  }, [selectedEvent]);
+
+  // Active applied promo code (only when pass type is NORMAL)
+  const appliedPromo = useMemo(() => {
+    if (selectedPassType !== 'NORMAL' || !promoCodeInput.trim()) return null;
+    const clean = promoCodeInput.trim().toUpperCase();
+    return availablePromoCodes.find(p => p.code === clean) || null;
+  }, [selectedPassType, promoCodeInput, availablePromoCodes]);
+
+  const basePrice = Number(selectedEvent?.base_price) || 0;
+
+  const discountAmount = useMemo(() => {
+    if (selectedPassType !== 'NORMAL' || !appliedPromo) return 0;
+    if (appliedPromo.discount_type === 'percentage') {
+      return (basePrice * appliedPromo.discount_amount) / 100;
+    }
+    return appliedPromo.discount_amount;
+  }, [selectedPassType, appliedPromo, basePrice]);
+
+  const calculatedFinalPrice = useMemo(() => {
+    if (selectedPassType === 'VIP' || selectedPassType === 'GIFT' || selectedPassType === 'INVITATION') {
+      return 0;
+    }
+    return Math.max(0, basePrice - discountAmount);
+  }, [selectedPassType, basePrice, discountAmount]);
 
   // Available drinks from selected event (JSONB drinks array or fallback drink_menus)
   const availableDrinks = useMemo(() => {
@@ -95,6 +144,7 @@ export function PassCreationSection({ users, events, onPassCreated }: PassCreati
     setSelectedEventId(eventId);
     setSelectedDrinkName('');
     setSelectedAromas([]);
+    setPromoCodeInput('');
   };
 
   const handleDrinkChange = (drinkName: string) => {
@@ -144,6 +194,11 @@ export function PassCreationSection({ users, events, onPassCreated }: PassCreati
         drinkName: selectedDrinkName.trim() || undefined,
         selected_aromas: selectedAromas,
         selectedAromas: selectedAromas,
+        promoCode: selectedPassType === 'NORMAL' && appliedPromo ? appliedPromo.code : undefined,
+        promo_code: selectedPassType === 'NORMAL' && appliedPromo ? appliedPromo.code : undefined,
+        promo_used: selectedPassType === 'NORMAL' && appliedPromo ? appliedPromo.code : undefined,
+        final_price: calculatedFinalPrice,
+        finalPrice: calculatedFinalPrice,
       });
 
       setStatusMessage({
@@ -154,6 +209,7 @@ export function PassCreationSection({ users, events, onPassCreated }: PassCreati
 
       setSelectedDrinkName('');
       setSelectedAromas([]);
+      setPromoCodeInput('');
 
       if (onPassCreated) {
         onPassCreated();
@@ -629,6 +685,99 @@ export function PassCreationSection({ users, events, onPassCreated }: PassCreati
               </div>
             </div>
 
+            {/* Conditional Promo Code Section (Only for NORMAL pass type) */}
+            {selectedPassType === 'NORMAL' && (
+              <div className="p-4 rounded-xl bg-gradient-to-r from-cyan-950/30 via-slate-900/60 to-black/30 border border-cyan-500/30 space-y-3 animate-fadeIn">
+                <div className="flex items-center justify-between">
+                  <label className="label text-xs uppercase tracking-wider font-extrabold text-cyan-400 flex items-center gap-1.5 m-0">
+                    <Tag size={14} className="text-cyan-400" />
+                    <span>Code Promo (Optionnel)</span>
+                  </label>
+                  {promoCodeInput && (
+                    <button
+                      type="button"
+                      onClick={() => setPromoCodeInput('')}
+                      className="text-[11px] text-gray-400 hover:text-white transition-colors flex items-center gap-1 cursor-pointer"
+                    >
+                      <X size={12} /> Effacer
+                    </button>
+                  )}
+                </div>
+
+                {/* Text input with dynamic visual indicators */}
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={promoCodeInput}
+                    onChange={(e) => setPromoCodeInput(e.target.value.toUpperCase())}
+                    placeholder="Ex: RED/5, ETD/15, STUDENT2026..."
+                    className={`input text-sm font-mono uppercase tracking-wider pr-10 ${
+                      appliedPromo
+                        ? 'border-emerald-500 bg-emerald-500/10 text-emerald-300 focus:border-emerald-500'
+                        : promoCodeInput.trim()
+                        ? 'border-rose-500 bg-rose-500/10 text-rose-300 focus:border-rose-500'
+                        : 'border-slate-700 bg-slate-900 text-white'
+                    }`}
+                  />
+                  {appliedPromo ? (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-400">
+                      <CheckCircle2 size={18} />
+                    </div>
+                  ) : promoCodeInput.trim() ? (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-rose-400">
+                      <AlertCircle size={18} />
+                    </div>
+                  ) : null}
+                </div>
+
+                {/* Instant visual feedback message below input */}
+                {appliedPromo ? (
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-400">
+                    <Check size={14} />
+                    <span>
+                      ✓ Code appliqué : -{discountAmount} DT ({appliedPromo.code})
+                    </span>
+                  </div>
+                ) : promoCodeInput.trim() ? (
+                  <div className="flex items-center gap-1.5 text-xs font-medium text-rose-400">
+                    <X size={14} />
+                    <span>✕ Code promo invalide pour cet événement</span>
+                  </div>
+                ) : null}
+
+                {/* Quick-select Badges for active promo codes on selected event */}
+                {availablePromoCodes.length > 0 && (
+                  <div className="pt-2 border-t border-slate-800/80">
+                    <span className="text-[11px] font-semibold text-gray-400 block mb-1.5">
+                      Codes promo disponibles pour cet événement (cliquer pour appliquer) :
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      {availablePromoCodes.map((p) => {
+                        const isSelected = promoCodeInput.trim().toUpperCase() === p.code;
+                        return (
+                          <button
+                            key={p.code}
+                            type="button"
+                            onClick={() => setPromoCodeInput(isSelected ? '' : p.code)}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                              isSelected
+                                ? 'bg-emerald-500 text-black shadow-md shadow-emerald-500/25 ring-2 ring-emerald-400'
+                                : 'bg-slate-800 text-gray-300 hover:bg-slate-700 hover:text-white border border-slate-700'
+                            }`}
+                          >
+                            <Tag size={11} />
+                            <span>{p.code}</span>
+                            <span className="opacity-75">(-{p.discount_amount} DT)</span>
+                            {isSelected && <Check size={12} className="stroke-[3]" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Recap Box */}
             <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 text-xs space-y-2">
               <div className="flex justify-between items-center">
@@ -661,11 +810,29 @@ export function PassCreationSection({ users, events, onPassCreated }: PassCreati
               </div>
               <div className="flex justify-between items-center border-t border-slate-800 pt-2">
                 <span className="text-gray-400">Montant facturé :</span>
-                <span className="font-extrabold text-sm text-emerald-400">
-                  {selectedPassType === 'VIP' || selectedPassType === 'GIFT' || selectedPassType === 'INVITATION' 
-                    ? '0 DT (Offert / Invitation)' 
-                    : `${selectedEvent?.base_price ?? 0} DT`}
-                </span>
+                <div>
+                  {selectedPassType === 'VIP' || selectedPassType === 'GIFT' || selectedPassType === 'INVITATION' ? (
+                    <span className="font-extrabold text-sm text-emerald-400">
+                      0 DT (Offert / Invitation)
+                    </span>
+                  ) : appliedPromo ? (
+                    <div className="flex items-center gap-2">
+                      <span className="line-through text-slate-500 font-semibold text-xs">
+                        {basePrice} DT
+                      </span>
+                      <span className="font-extrabold text-sm text-emerald-400">
+                        {calculatedFinalPrice} DT
+                      </span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                        -{discountAmount} DT
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="font-extrabold text-sm text-emerald-400">
+                      {basePrice} DT
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
