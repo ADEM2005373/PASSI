@@ -29,8 +29,9 @@ function VerifyEmailContent() {
   const [isEditingEmail, setIsEditingEmail] = useState(false);
   const [editedEmail, setEditedEmail] = useState("");
 
-  // 6 individual digit states
-  const [digits, setDigits] = useState<string[]>(["", "", "", "", "", ""]);
+  // 8 individual digit states to match Supabase 8-digit OTP token
+  const OTP_LENGTH = 8;
+  const [digits, setDigits] = useState<string[]>(Array(OTP_LENGTH).fill(""));
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   const [loading, setLoading] = useState(false);
@@ -82,7 +83,7 @@ function VerifyEmailContent() {
     setDigits(newDigits);
 
     // Auto-advance to next input
-    if (index < 5) {
+    if (index < OTP_LENGTH - 1) {
       inputRefs.current[index + 1]?.focus();
     }
   };
@@ -99,7 +100,7 @@ function VerifyEmailContent() {
     } else if (e.key === "ArrowLeft" && index > 0) {
       e.preventDefault();
       inputRefs.current[index - 1]?.focus();
-    } else if (e.key === "ArrowRight" && index < 5) {
+    } else if (e.key === "ArrowRight" && index < OTP_LENGTH - 1) {
       e.preventDefault();
       inputRefs.current[index + 1]?.focus();
     }
@@ -111,24 +112,24 @@ function VerifyEmailContent() {
     if (!pastedData) return;
 
     const newDigits = [...digits];
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < OTP_LENGTH; i++) {
       newDigits[i] = pastedData[i] || "";
     }
     setDigits(newDigits);
 
-    const nextIndex = Math.min(pastedData.length, 5);
+    const nextIndex = Math.min(pastedData.length, OTP_LENGTH - 1);
     inputRefs.current[nextIndex]?.focus();
 
-    // Auto-submit if 6 digits pasted
-    if (pastedData.length >= 6) {
-      executeVerification(pastedData.slice(0, 6));
+    // Auto-submit if all digits pasted
+    if (pastedData.length >= OTP_LENGTH) {
+      executeVerification(pastedData.slice(0, OTP_LENGTH));
     }
   };
 
   const executeVerification = async (codeToVerify?: string) => {
     const fullCode = codeToVerify || digits.join("");
-    if (fullCode.length !== 6) {
-      setError("Veuillez saisir les 6 chiffres du code reçu par email.");
+    if (fullCode.length !== OTP_LENGTH) {
+      setError(`Veuillez saisir les ${OTP_LENGTH} chiffres du code reçu par email.`);
       return;
     }
 
@@ -242,7 +243,7 @@ function VerifyEmailContent() {
                 Code de vérification
               </h1>
               <p className="text-sm mt-1.5 font-medium" style={{ color: "var(--text-secondary)" }}>
-                Saisissez le code à 6 chiffres envoyé par email pour confirmer votre compte.
+                Saisissez le code à 8 chiffres envoyé par email pour confirmer votre compte.
               </p>
             </div>
 
@@ -312,8 +313,8 @@ function VerifyEmailContent() {
 
             {/* OTP Form */}
             <form onSubmit={handleSubmit} className="space-y-6">
-              {/* 6 Digit Input Slots */}
-              <div className="flex justify-between items-center gap-2 sm:gap-2.5">
+              {/* 8 Digit Input Slots */}
+              <div className="grid grid-cols-8 gap-1.5 sm:gap-2">
                 {digits.map((digit, idx) => (
                   <input
                     key={idx}
@@ -328,7 +329,7 @@ function VerifyEmailContent() {
                     onChange={(e) => handleDigitChange(idx, e.target.value)}
                     onKeyDown={(e) => handleKeyDown(idx, e)}
                     onPaste={handlePaste}
-                    className={`w-11 h-13 sm:w-12 sm:h-14 text-center text-xl sm:text-2xl font-black rounded-2xl transition-all outline-none border ${
+                    className={`w-full aspect-[4/5] sm:aspect-square flex items-center justify-center text-center text-lg sm:text-2xl font-black rounded-xl sm:rounded-2xl transition-all outline-none border ${
                       digit
                         ? "border-passi-turquoise text-passi-turquoise bg-passi-turquoise/5 shadow-[0_0_12px_rgba(45,212,191,0.15)]"
                         : "border-neutral-700 focus:border-passi-corail focus:ring-2 focus:ring-passi-corail/30"

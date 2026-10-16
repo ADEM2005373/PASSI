@@ -20,8 +20,8 @@ export async function verifyEmailOtpAction(email: string, code: string): Promise
     return { success: false, error: "Adresse email manquante." };
   }
 
-  if (!cleanCode || cleanCode.length !== 6) {
-    return { success: false, error: "Veuillez saisir un code de vérification à 6 chiffres." };
+  if (!cleanCode || cleanCode.length < 6 || cleanCode.length > 8) {
+    return { success: false, error: "Veuillez saisir un code de vérification valide (6 à 8 chiffres)." };
   }
 
   try {
