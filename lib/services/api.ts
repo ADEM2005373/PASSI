@@ -56,6 +56,16 @@ export type Pass = {
   payment_point_id?: string | null;
   approved_by?: string | null;
   payment_approved_at?: string | null;
+  created_by?: string | null;
+  pass_origin?: 'USER' | 'ADMIN' | string | null;
+  creator?: {
+    id?: string;
+    first_name?: string | null;
+    last_name?: string | null;
+    full_name?: string | null;
+    email?: string | null;
+    role?: string | null;
+  } | null;
   approver?: {
     id?: string;
     first_name?: string | null;
@@ -475,7 +485,7 @@ export const api = {
     const supabase = createClient();
     let query = supabase
       .from('passes')
-      .select('*, event:events(*), user:profiles!passes_user_id_fkey(*), approver:profiles!passes_approved_by_fkey(id, email, full_name, first_name, last_name, role)')
+      .select('*, event:events(*), user:profiles!passes_user_id_fkey(*), creator:profiles!passes_created_by_fkey(id, email, full_name, first_name, last_name, role), approver:profiles!passes_approved_by_fkey(id, email, full_name, first_name, last_name, role)')
       .order('created_at', { ascending: false });
 
     if (eventId && eventId !== 'all' && eventId.trim() !== '') {
@@ -488,13 +498,24 @@ export const api = {
     if (error || !passesData) {
       let fallbackQuery = supabase
         .from('passes')
-        .select('*, events(*)')
+        .select('*, event:events(*), user:profiles!passes_user_id_fkey(*), approver:profiles!passes_approved_by_fkey(id, email, full_name, first_name, last_name, role)')
         .order('created_at', { ascending: false });
       if (eventId && eventId !== 'all' && eventId.trim() !== '') {
         fallbackQuery = fallbackQuery.eq('event_id', eventId);
       }
       const fallbackRes = await fallbackQuery;
       passesData = fallbackRes.data;
+
+      if (!passesData) {
+        let fallbackEventsOnly = supabase
+          .from('passes')
+          .select('*, events(*)')
+          .order('created_at', { ascending: false });
+        if (eventId && eventId !== 'all' && eventId.trim() !== '') {
+          fallbackEventsOnly = fallbackEventsOnly.eq('event_id', eventId);
+        }
+        passesData = (await fallbackEventsOnly).data;
+      }
     }
 
     if (!passesData) {
@@ -506,7 +527,7 @@ export const api = {
       passesData = plainRes.data || [];
     }
 
-    // Map profiles and relations for both users and approvers
+    // Map profiles and relations for users, creators, and approvers
     const { data: profilesData } = await supabase
       .from('profiles')
       .select('id, instagram_handle, full_name, first_name, last_name, email, role');
@@ -514,14 +535,26 @@ export const api = {
 
     return passesData.map((pass: any) => {
       const profile = profilesMap.get(pass.user_id) || pass.user || pass.profiles;
+      const creatorProfile = pass.creator || profilesMap.get(pass.created_by) || null;
       const approverProfile = pass.approver || profilesMap.get(pass.approved_by) || profilesMap.get(pass.payment_point_id) || null;
       const evt = pass.event || pass.events;
+
+      // Infer origin: either stored in pass_origin, or inferred if created_by is present or pass_type is special
+      const isManualAdmin = Boolean(
+        pass.created_by ||
+        pass.pass_origin === 'ADMIN' ||
+        ['VIP', 'GIFT', 'INVITATION'].includes(pass.pass_type)
+      );
+      const passOrigin = isManualAdmin ? 'ADMIN' : 'USER';
+
       return {
         ...pass,
+        pass_origin: passOrigin,
         event: evt,
         events: evt,
         user: profile,
         profiles: profile,
+        creator: creatorProfile,
         approver: approverProfile,
         status: pass.entry_status || pass.status,
         entry_status: pass.entry_status || pass.status,

@@ -641,8 +641,8 @@ export interface CreateAdminPassPayload {
  * with selected drink and aromas.
  */
 export async function createAdminPassAction(payload: CreateAdminPassPayload) {
-  const { error: authError } = await requireRole(['admin']);
-  if (authError) {
+  const { error: authError, user: caller } = await requireRole(['admin']);
+  if (authError || !caller) {
     throw new Error('Action non autorisée : droits administrateur requis');
   }
 
@@ -783,12 +783,15 @@ export async function createAdminPassAction(payload: CreateAdminPassPayload) {
   }
 
   // 6. Direct DB insertion
+  const now = new Date().toISOString();
   const insertPayload: Record<string, any> = {
     user_id: userId,
     event_id: eventId,
     guest_first_name: resolvedFirstName,
     guest_last_name: resolvedLastName,
     pass_type: normalizedPassType,
+    pass_origin: 'ADMIN',
+    created_by: caller.id,
     invitation_status: invitationStatus,
     entry_status: entryStatus,
     entry_qr_uuid: entryQrUuid,
@@ -802,6 +805,12 @@ export async function createAdminPassAction(payload: CreateAdminPassPayload) {
     drink_qr_code: drinkQrUuid,
   };
 
+  if (normalizedPassType === 'GIFT' || normalizedPassType === 'VIP') {
+    insertPayload.status = 'PAID';
+    insertPayload.approved_by = caller.id;
+    insertPayload.payment_approved_at = now;
+  }
+
   let { data: newPass, error: insertError } = await supabaseAdmin
     .from('passes')
     .insert(insertPayload)
@@ -809,7 +818,13 @@ export async function createAdminPassAction(payload: CreateAdminPassPayload) {
     .single();
 
   if (insertError) {
+    // Retry without newly added schema columns if not yet migrated
     delete insertPayload.drink_qr_code;
+    delete insertPayload.created_by;
+    delete insertPayload.pass_origin;
+    if (insertError.message?.includes('approved_by')) {
+      delete insertPayload.approved_by;
+    }
     const { data: retryPass, error: retryError } = await supabaseAdmin
       .from('passes')
       .insert(insertPayload)

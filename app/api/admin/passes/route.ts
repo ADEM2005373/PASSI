@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
   try {
     let query = supabaseAdmin
       .from('passes')
-      .select('*, event:events(*), user:profiles!passes_user_id_fkey(*), approver:profiles!passes_approved_by_fkey(id, email, full_name, first_name, last_name, role)')
+      .select('*, event:events(*), user:profiles!passes_user_id_fkey(*), creator:profiles!passes_created_by_fkey(id, email, full_name, first_name, last_name, role), approver:profiles!passes_approved_by_fkey(id, email, full_name, first_name, last_name, role)')
       .order('created_at', { ascending: false });
 
     if (statusFilter && statusFilter !== 'all') {
@@ -38,12 +38,12 @@ export async function GET(req: NextRequest) {
 
     let { data, error } = await query;
 
-    // Fallback if relationship embedding fails
+    // Fallback if relationship embedding fails (e.g. if passes_created_by_fkey is not yet applied)
     if (error) {
       console.warn("Foreign relationship select failed in GET /api/admin/passes, falling back:", error);
       let fallbackQuery = supabaseAdmin
         .from('passes')
-        .select('*, events(*)')
+        .select('*, event:events(*), user:profiles!passes_user_id_fkey(*), approver:profiles!passes_approved_by_fkey(id, email, full_name, first_name, last_name, role)')
         .order('created_at', { ascending: false });
 
       if (statusFilter && statusFilter !== 'all') {
@@ -57,14 +57,31 @@ export async function GET(req: NextRequest) {
 
       const fallbackRes = await fallbackQuery;
       data = fallbackRes.data;
+
+      if (!data) {
+        let eventsOnlyQuery = supabaseAdmin
+          .from('passes')
+          .select('*, events(*)')
+          .order('created_at', { ascending: false });
+        if (statusFilter && statusFilter !== 'all') {
+          const lower = statusFilter.toLowerCase();
+          const upper = statusFilter.toUpperCase();
+          eventsOnlyQuery = eventsOnlyQuery.or(`entry_status.eq.${lower},entry_status.eq.${upper}`);
+        }
+        if (eventIdFilter && eventIdFilter !== 'all' && eventIdFilter.trim() !== '') {
+          eventsOnlyQuery = eventsOnlyQuery.eq('event_id', eventIdFilter);
+        }
+        data = (await eventsOnlyQuery).data;
+      }
     }
 
     if (!data) return NextResponse.json({ passes: [] });
 
-    // Ensure profiles data is mapped for both pass owners and approvers
+    // Ensure profiles data is mapped for pass owners, approvers, and creators
     const userIds = [...new Set(data.map((p: any) => p.user_id).filter(Boolean))];
     const approverIds = [...new Set(data.map((p: any) => p.approved_by || p.payment_point_id).filter(Boolean))];
-    const allProfileIds = [...new Set([...userIds, ...approverIds])];
+    const creatorIds = [...new Set(data.map((p: any) => p.created_by).filter(Boolean))];
+    const allProfileIds = [...new Set([...userIds, ...approverIds, ...creatorIds])];
 
     let profilesMap: Record<string, any> = {};
     if (allProfileIds.length > 0) {
@@ -80,16 +97,27 @@ export async function GET(req: NextRequest) {
     const formattedPasses = data.map((pass: any) => {
       const prof = profilesMap[pass.user_id] || pass.user || pass.profiles || {};
       const approverProf = pass.approver || profilesMap[pass.approved_by] || profilesMap[pass.payment_point_id] || null;
+      const creatorProf = pass.creator || profilesMap[pass.created_by] || null;
       const evt = pass.event || pass.events || {};
+
+      const isManualAdmin = Boolean(
+        pass.created_by ||
+        pass.pass_origin === 'ADMIN' ||
+        ['VIP', 'GIFT', 'INVITATION'].includes(pass.pass_type?.toUpperCase())
+      );
+      const passOrigin = pass.pass_origin || (isManualAdmin ? 'ADMIN' : 'USER');
+
       return {
         ...pass,
         status: pass.entry_status || pass.status,
         entry_status: pass.entry_status || pass.status,
+        pass_origin: passOrigin,
         events: evt,
         event: evt,
         profiles: prof,
         user: prof,
         approver: approverProf,
+        creator: creatorProf,
         instagram_handle: prof.instagram_handle || pass.instagram_handle || '@unknown',
         drink_menus: pass.drink_name ? { name: pass.drink_name } : (pass.drink_menus || null),
       };

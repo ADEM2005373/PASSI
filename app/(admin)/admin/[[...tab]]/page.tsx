@@ -1196,10 +1196,26 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
                                   Boisson: {pass.drink_menus.name}
                                 </p>
                               )}
-                              <span className={`badge mt-2 inline-block ${sc.bg} ${sc.color}`}>{sc.label}</span>
+                              {/* Audit Trail & Badges */}
+                              {(() => {
+                                const isUserCreated = !(
+                                  pass.pass_origin === 'ADMIN' ||
+                                  Boolean(pass.created_by) ||
+                                  ['VIP', 'GIFT', 'INVITATION'].includes((pass.pass_type || '').toUpperCase())
+                                );
 
-                              {/* Audit Trail: Approver & Mode info */}
-                              {(pass.approved_by || pass.approver) && (() => {
+                                let creatorName = "Admin";
+                                const creator = pass.creator;
+                                if (creator?.first_name || creator?.last_name) {
+                                  creatorName = [creator.first_name, creator.last_name].filter(Boolean).join(" ");
+                                } else if (creator?.full_name) {
+                                  creatorName = creator.full_name;
+                                } else if (creator?.email) {
+                                  creatorName = creator.email.split("@")[0];
+                                } else if (pass.created_by) {
+                                  creatorName = `ID: ${pass.created_by.slice(0, 8)}`;
+                                }
+
                                 const approver = pass.approver;
                                 let approverName = "";
                                 if (approver?.first_name || approver?.last_name) {
@@ -1210,39 +1226,65 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
                                   approverName = approver.email.split("@")[0];
                                 } else if (pass.approved_by) {
                                   approverName = `ID: ${pass.approved_by.slice(0, 8)}`;
-                                } else {
-                                  approverName = "Administrateur";
                                 }
+
+                                const isInstantPass = ['VIP', 'GIFT', 'INVITATION'].includes((pass.pass_type || '').toUpperCase());
+                                const isActivatedOrPaid = ['activated', 'scanned'].includes(pass.entry_status);
+                                const resolvedApprover = approverName || (isInstantPass || isActivatedOrPaid ? 'Système / Instantané' : null);
 
                                 const role = (approver?.role || "").toLowerCase();
                                 const isSimulation = role === "admin";
-                                const badgeLabel = isSimulation ? "Mode Simulation" : "Caissier";
+                                const badgeLabel = approver ? (isSimulation ? "Mode Simulation" : "Caissier") : null;
 
                                 return (
-                                  <div className="mt-2.5 pt-2 border-t border-neutral-800 flex flex-wrap items-center gap-1.5 text-xs">
-                                    <span className="text-neutral-400 font-medium">Approuvé par :</span>
-                                    <span className="font-bold text-white">
-                                      {approverName}
-                                    </span>
-                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                      isSimulation
-                                        ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
-                                        : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                                    }`}>
-                                      {badgeLabel}
-                                    </span>
-                                    {pass.payment_approved_at && (
-                                      <span className="text-neutral-400 text-[11px] ml-1">
-                                        le {new Date(pass.payment_approved_at).toLocaleString("fr-FR", {
-                                          day: "2-digit",
-                                          month: "2-digit",
-                                          year: "numeric",
-                                          hour: "2-digit",
-                                          minute: "2-digit",
-                                        })}
-                                      </span>
-                                    )}
-                                  </div>
+                                  <>
+                                    <div className="flex flex-wrap items-center gap-2 mt-2">
+                                      <span className={`badge inline-block ${sc.bg} ${sc.color}`}>{sc.label}</span>
+                                      {isUserCreated ? (
+                                        <span className="bg-blue-500/10 text-blue-400 text-xs px-2 py-0.5 rounded-md font-medium">
+                                          👤 Créé par l'utilisateur
+                                        </span>
+                                      ) : (
+                                        <span className="bg-purple-500/10 text-purple-400 text-xs px-2 py-0.5 rounded-md font-medium">
+                                          👑 Créé par l'Admin ({creatorName})
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    <div className="mt-2.5 pt-2 border-t border-neutral-800 flex flex-wrap items-center gap-1.5 text-xs">
+                                      {resolvedApprover ? (
+                                        <>
+                                          <span className="text-xs text-slate-400">
+                                            ✓ Approuvé par : <span className="font-bold text-white">{resolvedApprover}</span>
+                                          </span>
+                                          {badgeLabel && (
+                                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                              isSimulation
+                                                ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                                                : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                                            }`}>
+                                              {badgeLabel}
+                                            </span>
+                                          )}
+                                          {pass.payment_approved_at && (
+                                            <span className="text-neutral-400 text-[11px] ml-1">
+                                              le {new Date(pass.payment_approved_at).toLocaleString("fr-FR", {
+                                                day: "2-digit",
+                                                month: "2-digit",
+                                                year: "numeric",
+                                                hour: "2-digit",
+                                                minute: "2-digit",
+                                              })}
+                                            </span>
+                                          )}
+                                        </>
+                                      ) : (
+                                        <span className="text-xs text-slate-400">
+                                          ⏳ Validation : En attente
+                                        </span>
+                                      )}
+                                    </div>
+                                  </>
                                 );
                               })()}
                             </div>
