@@ -133,13 +133,54 @@ export const api = {
     
     if (!user) return null;
 
-    const { data: profile } = await supabase
+    let { data: profile } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', user.id)
       .maybeSingle();
 
-    if (!profile) return null;
+    if (!profile) {
+      console.warn("Profil manquant pour l'utilisateur connecté, tentative d'auto-création...");
+      const meta = user.user_metadata || {};
+      const inferredRole = (meta.role || (user.email?.includes('passi.com') ? 'admin' : 'user')).toLowerCase();
+      const fullName = meta.full_name || [meta.first_name, meta.last_name].filter(Boolean).join(' ') || (user.email ? user.email.split('@')[0] : 'Utilisateur');
+
+      try {
+        const { data: newProfile } = await supabase
+          .from('profiles')
+          .upsert({
+            id: user.id,
+            email: user.email || '',
+            full_name: fullName,
+            first_name: meta.first_name || fullName.split(' ')[0] || '',
+            last_name: meta.last_name || fullName.split(' ').slice(1).join(' ') || '',
+            role: inferredRole as any,
+            is_suspended: false,
+          }, { onConflict: 'id' })
+          .select('*')
+          .maybeSingle();
+
+        if (newProfile) {
+          profile = newProfile;
+        }
+      } catch (e) {
+        console.warn("Client profile upsert failed, using safe fallback:", e);
+      }
+
+      if (!profile) {
+        profile = {
+          id: user.id,
+          email: user.email || '',
+          full_name: fullName,
+          first_name: meta.first_name || fullName.split(' ')[0] || '',
+          last_name: meta.last_name || fullName.split(' ').slice(1).join(' ') || '',
+          role: inferredRole as any,
+          instagram_handle: meta.instagram_handle || null,
+          is_suspended: false,
+          created_at: user.created_at,
+        };
+      }
+    }
 
     let userProfile = profile as User;
     const actualRole = (userProfile.role || '').toUpperCase();

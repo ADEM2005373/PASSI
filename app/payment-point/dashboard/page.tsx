@@ -128,7 +128,34 @@ export default function PaymentPointDashboard() {
   useEffect(() => {
     setMounted(true);
     const init = async () => {
-      const user = await api.getCurrentUser();
+      let user = await api.getCurrentUser();
+      if (!user) {
+        // Auto-recovery fallback check for cashier profile
+        try {
+          const { createClient } = await import('@/lib/supabase/client');
+          const supabase = createClient();
+          const { data: { user: authUser } } = await supabase.auth.getUser();
+          if (authUser) {
+            console.warn("Profil manquant pour l'utilisateur connecté, tentative d'auto-création...");
+            const meta = authUser.user_metadata || {};
+            const isStaff = authUser.email?.includes('passi.com');
+            const defaultRole = (meta.role || (isStaff ? 'admin' : 'payment_point')).toLowerCase();
+            const fullName = meta.full_name || [meta.first_name, meta.last_name].filter(Boolean).join(' ') || (authUser.email ? authUser.email.split('@')[0] : 'Caissier');
+            
+            await supabase.from('profiles').upsert({
+              id: authUser.id,
+              email: authUser.email || '',
+              full_name: fullName,
+              role: defaultRole,
+            }, { onConflict: 'id' });
+
+            user = await api.getCurrentUser();
+          }
+        } catch (e) {
+          console.warn("Auto-recovery in POS dashboard init failed:", e);
+        }
+      }
+
       if (!user) {
         router.replace("/login");
         return;

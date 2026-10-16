@@ -348,14 +348,44 @@ export async function approvePassPaymentAction(passId: string) {
   }
 
   // Verify role: allow 'admin' (even in simulation) or 'payment_point'
-  const { data: profile, error: profileError } = await supabaseAdmin
+  let { data: profile, error: profileError } = await supabaseAdmin
     .from('profiles')
     .select('id, role, is_suspended, full_name, first_name, last_name, email')
     .eq('id', user.id)
     .maybeSingle();
 
-  if (profileError || !profile) {
-    throw new Error("Profil utilisateur introuvable.");
+  // Auto-recovery fallback if profile row is missing in public.profiles
+  if (!profile) {
+    console.warn(`[Auto-Recovery] Profil manquant pour l'utilisateur ${user.email} (${user.id}), création automatique...`);
+    const meta = user.user_metadata || {};
+    const inferredRole = (meta.role || (user.email?.includes('passi.com') ? 'admin' : 'payment_point')).toLowerCase();
+    const fullName = meta.full_name || [meta.first_name, meta.last_name].filter(Boolean).join(' ') || (user.email ? user.email.split('@')[0] : 'Caissier');
+    const firstName = meta.first_name || fullName.split(' ')[0] || 'Caissier';
+    const lastName = meta.last_name || fullName.split(' ').slice(1).join(' ') || '';
+
+    const { data: newProfile, error: insertError } = await supabaseAdmin
+      .from('profiles')
+      .upsert({
+        id: user.id,
+        email: user.email || '',
+        full_name: fullName,
+        first_name: firstName,
+        last_name: lastName,
+        role: inferredRole,
+        is_suspended: false,
+      }, { onConflict: 'id' })
+      .select('id, role, is_suspended, full_name, first_name, last_name, email')
+      .single();
+
+    if (newProfile) {
+      profile = newProfile;
+    } else {
+      console.error("[Auto-Recovery] Échec de création du profil manquant:", insertError);
+    }
+  }
+
+  if (!profile) {
+    throw new Error("Profil utilisateur introuvable. Veuillez recharger la page.");
   }
 
   if (profile.is_suspended) {
