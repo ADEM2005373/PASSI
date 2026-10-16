@@ -346,6 +346,7 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
                       drinks={(event as any).drink_menus && (event as any).drink_menus.length > 0 ? (event as any).drink_menus : ((event as any).drinks || [])}
                       selectedDrinkId={guest.drinkId}
                       selectedAromas={guest.selectedAromas}
+                      name={`arome-guest-${index}`}
                       required
                       onChange={(drinkId, selectedAromas) => {
                         const g = [...guests];

@@ -14,28 +14,49 @@ export interface DrinkSelectorProps {
   drinks: DrinkOption[];
   selectedDrinkId?: string;
   selectedAromas?: string[];
-  onChange?: (drinkId: string, selectedAromas: string[]) => void;
+  selectedArome?: string | null;
+  selectedAroma?: string | null;
+  onChange?: (drinkId: string, selectedAromas: string[], selectedArome?: string | null) => void;
   label?: string;
   required?: boolean;
   disabled?: boolean;
   className?: string;
+  name?: string;
 }
 
 /**
  * DrinkSelector Component
  * Provides drink selection via an HTML <select> dropdown,
- * and conditionally maps checkboxes for available aromas/flavors.
+ * and conditionally maps radio buttons for single aroma/flavor selection.
  */
 export function DrinkSelector({
   drinks,
   selectedDrinkId = '',
   selectedAromas = [],
+  selectedArome: propSelectedArome,
+  selectedAroma: propSelectedAroma,
   onChange,
   label = "Boisson incluse",
   required = false,
   disabled = false,
   className = "",
+  name = "arome",
 }: DrinkSelectorProps) {
+  // Current single selected aroma (string | null)
+  // Replaces the multi-selection array with a single unique value
+  const selectedArome: string = useMemo(() => {
+    if (propSelectedArome !== undefined && propSelectedArome !== null) {
+      return propSelectedArome;
+    }
+    if (propSelectedAroma !== undefined && propSelectedAroma !== null) {
+      return propSelectedAroma;
+    }
+    if (Array.isArray(selectedAromas) && selectedAromas.length > 0) {
+      return selectedAromas[0] || "";
+    }
+    return "";
+  }, [propSelectedArome, propSelectedAroma, selectedAromas]);
+
   // Find current selected drink from options (matches by id or fallback by name)
   const selectedDrink = useMemo(() => {
     if (!selectedDrinkId) return null;
@@ -51,20 +72,17 @@ export function DrinkSelector({
   // Handler for drink dropdown change
   const handleDrinkChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newDrinkId = e.target.value;
-    // When changing drink, reset selected aromas to empty array
+    // When changing drink, reset selected aroma to empty/null
     if (onChange) {
-      onChange(newDrinkId, []);
+      onChange(newDrinkId, [], null);
     }
   };
 
-  // Handler for aroma checkbox toggling
-  const handleAromaToggle = (aroma: string) => {
-    if (!onChange) return;
-    const exists = selectedAromas.includes(aroma);
-    const updated = exists 
-      ? selectedAromas.filter(a => a !== aroma)
-      : [...selectedAromas, aroma];
-    onChange(selectedDrinkId, updated);
+  // Handler for single aroma selection
+  const handleAromeSelect = (aroma: string) => {
+    if (disabled || !onChange) return;
+    // When the user clicks on a new aroma, it immediately replaces the previously selected aroma
+    onChange(selectedDrinkId, [aroma], aroma);
   };
 
   if (!drinks || drinks.length === 0) {
@@ -93,7 +111,9 @@ export function DrinkSelector({
           <option value="">-- Choisir une boisson --</option>
           {drinks.map((drink, idx) => {
             const val = drink.name || drink.id;
-            const aromaCount = drink.aromas && drink.aromas.length > 0 ? ` (${drink.aromas.length} arômes disponibles)` : '';
+            const aromaCount = drink.aromas && drink.aromas.length > 0 
+              ? ` (${drink.aromas.length} arôme${drink.aromas.length > 1 ? 's' : ''} disponible${drink.aromas.length > 1 ? 's' : ''})` 
+              : '';
             return (
               <option key={drink.id || `drink-${idx}`} value={val}>
                 {drink.name}{aromaCount}
@@ -103,23 +123,24 @@ export function DrinkSelector({
         </select>
       </div>
 
-      {/* 2. Conditional Aromas / Flavors Checkboxes */}
+      {/* 2. Conditional Aromas / Flavors Radio Buttons */}
       {selectedDrink && availableAromas.length > 0 && (
         <div className="p-3.5 rounded-xl bg-neutral-900/80 border border-neutral-800 space-y-2.5 animate-in fade-in slide-in-from-top-1 duration-200">
           <div className="flex items-center gap-1.5 text-xs font-bold text-passi-turquoise">
             <Sparkles size={13} />
-            <span>Choisissez vos arômes / goûts :</span>
+            <span>Choisissez votre arôme / goût :</span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
             {availableAromas.map((aroma, idx) => {
-              const isChecked = selectedAromas.includes(aroma);
-              const checkboxId = `aroma-${selectedDrink.id || 'drink'}-${idx}`;
+              const isChecked = selectedArome === aroma;
+              const radioId = `arome-${selectedDrink.id || 'drink'}-${idx}`;
 
               return (
                 <label
                   key={aroma}
-                  htmlFor={checkboxId}
+                  htmlFor={radioId}
+                  onClick={() => handleAromeSelect(aroma)}
                   className={`flex items-center gap-2.5 p-2 rounded-lg border text-xs cursor-pointer transition-all select-none ${
                     isChecked
                       ? 'bg-passi-turquoise/15 border-passi-turquoise/40 text-passi-turquoise font-bold'
@@ -127,14 +148,14 @@ export function DrinkSelector({
                   }`}
                 >
                   <input
-                    type="checkbox"
-                    id={checkboxId}
-                    name="selected_aromas"
+                    type="radio"
+                    id={radioId}
+                    name={name}
                     value={aroma}
                     checked={isChecked}
                     disabled={disabled}
-                    onChange={() => handleAromaToggle(aroma)}
-                    className="w-4 h-4 rounded border-neutral-600 text-passi-turquoise focus:ring-passi-turquoise focus:ring-offset-neutral-900 cursor-pointer accent-teal-500"
+                    onChange={() => handleAromeSelect(aroma)}
+                    className="w-4 h-4 border-neutral-600 text-passi-turquoise focus:ring-passi-turquoise focus:ring-offset-neutral-900 cursor-pointer accent-teal-500"
                   />
                   <span className="flex-1">{aroma}</span>
                   {isChecked && <Check size={12} className="text-passi-turquoise shrink-0" />}
@@ -143,9 +164,9 @@ export function DrinkSelector({
             })}
           </div>
 
-          {selectedAromas.length > 0 && (
+          {selectedArome && (
             <p className="text-[11px] text-neutral-400 italic pt-1">
-              Sélectionné(s) : {selectedAromas.join(', ')}
+              Sélectionné : {selectedArome}
             </p>
           )}
         </div>

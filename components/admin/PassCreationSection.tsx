@@ -102,12 +102,8 @@ export function PassCreationSection({ users, events, onPassCreated }: PassCreati
     setSelectedAromas([]);
   };
 
-  const handleAromaToggle = (aroma: string) => {
-    setSelectedAromas(prev => 
-      prev.includes(aroma) 
-        ? prev.filter(a => a !== aroma)
-        : [...prev, aroma]
-    );
+  const handleAromaSelect = (aroma: string) => {
+    setSelectedAromas([aroma]);
   };
 
   const handleSelectUser = (user: User) => {
@@ -560,23 +556,24 @@ export function PassCreationSection({ users, events, onPassCreated }: PassCreati
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-bold text-passi-turquoise flex items-center gap-1.5">
                       <Sparkles size={13} />
-                      Arômes / Goûts pour {currentDrink.name} :
+                      Choisissez votre arôme / goût pour {currentDrink.name} :
                     </span>
                     {selectedAromas.length > 0 && (
                       <span className="text-[11px] text-emerald-400 font-semibold">
-                        {selectedAromas.length} sélectionné{selectedAromas.length > 1 ? 's' : ''}
+                        Sélectionné
                       </span>
                     )}
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                     {availableAromas.map((aroma, idx) => {
-                      const isChecked = selectedAromas.includes(aroma);
-                      const checkboxId = `admin-pass-aroma-${idx}`;
+                      const isChecked = selectedAromas[0] === aroma;
+                      const radioId = `admin-pass-aroma-${idx}`;
                       return (
                         <label
                           key={aroma}
-                          htmlFor={checkboxId}
+                          htmlFor={radioId}
+                          onClick={() => handleAromaSelect(aroma)}
                           className={`flex items-center gap-2.5 p-2.5 rounded-lg border text-xs cursor-pointer transition-all select-none ${
                             isChecked
                               ? 'bg-passi-turquoise/15 border-passi-turquoise/60 text-passi-turquoise font-bold ring-1 ring-passi-turquoise/40 shadow-sm'
@@ -584,13 +581,13 @@ export function PassCreationSection({ users, events, onPassCreated }: PassCreati
                           }`}
                         >
                           <input
-                            type="checkbox"
-                            id={checkboxId}
-                            name="selected_aromas"
+                            type="radio"
+                            id={radioId}
+                            name="admin_arome"
                             value={aroma}
                             checked={isChecked}
-                            onChange={() => handleAromaToggle(aroma)}
-                            className="w-4 h-4 rounded border-slate-700 text-passi-turquoise focus:ring-passi-turquoise focus:ring-offset-slate-950 cursor-pointer accent-teal-500"
+                            onChange={() => handleAromaSelect(aroma)}
+                            className="w-4 h-4 border-slate-700 text-passi-turquoise focus:ring-passi-turquoise focus:ring-offset-slate-950 cursor-pointer accent-teal-500"
                           />
                           <span className="flex-1 truncate">{aroma}</span>
                           {isChecked && <Check size={14} className="text-passi-turquoise shrink-0" />}
@@ -601,7 +598,7 @@ export function PassCreationSection({ users, events, onPassCreated }: PassCreati
 
                   {selectedAromas.length > 0 && (
                     <p className="text-[11px] text-gray-400 italic">
-                      Arômes retenus : <span className="text-white font-medium">{selectedAromas.join(', ')}</span>
+                      Sélectionné : <span className="text-white font-medium">{selectedAromas[0]}</span>
                     </p>
                   )}
                 </div>

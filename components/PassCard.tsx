@@ -217,13 +217,9 @@ export function PassCard({ pass, onUpdate }: PassCardProps) {
     setClaimError(null);
   };
 
-  // Handle aroma checkbox toggle
-  const handleAromaToggle = (aroma: string) => {
-    setSelectedAromas((prev) =>
-      prev.includes(aroma)
-        ? prev.filter((a) => a !== aroma)
-        : [...prev, aroma]
-    );
+  // Handle single aroma selection
+  const handleAromaSelect = (aroma: string) => {
+    setSelectedAromas([aroma]);
   };
 
   // Handle drink confirmation submission
@@ -536,7 +532,7 @@ export function PassCard({ pass, onUpdate }: PassCardProps) {
                       </div>
                       {localPass.selected_aromas && localPass.selected_aromas.length > 0 && (
                         <span className="text-[11px] text-amber-300 font-medium normal-case">
-                          Arômes : {localPass.selected_aromas.join(', ')}
+                          Arôme : {localPass.selected_aromas[0]}
                         </span>
                       )}
                     </div>
@@ -603,23 +599,24 @@ export function PassCard({ pass, onUpdate }: PassCardProps) {
                           </select>
                         </div>
 
-                        {/* 2. Conditional Aromas Checkboxes */}
+                        {/* 2. Conditional Aromas Radio Buttons */}
                         {selectedDrinkName && currentAromas.length > 0 && (
                           <div className="p-3.5 rounded-xl bg-neutral-900/90 border border-neutral-800 space-y-2.5 animate-in fade-in slide-in-from-top-1 duration-200">
                             <div className="flex items-center gap-1.5 text-xs font-bold text-amber-400">
                               <Sparkles size={13} />
-                              <span>Arômes / Goûts disponibles :</span>
+                              <span>Choisissez votre arôme / goût :</span>
                             </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                               {currentAromas.map((aroma: string, idx: number) => {
-                                const isChecked = selectedAromas.includes(aroma);
-                                const checkboxId = `aroma-${localPass.id}-${idx}`;
+                                const isChecked = selectedAromas[0] === aroma;
+                                const radioId = `aroma-${localPass.id}-${idx}`;
 
                                 return (
                                   <label
                                     key={aroma}
-                                    htmlFor={checkboxId}
+                                    htmlFor={radioId}
+                                    onClick={() => handleAromaSelect(aroma)}
                                     className={`flex items-center gap-2.5 p-2 rounded-lg border text-xs cursor-pointer transition-all select-none ${
                                       isChecked
                                         ? 'bg-amber-500/15 border-amber-500/40 text-amber-300 font-bold'
@@ -627,13 +624,14 @@ export function PassCard({ pass, onUpdate }: PassCardProps) {
                                     }`}
                                   >
                                     <input
-                                      type="checkbox"
-                                      id={checkboxId}
+                                      type="radio"
+                                      id={radioId}
+                                      name={`arome-${localPass.id}`}
                                       value={aroma}
                                       checked={isChecked}
                                       disabled={isClaimingDrink}
-                                      onChange={() => handleAromaToggle(aroma)}
-                                      className="w-4 h-4 rounded border-neutral-600 text-amber-500 focus:ring-amber-400 focus:ring-offset-neutral-900 cursor-pointer accent-amber-500"
+                                      onChange={() => handleAromaSelect(aroma)}
+                                      className="w-4 h-4 border-neutral-600 text-amber-500 focus:ring-amber-400 focus:ring-offset-neutral-900 cursor-pointer accent-amber-500"
                                     />
                                     <span className="flex-1">{aroma}</span>
                                     {isChecked && <Check size={12} className="text-amber-400 shrink-0" />}
@@ -644,7 +642,7 @@ export function PassCard({ pass, onUpdate }: PassCardProps) {
 
                             {selectedAromas.length > 0 && (
                               <p className="text-[11px] text-amber-300/80 italic pt-1">
-                                Sélectionné(s) : {selectedAromas.join(', ')}
+                                Sélectionné : {selectedAromas[0]}
                               </p>
                             )}
                           </div>
