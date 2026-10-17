@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/supabase/api-security";
+import { getOrCreateProfile, normalizeRole } from "@/lib/supabase/profile-guard";
 import { createAdminPassAction } from "@/lib/actions/pass-lifecycle";
 import type { CreateAdminPassPayload } from "@/lib/actions/pass-lifecycle";
 
@@ -56,13 +57,9 @@ export async function createStaffAccount(
     };
   }
 
-  const { data: callerProfile } = await supabaseAdmin
-    .from('profiles')
-    .select('role, is_suspended')
-    .eq('id', caller.id)
-    .maybeSingle();
+  const { profile: callerProfile } = await getOrCreateProfile(caller, { defaultRole: 'admin' });
 
-  if (!callerProfile || callerProfile.is_suspended || (callerProfile.role || '').toLowerCase() !== 'admin') {
+  if (callerProfile.is_suspended || normalizeRole(callerProfile.role) !== 'admin') {
     return {
       success: false,
       error: "Non autorisé : Seuls les administrateurs peuvent créer des comptes staff ou admin.",

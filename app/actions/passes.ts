@@ -3,6 +3,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { getOrCreateProfile, normalizeRole } from "@/lib/supabase/profile-guard";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -88,14 +89,9 @@ export async function claimPassDrink(
       return { success: false, error: "Pass introuvable." };
     }
 
-    // Check ownership (or admin permission)
-    const { data: profile } = await supabaseAdmin
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    const isAdmin = (profile?.role || "").toUpperCase() === "ADMIN";
+    // Check ownership (or admin permission) with defensive profile auto-recovery
+    const { profile } = await getOrCreateProfile(user);
+    const isAdmin = normalizeRole(profile?.role) === 'admin';
     if (!isAdmin && pass.user_id !== user.id) {
       return {
         success: false,

@@ -1,5 +1,9 @@
 import { createClient } from './server';
 import { NextResponse } from 'next/server';
+import { getOrCreateProfile, SafeProfile, normalizeRole, ensureProfile } from './profile-guard';
+
+export { getOrCreateProfile, ensureProfile, normalizeRole };
+export type { SafeProfile };
 
 export async function requireRole(allowedRoles: string[]) {
   try {
@@ -7,66 +11,57 @@ export async function requireRole(allowedRoles: string[]) {
     const { data: { user }, error: userError } = await supabase.auth.getUser();
 
     if (userError || !user) {
-      return { error: NextResponse.json({ error: 'Unauthorized: No session found' }, { status: 401 }), user: null, role: null };
+      return { 
+        error: NextResponse.json({ error: 'Non autorisé : Veuillez vous connecter.' }, { status: 401 }), 
+        user: null, 
+        role: null,
+        profile: null 
+      };
     }
 
-    let { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('role, is_suspended')
-      .eq('id', user.id)
-      .maybeSingle();
-
-    if (!profile && process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      try {
-        const { createClient: createAdminClient } = await import('@supabase/supabase-js');
-        const supabaseAdmin = createAdminClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.SUPABASE_SERVICE_ROLE_KEY!
-        );
-        const meta = user.user_metadata || {};
-        const isStaff = user.email?.includes('passi.com');
-        const inferredRole = (meta.role || (isStaff ? 'admin' : 'user')).toLowerCase();
-        const fullName = meta.full_name || [meta.first_name, meta.last_name].filter(Boolean).join(' ') || (user.email ? user.email.split('@')[0] : 'Utilisateur');
-
-        const { data: newProfile } = await supabaseAdmin
-          .from('profiles')
-          .upsert({
-            id: user.id,
-            email: user.email || '',
-            full_name: fullName,
-            role: inferredRole,
-            is_suspended: false,
-          }, { onConflict: 'id' })
-          .select('role, is_suspended')
-          .single();
-
-        if (newProfile) {
-          profile = newProfile;
-          profileError = null;
-        }
-      } catch (e) {
-        console.warn("api-security profile auto-creation warning:", e);
-      }
-    }
+    // Defensive Profile Guard: automatically look up or provision baseline profile
+    const targetRole = allowedRoles[0] || 'user';
+    const { profile } = await getOrCreateProfile(user, { defaultRole: targetRole });
 
     if (!profile) {
-      return { error: NextResponse.json({ error: 'Unauthorized: Profile not found' }, { status: 401 }), user: null, role: null };
+      return { 
+        error: NextResponse.json({ error: 'Non autorisé : Profil introuvable.' }, { status: 401 }), 
+        user: null, 
+        role: null,
+        profile: null 
+      };
     }
 
     if (profile.is_suspended) {
-      return { error: NextResponse.json({ error: 'Compte suspendu. Veuillez contacter un administrateur.' }, { status: 403 }), user: null, role: null };
+      return { 
+        error: NextResponse.json({ error: 'Compte suspendu. Veuillez contacter un administrateur.' }, { status: 403 }), 
+        user: null, 
+        role: null,
+        profile: null 
+      };
     }
 
-    const currentRole = (profile.role || '').toLowerCase();
-    const normalizedAllowedRoles = allowedRoles.map(r => r.toLowerCase());
+    const currentRole = normalizeRole(profile.role);
+    const normalizedAllowedRoles = allowedRoles.map(r => normalizeRole(r));
 
     if (!normalizedAllowedRoles.includes(currentRole)) {
-      return { error: NextResponse.json({ error: 'Forbidden: Insufficient permissions' }, { status: 403 }), user, role: currentRole };
+      return { 
+        error: NextResponse.json({ error: 'Accès refusé : Droits insuffisants.' }, { status: 403 }), 
+        user, 
+        role: currentRole,
+        profile 
+      };
     }
 
-    return { error: null, user, role: currentRole };
+    return { error: null, user, role: currentRole, profile };
   } catch (err: any) {
-    console.error("Security verification error:", err);
-    return { error: NextResponse.json({ error: 'Internal Server Error' }, { status: 500 }), user: null, role: null };
+    console.error("Security verification error in requireRole:", err);
+    return { 
+      error: NextResponse.json({ error: 'Erreur interne du serveur lors de la vérification des accès.' }, { status: 500 }), 
+      user: null, 
+      role: null,
+      profile: null 
+    };
   }
 }
+

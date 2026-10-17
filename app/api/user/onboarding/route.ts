@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createClient } from '@supabase/supabase-js';
+import { getOrCreateProfile } from '@/lib/supabase/profile-guard';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -21,6 +22,9 @@ export async function POST(req: NextRequest) {
     if (!instagramHandle || typeof instagramHandle !== 'string') {
       return NextResponse.json({ error: 'Identifiant Instagram requis' }, { status: 400 });
     }
+
+    // Defensive Guard: Ensure profile row exists before updating
+    await getOrCreateProfile(user);
 
     const { error: updateError } = await supabaseAdmin
       .from('profiles')

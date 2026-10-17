@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@supabase/supabase-js';
 import { createClient as createServerClient } from '@/lib/supabase/server';
+import { getOrCreateProfile, normalizeRole } from '@/lib/supabase/profile-guard';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -16,14 +17,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Non autorisé : Veuillez vous reconnecter.' }, { status: 401 });
   }
 
-  // Verify active admin role
-  const { data: adminProfile } = await supabaseAdmin
-    .from('profiles')
-    .select('role, is_suspended')
-    .eq('id', adminUser.id)
-    .maybeSingle();
+  // 2. Verify active admin role with defensive profile auto-recovery
+  const { profile: adminProfile } = await getOrCreateProfile(adminUser, { defaultRole: 'admin' });
 
-  if (!adminProfile || adminProfile.is_suspended || (adminProfile.role || '').toLowerCase() !== 'admin') {
+  if (adminProfile.is_suspended || normalizeRole(adminProfile.role) !== 'admin') {
     return NextResponse.json({ error: 'Action non autorisée : droits administrateur requis.' }, { status: 403 });
   }
 

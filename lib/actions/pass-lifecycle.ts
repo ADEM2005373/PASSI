@@ -5,6 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 import { sendTransactionalEmail, buildPassiEmailTemplate } from '@/lib/mailer';
 import { requireRole } from '@/lib/supabase/api-security';
+import { getOrCreateProfile, normalizeRole } from '@/lib/supabase/profile-guard';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -22,13 +23,9 @@ export async function approvePhase1PassAction(passId: string) {
     throw new Error('Action non autorisée : Veuillez vous reconnecter.');
   }
 
-  const { data: profile } = await supabaseAdmin
-    .from('profiles')
-    .select('role, is_suspended')
-    .eq('id', user.id)
-    .maybeSingle();
+  const { profile } = await getOrCreateProfile(user, { defaultRole: 'admin' });
 
-  if (!profile || profile.is_suspended || (profile.role || '').toLowerCase() !== 'admin') {
+  if (profile.is_suspended || normalizeRole(profile.role) !== 'admin') {
     throw new Error('Action non autorisée : droits administrateur requis');
   }
 
@@ -196,13 +193,9 @@ export async function rejectPassAction(passId: string, rejectionReason?: string)
     throw new Error('Action non autorisée : Veuillez vous reconnecter.');
   }
 
-  const { data: profile } = await supabaseAdmin
-    .from('profiles')
-    .select('role, is_suspended')
-    .eq('id', user.id)
-    .maybeSingle();
+  const { profile } = await getOrCreateProfile(user, { defaultRole: 'admin' });
 
-  if (!profile || profile.is_suspended || (profile.role || '').toLowerCase() !== 'admin') {
+  if (profile.is_suspended || normalizeRole(profile.role) !== 'admin') {
     throw new Error('Action non autorisée : droits administrateur requis');
   }
 
@@ -390,48 +383,14 @@ export async function approvePassPaymentAction(passId: string) {
     throw new Error("Utilisateur non authentifié.");
   }
 
-  // Verify role: allow 'admin' (even in simulation) or 'payment_point'
-  let { data: profile, error: profileError } = await supabaseAdmin
-    .from('profiles')
-    .select('id, role, is_suspended, full_name, email')
-    .eq('id', user.id)
-    .maybeSingle();
-
-  // Auto-recovery fallback if profile row is missing in public.profiles
-  if (!profile) {
-    console.warn(`[Auto-Recovery] Profil manquant pour l'utilisateur ${user.email} (${user.id}), création automatique...`);
-    const meta = user.user_metadata || {};
-    const inferredRole = (meta.role || (user.email?.includes('passi.com') ? 'admin' : 'payment_point')).toLowerCase();
-    const fullName = meta.full_name || [meta.first_name, meta.last_name].filter(Boolean).join(' ') || (user.email ? user.email.split('@')[0] : 'Caissier');
-
-    const { data: newProfile, error: insertError } = await supabaseAdmin
-      .from('profiles')
-      .upsert({
-        id: user.id,
-        email: user.email || '',
-        full_name: fullName,
-        role: inferredRole === 'admin' ? 'admin' : 'payment_point',
-        is_suspended: false,
-      }, { onConflict: 'id' })
-      .select('id, role, is_suspended, full_name, email')
-      .single();
-
-    if (newProfile) {
-      profile = newProfile;
-    } else {
-      console.error("[Auto-Recovery] Échec de création du profil manquant:", insertError);
-    }
-  }
-
-  if (!profile) {
-    throw new Error("Profil utilisateur introuvable. Veuillez recharger la page.");
-  }
+  // Verify role with defensive profile auto-recovery: allow 'admin' (even in simulation) or 'payment_point'
+  const { profile } = await getOrCreateProfile(user, { defaultRole: 'payment_point' });
 
   if (profile.is_suspended) {
     throw new Error("Compte suspendu. Veuillez contacter un administrateur.");
   }
 
-  const role = (profile.role || '').toLowerCase();
+  const role = normalizeRole(profile.role);
   if (!['payment_point', 'admin'].includes(role)) {
     throw new Error("Droits insuffisants pour approuver le paiement.");
   }
@@ -726,14 +685,10 @@ export async function createAdminPassAction(payloadOrFormData: CreateAdminPassPa
     throw new Error("Non autorisé : Veuillez vous reconnecter.");
   }
 
-  // 2. Verify active admin privileges dynamically
-  const { data: callerProfile, error: profileErr } = await supabaseAdmin
-    .from('profiles')
-    .select('id, role, is_suspended')
-    .eq('id', user.id)
-    .maybeSingle();
+  // 2. Verify active admin privileges dynamically with defensive profile guard
+  const { profile: callerProfile } = await getOrCreateProfile(user, { defaultRole: 'admin' });
 
-  if (profileErr || !callerProfile || callerProfile.is_suspended || (callerProfile.role || '').toLowerCase() !== 'admin') {
+  if (callerProfile.is_suspended || normalizeRole(callerProfile.role) !== 'admin') {
     throw new Error("Action non autorisée : droits administrateur requis.");
   }
 
@@ -970,13 +925,9 @@ export async function deletePassAction(passId: string, holderNameConfirmation?: 
     throw new Error('Action non autorisée : Veuillez vous reconnecter.');
   }
 
-  const { data: profile } = await supabaseAdmin
-    .from('profiles')
-    .select('role, is_suspended')
-    .eq('id', user.id)
-    .maybeSingle();
+  const { profile } = await getOrCreateProfile(user, { defaultRole: 'admin' });
 
-  if (!profile || profile.is_suspended || (profile.role || '').toLowerCase() !== 'admin') {
+  if (profile.is_suspended || normalizeRole(profile.role) !== 'admin') {
     throw new Error('Action non autorisée : droits administrateur requis');
   }
 

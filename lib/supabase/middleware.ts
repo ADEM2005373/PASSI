@@ -77,7 +77,10 @@ export async function updateSession(request: NextRequest) {
       return NextResponse.redirect(url)
     }
 
-    const actualRole = (profile?.role || 'user').toLowerCase()
+    const metaRole = (user.user_metadata?.role || '').toLowerCase();
+    const isStaffEmail = user.email?.toLowerCase().includes('passi.com');
+    const defaultInferredRole = metaRole === 'cashier' ? 'payment_point' : (metaRole || (isStaffEmail ? 'admin' : 'user'));
+    const actualRole = (profile?.role || defaultInferredRole).toLowerCase();
     let role = actualRole
     const isImpersonating = !!request.cookies.get('passi_impersonate_role')?.value
     

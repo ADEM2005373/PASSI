@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createClient as createServerClient } from '@/lib/supabase/server';
+import { getOrCreateProfile, normalizeRole } from '@/lib/supabase/profile-guard';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -37,13 +38,8 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Ownership check (Allow owner OR admin in simulation/management mode)
-    const { data: userProfile } = await supabaseAdmin
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .maybeSingle();
-
-    const isAdmin = (userProfile?.role || '').toUpperCase() === 'ADMIN';
+    const { profile: userProfile } = await getOrCreateProfile(user);
+    const isAdmin = normalizeRole(userProfile.role) === 'admin';
     if (!isAdmin && pass.user_id !== user.id) {
       return NextResponse.json({ error: 'Accès non autorisé à ce pass.' }, { status: 403 });
     }
