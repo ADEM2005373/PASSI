@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
     const validRoles = ['payment_point', 'PAYMENT_POINT', 'cashier', 'CASHIER'];
     let cashiersQuery = supabaseAdmin
       .from('profiles')
-      .select('id, email, full_name, role, is_suspended, created_at');
+      .select('id, email, full_name, role, is_suspended, created_at, sell_point_name');
 
     if (activeStaffIds.length > 0) {
       cashiersQuery = cashiersQuery.or(
@@ -50,18 +50,51 @@ export async function GET(req: NextRequest) {
       cashiersQuery = cashiersQuery.in('role', validRoles);
     }
 
-    let { data: cashiers, error: cashiersErr } = await cashiersQuery.order('email', { ascending: true });
+    let cashiers: any[] | null = null;
+    let cashiersErr: any = null;
+    const initialRes = await cashiersQuery.order('email', { ascending: true });
+    cashiers = initialRes.data;
+    cashiersErr = initialRes.error;
+
+    // Defensive fallback if sell_point_name column not yet present in PostgreSQL
+    if (cashiersErr && cashiersErr.message?.includes('sell_point_name')) {
+      let retryQuery = supabaseAdmin
+        .from('profiles')
+        .select('id, email, full_name, role, is_suspended, created_at');
+      if (activeStaffIds.length > 0) {
+        retryQuery = retryQuery.or(
+          `role.in.(${validRoles.join(',')}),id.in.(${activeStaffIds.join(',')})`
+        );
+      } else {
+        retryQuery = retryQuery.in('role', validRoles);
+      }
+      const retryResult = await retryQuery.order('email', { ascending: true });
+      cashiers = retryResult.data;
+      cashiersErr = retryResult.error;
+    }
 
     if (cashiersErr) {
       console.error('Error fetching cashier profiles from Supabase, attempting fallback:', cashiersErr);
     }
 
-    let cashierList = cashiers || [];
+    let cashierList: any[] = cashiers || [];
     // Resilient fallback: if query returned an error or empty list, fetch all profiles and filter in JavaScript
     if (cashiersErr || cashierList.length === 0) {
-      const { data: allProfs, error: allProfsErr } = await supabaseAdmin
+      let allProfs: any[] | null = null;
+      let allProfsErr: any = null;
+      const initialAll = await supabaseAdmin
         .from('profiles')
-        .select('id, email, full_name, role, is_suspended, created_at');
+        .select('id, email, full_name, role, is_suspended, created_at, sell_point_name');
+      allProfs = initialAll.data;
+      allProfsErr = initialAll.error;
+      
+      if (allProfsErr && allProfsErr.message?.includes('sell_point_name')) {
+        const retryAll = await supabaseAdmin
+          .from('profiles')
+          .select('id, email, full_name, role, is_suspended, created_at');
+        allProfs = retryAll.data;
+        allProfsErr = retryAll.error;
+      }
       
       if (!allProfsErr && allProfs) {
         cashierList = allProfs.filter((p: any) => {
@@ -74,9 +107,11 @@ export async function GET(req: NextRequest) {
     const cashierMap = new Map<string, any>();
     cashierList.forEach(c => {
       const isSimulation = (c.role || '').toLowerCase() === 'admin';
-      const cleanName = c.full_name || (c.email ? c.email.split('@')[0] : 'Guichetier');
+      const sellPointName = c.sell_point_name || (c.full_name && !c.full_name.includes('@') ? c.full_name : null);
+      const cleanName = sellPointName || c.full_name || (c.email ? c.email.split('@')[0] : 'Guichetier');
       cashierMap.set(c.id, {
         ...c,
+        sell_point_name: sellPointName,
         cleanName,
         isSimulation,
         email: isSimulation ? `${cleanName} (Mode Simulation)` : c.email,
@@ -177,13 +212,15 @@ export async function GET(req: NextRequest) {
       totalTodayRevenueAll += roundedToday;
       totalTodayPassesAll += todayPassesCount;
 
-      const cleanName = cashier.full_name || (cashier.email ? cashier.email.split('@')[0] : 'Guichetier');
+      const sellPointName = cashier.sell_point_name || (cashier.full_name && !cashier.full_name.includes('@') ? cashier.full_name : null);
+      const cleanName = sellPointName || cashier.full_name || (cashier.email ? cashier.email.split('@')[0] : 'Guichetier');
       const isSimulation = (cashier.role || '').toLowerCase() === 'admin';
 
       return {
         id: cashier.id,
         email: isSimulation ? `${cleanName} (Mode Simulation)` : cashier.email,
         full_name: isSimulation ? `${cleanName} (Mode Simulation)` : cleanName,
+        sell_point_name: sellPointName,
         is_simulation: isSimulation,
         is_suspended: Boolean(cashier.is_suspended),
         liveDrawerBalance: roundedLive,

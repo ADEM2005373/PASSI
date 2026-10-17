@@ -67,6 +67,7 @@ export function PaymentPointSupervisionSection({
   const [onlyDiscrepancies, setOnlyDiscrepancies] = useState<boolean>(false);
 
   // Account Creation Form State
+  const [workerSellPointName, setWorkerSellPointName] = useState("");
   const [workerEmail, setWorkerEmail] = useState("");
   const [workerPassword, setWorkerPassword] = useState("");
   const [workerMsg, setWorkerMsg] = useState("");
@@ -134,11 +135,22 @@ export function PaymentPointSupervisionSection({
   // Create worker handler
   const handleCreateWorker = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!workerSellPointName.trim()) {
+      setWorkerMsg("Veuillez saisir le nom du point de vente.");
+      return;
+    }
     setIsCreatingWorker(true);
     setWorkerMsg("Création en cours...");
     try {
-      await api.adminCreateUser(workerEmail, workerPassword, "", "payment_point");
-      setWorkerMsg("✓ Compte Guichetier créé avec succès !");
+      await api.adminCreateUser(
+        workerEmail.trim(), 
+        workerPassword, 
+        "", 
+        "payment_point", 
+        workerSellPointName.trim()
+      );
+      setWorkerMsg("✓ Point de Vente créé avec succès !");
+      setWorkerSellPointName("");
       setWorkerEmail("");
       setWorkerPassword("");
       await onRefreshProfiles();
@@ -155,10 +167,10 @@ export function PaymentPointSupervisionSection({
   // 1. Cashier Comparison: Recette du Jour vs Solde Actuel en Caisse
   const cashierComparisonData = useMemo(() => {
     return (supervisionData.cashiersOverview || []).map((c: any) => {
-      const emailShort = c.email?.split('@')[0] || c.id?.slice(0, 8) || 'Caisse';
+      const displayName = c.sell_point_name || c.full_name || c.email?.split('@')[0] || c.id?.slice(0, 8) || 'Point de Vente';
       return {
-        name: emailShort,
-        fullName: c.email,
+        name: displayName,
+        fullName: c.sell_point_name ? `${c.sell_point_name} (${c.email})` : (c.email || displayName),
         recette: Number(c.todayRevenue || 0),
         solde: Number(c.liveDrawerBalance || 0),
         passes: Number(c.todayPassesCount || 0)
@@ -172,7 +184,7 @@ export function PaymentPointSupervisionSection({
       .slice(0, 8)
       .map((cl: any) => {
         const dateStr = cl.closure_date?.slice(5) || 'N/A'; // MM-DD
-        const cashierName = cl.cashier?.email?.split('@')[0] || cl.cashier_id?.slice(0, 6) || 'Caisse';
+        const cashierName = cl.cashier?.sell_point_name || cl.cashier?.full_name || cl.cashier?.email?.split('@')[0] || cl.cashier_id?.slice(0, 6) || 'Point de Vente';
         const expected = Number(cl.expected_amount || 0);
         const declared = Number(cl.declared_amount || 0);
         const discrepancy = Number(cl.discrepancy || 0);
@@ -201,9 +213,10 @@ export function PaymentPointSupervisionSection({
   // ─── ADMIN CSV EXPORT ───
   const handleExportCSV = (type: 'closures' | 'collections') => {
     if (type === 'closures') {
-      const headers = ["Date Cloture", "Guichetier", "Passes Valides", "Montant Attendu (TND)", "Montant Declare (TND)", "Ecart (TND)", "Statut", "Notes Justificatives"];
+      const headers = ["Date Cloture", "Point de Vente", "Email", "Passes Valides", "Montant Attendu (TND)", "Montant Declare (TND)", "Ecart (TND)", "Statut", "Notes Justificatives"];
       const rows = supervisionData.allClosures.map((cl: any) => [
         cl.closure_date || 'N/A',
+        `"${(cl.cashier?.sell_point_name || cl.cashier?.full_name || 'Point de Vente').replace(/"/g, '""')}"`,
         `"${(cl.cashier?.email || cl.cashier_id || '').replace(/"/g, '""')}"`,
         String(cl.passes_approved_count ?? 0),
         String(cl.expected_amount ?? 0),
@@ -228,9 +241,10 @@ export function PaymentPointSupervisionSection({
       link.click();
       document.body.removeChild(link);
     } else {
-      const headers = ["Date et Heure", "Guichetier", "Superviseur Beneficiaire", "Montant Remis (TND)", "Notes / Observations"];
+      const headers = ["Date et Heure", "Point de Vente", "Email", "Superviseur Beneficiaire", "Montant Remis (TND)", "Notes / Observations"];
       const rows = supervisionData.allCollections.map((col: any) => [
         col.collection_time ? col.collection_time.replace('T', ' ').slice(0, 19) : 'N/A',
+        `"${(col.cashier?.sell_point_name || col.cashier?.full_name || 'Point de Vente').replace(/"/g, '""')}"`,
         `"${(col.cashier?.email || col.cashier_id || '').replace(/"/g, '""')}"`,
         `"${(col.supervisor_name || '').replace(/"/g, '""')}"`,
         String(col.collected_amount ?? 0),
@@ -302,7 +316,7 @@ export function PaymentPointSupervisionSection({
     if (type === 'closures') {
       const tableRows = supervisionData.allClosures.map((cl: any) => [
         cl.closure_date || 'N/A',
-        cl.cashier?.email || cl.cashier_id?.slice(0, 8) || 'N/A',
+        cl.cashier?.sell_point_name ? `${cl.cashier.sell_point_name} (${cl.cashier.email})` : (cl.cashier?.full_name || cl.cashier?.email || cl.cashier_id?.slice(0, 8) || 'N/A'),
         String(cl.passes_approved_count ?? 0),
         `${Number(cl.expected_amount).toFixed(2)} DT`,
         `${Number(cl.declared_amount).toFixed(2)} DT`,
@@ -313,7 +327,7 @@ export function PaymentPointSupervisionSection({
 
       autoTable(doc, {
         startY,
-        head: [["Date", "Guichetier", "Passes", "Attendu", "Déclaré", "Écart", "Statut", "Notes"]],
+        head: [["Date", "Point de Vente", "Passes", "Attendu", "Déclaré", "Écart", "Statut", "Notes"]],
         body: tableRows.length > 0 ? tableRows : [["-", "Aucune clôture", "-", "-", "-", "-", "-", "-"]],
         theme: 'striped',
         headStyles: { fillColor: [255, 107, 94], fontStyle: 'bold', fontSize: 8 },
@@ -322,7 +336,7 @@ export function PaymentPointSupervisionSection({
     } else {
       const tableRows = supervisionData.allCollections.map((col: any) => [
         col.collection_time ? col.collection_time.replace('T', ' ').slice(0, 16) : 'N/A',
-        col.cashier?.email || col.cashier_id?.slice(0, 8) || 'N/A',
+        col.cashier?.sell_point_name ? `${col.cashier.sell_point_name} (${col.cashier.email})` : (col.cashier?.full_name || col.cashier?.email || col.cashier_id?.slice(0, 8) || 'N/A'),
         col.supervisor_name || 'N/A',
         `${Number(col.collected_amount).toFixed(2)} DT`,
         col.notes || '-'
@@ -330,7 +344,7 @@ export function PaymentPointSupervisionSection({
 
       autoTable(doc, {
         startY,
-        head: [["Date & Heure", "Guichetier", "Superviseur Bénéficiaire", "Montant Remis", "Observations"]],
+        head: [["Date & Heure", "Point de Vente", "Superviseur Bénéficiaire", "Montant Remis", "Observations"]],
         body: tableRows.length > 0 ? tableRows : [["-", "Aucune remise", "-", "-", "-"]],
         theme: 'striped',
         headStyles: { fillColor: [16, 185, 129], fontStyle: 'bold', fontSize: 8 },
@@ -345,6 +359,9 @@ export function PaymentPointSupervisionSection({
   const handleDownloadSingleBon = (col: any) => {
     const doc = new jsPDF();
     const dateFormatted = new Date(col.collection_time || new Date()).toLocaleString('fr-FR');
+    const pointLabel = col.cashier?.sell_point_name
+      ? `${col.cashier.sell_point_name} (${col.cashier.email})`
+      : (col.cashier?.full_name || col.cashier?.email || col.cashier_id);
 
     doc.setFillColor(26, 32, 44);
     doc.rect(0, 0, 210, 36, 'F');
@@ -364,7 +381,7 @@ export function PaymentPointSupervisionSection({
     doc.text(`RÉFÉRENCE : ${col.id ? col.id.slice(0, 13).toUpperCase() : 'REMISE-' + Date.now()}`, 14, 46);
     doc.setFont("helvetica", "normal");
     doc.text(`Date & Heure : ${dateFormatted}`, 14, 53);
-    doc.text(`Point de Vente / Caissier : ${col.cashier?.email || col.cashier_id}`, 14, 60);
+    doc.text(`Point de Vente : ${pointLabel}`, 14, 60);
     doc.text(`Superviseur Bénéficiaire : ${col.supervisor_name}`, 14, 67);
 
     doc.setFillColor(241, 245, 249);
@@ -766,10 +783,13 @@ export function PaymentPointSupervisionSection({
                               <Banknote size={20} />
                             </div>
                             <div className="min-w-0">
-                              <h4 className="font-bold text-sm truncate text-neutral-900 dark:text-white">
-                                {cashier.email}
+                              <h4 className="font-bold text-base truncate text-neutral-900 dark:text-white" title={cashier.sell_point_name || cashier.full_name || "Point de Vente sans nom"}>
+                                {cashier.sell_point_name || cashier.full_name || "Point de Vente sans nom"}
                               </h4>
-                              <span className="text-[11px] text-neutral-400 font-mono">
+                              <div className="flex items-center gap-1.5 text-xs text-neutral-500 dark:text-neutral-400">
+                                <span className="truncate max-w-[200px]">({cashier.email})</span>
+                              </div>
+                              <span className="text-[10px] text-neutral-400 font-mono">
                                 ID: {cashier.id.slice(0, 8)}...
                               </span>
                             </div>
@@ -905,9 +925,21 @@ export function PaymentPointSupervisionSection({
                 Définissez les identifiants de connexion d'un nouvel opérateur de caisse
               </p>
 
-              <form onSubmit={handleCreateWorker} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+              <form onSubmit={handleCreateWorker} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                 <div>
-                  <label className="label">Adresse Email Guichetier</label>
+                  <label className="label">Nom du Point de Vente *</label>
+                  <input 
+                    type="text" 
+                    required 
+                    value={workerSellPointName} 
+                    onChange={e => setWorkerSellPointName(e.target.value)} 
+                    placeholder="Ex: Guichet VIP Entrée Nord" 
+                    className="input" 
+                  />
+                </div>
+
+                <div>
+                  <label className="label">Adresse Email Guichetier *</label>
                   <input 
                     type="email" 
                     required 
@@ -919,7 +951,7 @@ export function PaymentPointSupervisionSection({
                 </div>
 
                 <div>
-                  <label className="label">Mot de passe provisoire</label>
+                  <label className="label">Mot de passe provisoire *</label>
                   <input 
                     type="password" 
                     required 
@@ -941,7 +973,7 @@ export function PaymentPointSupervisionSection({
                     ) : (
                       <Plus size={16} />
                     )}
-                    <span>Créer le compte Guichet</span>
+                    <span>Créer le Point de Vente</span>
                   </button>
                 </div>
               </form>
@@ -1039,7 +1071,14 @@ export function PaymentPointSupervisionSection({
                         <tr key={cl.id} className="hover:bg-gray-50/50 dark:hover:bg-neutral-900/50 transition-colors">
                           <td className="py-3 pr-3 font-mono font-medium">{cl.closure_date}</td>
                           <td className="py-3 px-3">
-                            <span className="font-semibold text-neutral-900 dark:text-white">{cl.cashier?.email || cl.cashier_id}</span>
+                            <div className="min-w-0">
+                              <span className="font-bold text-neutral-900 dark:text-white block truncate">
+                                {cl.cashier?.sell_point_name || cl.cashier?.full_name || "Point de Vente sans nom"}
+                              </span>
+                              <span className="text-[11px] text-neutral-500 dark:text-neutral-400 block truncate">
+                                ({cl.cashier?.email || cl.cashier_id})
+                              </span>
+                            </div>
                           </td>
                           <td className="py-3 px-3">{cl.passes_approved_count}</td>
                           <td className="py-3 px-3 font-mono">{Number(cl.expected_amount).toFixed(2)} TND</td>
@@ -1127,7 +1166,7 @@ export function PaymentPointSupervisionSection({
                   <thead>
                     <tr className="border-b border-gray-200 dark:border-neutral-800 text-neutral-400 font-semibold">
                       <th className="py-3 pr-3">Date & Heure</th>
-                      <th className="py-3 px-3">Guichetier</th>
+                      <th className="py-3 px-3">Point de Vente / Guichetier</th>
                       <th className="py-3 px-3">Superviseur Bénéficiaire</th>
                       <th className="py-3 px-3">Montant Remis</th>
                       <th className="py-3 px-3">Notes / Remarques</th>
@@ -1140,8 +1179,15 @@ export function PaymentPointSupervisionSection({
                         <td className="py-3 pr-3 font-mono text-neutral-400">
                           {new Date(col.collection_time).toLocaleString('fr-FR')}
                         </td>
-                        <td className="py-3 px-3 font-semibold text-neutral-900 dark:text-white">
-                          {col.cashier?.email || col.cashier_id}
+                        <td className="py-3 px-3">
+                          <div className="min-w-0">
+                            <span className="font-bold text-neutral-900 dark:text-white block truncate">
+                              {col.cashier?.sell_point_name || col.cashier?.full_name || "Point de Vente sans nom"}
+                            </span>
+                            <span className="text-[11px] text-neutral-500 dark:text-neutral-400 block truncate">
+                              ({col.cashier?.email || col.cashier_id})
+                            </span>
+                          </div>
                         </td>
                         <td className="py-3 px-3 font-bold text-amber-600 dark:text-amber-400">
                           {col.supervisor_name}

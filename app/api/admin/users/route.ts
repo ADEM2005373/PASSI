@@ -20,7 +20,17 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { email, password, instagramHandle, role, is_suspended } = body || {};
+    const { 
+      email, 
+      password, 
+      instagramHandle, 
+      role, 
+      is_suspended, 
+      sell_point_name, 
+      sellPointName, 
+      firstName, 
+      lastName 
+    } = body || {};
 
     if (!email || typeof email !== 'string' || !password || typeof password !== 'string' || !role || typeof role !== 'string') {
       return NextResponse.json({ error: 'Champs requis manquants ou invalides (email, password, role)' }, { status: 400 });
@@ -32,36 +42,60 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Rôle invalide' }, { status: 400 });
     }
 
+    const resolvedSellPointName = (sell_point_name || sellPointName || '').trim();
+    const resolvedFirstName = (firstName || '').trim();
+    const resolvedLastName = (lastName || '').trim();
+    const resolvedFullName = resolvedSellPointName || 
+      (resolvedFirstName && resolvedLastName ? `${resolvedFirstName} ${resolvedLastName}` : (resolvedFirstName || ''));
+
     // 1. Create Auth User with email_confirm: true to bypass email confirmation for staff/admin
+    const userMetadata: Record<string, any> = {
+      role: normalizedRole.toUpperCase(),
+    };
+    if (resolvedSellPointName) userMetadata.sell_point_name = resolvedSellPointName;
+    if (resolvedFirstName) userMetadata.first_name = resolvedFirstName;
+    if (resolvedLastName) userMetadata.last_name = resolvedLastName;
+    if (resolvedFullName) userMetadata.full_name = resolvedFullName;
+
     const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.createUser({
       email: String(email).trim().toLowerCase(),
       password: String(password),
       email_confirm: true,
-      user_metadata: {
-        role: normalizedRole.toUpperCase(),
-      },
+      user_metadata: userMetadata,
     });
 
     if (authErr) {
       console.error("Auth creation error in users POST:", authErr);
-      return NextResponse.json({ error: "Impossible de créer le compte utilisateur" }, { status: 400 });
+      return NextResponse.json({ error: authErr.message || "Impossible de créer le compte utilisateur" }, { status: 400 });
     }
     const userId = authData.user.id;
 
-    // 2. Insert Profile
-    const { error: profileError } = await supabaseAdmin.from('profiles').insert([
-      {
-        id: userId,
-        email: String(email).trim().toLowerCase(),
-        role: normalizedRole,
-        instagram_handle: instagramHandle ? String(instagramHandle).slice(0, 50) : '',
-        is_suspended: Boolean(is_suspended),
-      },
-    ]);
+    // 2. Insert Profile with defensive fallback if sell_point_name column not migrated yet
+    const profilePayload: Record<string, any> = {
+      id: userId,
+      email: String(email).trim().toLowerCase(),
+      role: normalizedRole,
+      instagram_handle: instagramHandle ? String(instagramHandle).slice(0, 50) : '',
+      is_suspended: Boolean(is_suspended),
+      full_name: resolvedFullName || null,
+      first_name: resolvedFirstName || null,
+      last_name: resolvedLastName || null,
+    };
+    if (resolvedSellPointName) {
+      profilePayload.sell_point_name = resolvedSellPointName;
+    }
+
+    let { error: profileError } = await supabaseAdmin.from('profiles').insert([profilePayload]);
+
+    if (profileError && profileError.message?.includes('sell_point_name')) {
+      delete profilePayload.sell_point_name;
+      const retryResult = await supabaseAdmin.from('profiles').insert([profilePayload]);
+      profileError = retryResult.error;
+    }
 
     if (profileError) {
       console.error("Profile creation error in users POST:", profileError);
-      // Rollback if profile creation fails
+      // Rollback auth user if profile insertion failed
       await supabaseAdmin.auth.admin.deleteUser(userId);
       return NextResponse.json({ error: "Impossible de créer le profil utilisateur" }, { status: 500 });
     }
@@ -133,18 +167,26 @@ export async function PATCH(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { userId, role, email, password, instagramHandle, is_suspended } = body || {};
+    const { userId, role, email, password, instagramHandle, is_suspended, sell_point_name, sellPointName, full_name } = body || {};
 
     if (!userId || typeof userId !== 'string') {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
 
-    // 1. Update Auth User if email or password are provided
-    if (email || password) {
-      const { error: authUpdateError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
-        ...(email && { email: String(email).trim().toLowerCase() }),
-        ...(password && { password: String(password) }),
-      });
+    const resolvedSellPoint = sell_point_name !== undefined ? sell_point_name : sellPointName;
+
+    // 1. Update Auth User if email, password, or metadata provided
+    const authUpdates: Record<string, any> = {};
+    if (email) authUpdates.email = String(email).trim().toLowerCase();
+    if (password) authUpdates.password = String(password);
+    if (resolvedSellPoint !== undefined) {
+      authUpdates.user_metadata = {
+        sell_point_name: resolvedSellPoint ? String(resolvedSellPoint).trim() : null,
+      };
+    }
+
+    if (Object.keys(authUpdates).length > 0) {
+      const { error: authUpdateError } = await supabaseAdmin.auth.admin.updateUserById(userId, authUpdates);
       if (authUpdateError) {
         console.error("Auth update error in users PATCH:", authUpdateError);
         return NextResponse.json({ error: "Impossible de modifier les identifiants" }, { status: 400 });
@@ -163,12 +205,28 @@ export async function PATCH(req: NextRequest) {
     if (email) profileUpdates.email = String(email).trim().toLowerCase();
     if (instagramHandle !== undefined) profileUpdates.instagram_handle = String(instagramHandle).slice(0, 50);
     if (is_suspended !== undefined) profileUpdates.is_suspended = Boolean(is_suspended);
+    if (full_name !== undefined) profileUpdates.full_name = full_name;
+    if (resolvedSellPoint !== undefined) {
+      profileUpdates.sell_point_name = resolvedSellPoint ? String(resolvedSellPoint).trim() : null;
+      if (!profileUpdates.full_name && resolvedSellPoint) {
+        profileUpdates.full_name = String(resolvedSellPoint).trim();
+      }
+    }
 
     if (Object.keys(profileUpdates).length > 0) {
-      const { error } = await supabaseAdmin
+      let { error } = await supabaseAdmin
         .from('profiles')
         .update(profileUpdates)
         .eq('id', userId);
+
+      if (error && error.message?.includes('sell_point_name')) {
+        delete profileUpdates.sell_point_name;
+        const retryResult = await supabaseAdmin
+          .from('profiles')
+          .update(profileUpdates)
+          .eq('id', userId);
+        error = retryResult.error;
+      }
 
       if (error) {
         console.error("Profile update error in users PATCH:", error);

@@ -52,6 +52,7 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
   const [newUserPassword, setNewUserPassword] = useState("");
   const [newUserInsta, setNewUserInsta] = useState("");
   const [newUserRole, setNewUserRole] = useState("user");
+  const [newUserSellPointName, setNewUserSellPointName] = useState("");
   const [userMsg, setUserMsg] = useState("");
 
   const [adminFullName, setAdminFullName] = useState("");
@@ -348,7 +349,7 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
 
   const cancelUserEdit = () => {
     setEditingUserId(null);
-    setNewUserEmail(""); setNewUserPassword(""); setNewUserInsta(""); setNewUserRole("user");
+    setNewUserEmail(""); setNewUserPassword(""); setNewUserInsta(""); setNewUserRole("user"); setNewUserSellPointName("");
   };
 
   const handleEditUserClick = (u: User) => {
@@ -356,6 +357,7 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
     setNewUserEmail(u.email);
     setNewUserInsta(u.instagram_handle || "");
     setNewUserRole(u.role);
+    setNewUserSellPointName(u.sell_point_name || "");
     setNewUserPassword("");
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -387,10 +389,23 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
       
       if (editingUserId) {
         await api.adminUpdateUser(editingUserId, newUserEmail, newUserPassword || undefined, newUserInsta, newUserRole);
+        if (newUserRole === 'payment_point' && newUserSellPointName) {
+          await fetch('/api/admin/users', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: editingUserId, sellPointName: newUserSellPointName }),
+          });
+        }
         setUserMsg("✓ Compte mis à jour avec succès");
         cancelUserEdit();
       } else {
-        await api.adminCreateUser(newUserEmail, newUserPassword, newUserInsta, newUserRole);
+        await api.adminCreateUser(
+          newUserEmail, 
+          newUserPassword, 
+          newUserInsta, 
+          newUserRole,
+          newUserRole === 'payment_point' ? newUserSellPointName : undefined
+        );
         setUserMsg("✓ Compte créé avec succès");
         cancelUserEdit();
       }
@@ -995,6 +1010,19 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
                       <option value="barman">Barman</option>
                     </select>
                   </div>
+                  {newUserRole === 'payment_point' && (
+                    <div>
+                      <label className="label">Nom du Point de Vente *</label>
+                      <input
+                        type="text"
+                        required
+                        value={newUserSellPointName}
+                        placeholder="Ex: Guichet VIP Entrée Nord"
+                        onChange={e => setNewUserSellPointName(e.target.value)}
+                        className="input"
+                      />
+                    </div>
+                  )}
                   <button type="submit" className="btn-primary w-full">
                     {editingUserId ? "Enregistrer les modifications" : "Créer le membre"}
                   </button>
@@ -1011,11 +1039,15 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
                     <div key={p.id} className="flex justify-between items-center p-4 rounded-2xl transition-colors gap-4" style={{ backgroundColor: 'var(--bg-input)', border: '1.5px solid var(--border)' }}>
                       <div className="flex items-center gap-3 min-w-0 flex-1">
                         <div className="w-9 h-9 flex-shrink-0 rounded-full bg-gradient-to-tr from-passi-corail to-orange-400 flex items-center justify-center text-white font-bold text-sm uppercase">
-                          {p.email[0]}
+                          {(p.sell_point_name || p.email)[0]}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="font-bold text-sm truncate" style={{ color: 'var(--text-primary)' }}>{p.email}</p>
-                          <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{p.instagram_handle}</p>
+                          <p className="font-bold text-sm truncate" style={{ color: 'var(--text-primary)' }}>
+                            {p.sell_point_name || p.full_name || p.email}
+                          </p>
+                          <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>
+                            {p.sell_point_name ? `${p.email} • ${p.instagram_handle || 'Point de vente'}` : (p.instagram_handle || p.email)}
+                          </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">

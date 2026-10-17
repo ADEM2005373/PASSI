@@ -26,6 +26,8 @@ export interface CreateStaffAccountPayload {
   role: 'admin' | 'barman' | 'security' | 'payment_point' | string;
   fullName?: string;
   instagramHandle?: string;
+  sellPointName?: string;
+  sell_point_name?: string;
 }
 
 export interface CreateStaffAccountResponse {
@@ -67,7 +69,9 @@ export async function createStaffAccount(
   }
 
   try {
-    const { email, password, role, fullName, instagramHandle } = payload || {};
+    const { email, password, role, fullName, instagramHandle, sellPointName, sell_point_name } = payload || {};
+    const resolvedSellPoint = (sellPointName || sell_point_name || '').trim();
+    const effectiveFullName = resolvedSellPoint || (fullName ? fullName.trim() : undefined);
 
     // 2. Validate inputs
     if (!email || typeof email !== 'string' || !email.trim()) {
@@ -91,15 +95,18 @@ export async function createStaffAccount(
     }
 
     // 3. Create Auth user via Supabase Admin API with email_confirm: true
+    const staffMeta: Record<string, any> = {
+      role: normalizedRole.toUpperCase(),
+      full_name: effectiveFullName,
+      created_by_admin: caller.id,
+    };
+    if (resolvedSellPoint) staffMeta.sell_point_name = resolvedSellPoint;
+
     const { data: authData, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email: cleanEmail,
       password: String(password),
       email_confirm: true, // MAGIC FLAG: auto-confirms email and bypasses confirmation requirement
-      user_metadata: {
-        role: normalizedRole.toUpperCase(),
-        full_name: fullName ? fullName.trim() : undefined,
-        created_by_admin: caller.id,
-      },
+      user_metadata: staffMeta,
     });
 
     if (createError || !authData?.user) {
@@ -113,16 +120,27 @@ export async function createStaffAccount(
     const newUserId = authData.user.id;
 
     // 4. Insert or update corresponding row in public.profiles table
-    const { error: profileError } = await supabaseAdmin
+    const profilePayload: Record<string, any> = {
+      id: newUserId,
+      email: cleanEmail,
+      role: normalizedRole,
+      full_name: effectiveFullName,
+      instagram_handle: instagramHandle ? instagramHandle.trim() : '',
+      is_suspended: false,
+    };
+    if (resolvedSellPoint) profilePayload.sell_point_name = resolvedSellPoint;
+
+    let { error: profileError } = await supabaseAdmin
       .from('profiles')
-      .upsert({
-        id: newUserId,
-        email: cleanEmail,
-        role: normalizedRole,
-        full_name: fullName ? fullName.trim() : undefined,
-        instagram_handle: instagramHandle ? instagramHandle.trim() : '',
-        is_suspended: false,
-      });
+      .upsert(profilePayload);
+
+    if (profileError && profileError.message?.includes('sell_point_name')) {
+      delete profilePayload.sell_point_name;
+      const retryResult = await supabaseAdmin
+        .from('profiles')
+        .upsert(profilePayload);
+      profileError = retryResult.error;
+    }
 
     if (profileError) {
       console.error("[createStaffAccount] Profiles insertion failed:", profileError);

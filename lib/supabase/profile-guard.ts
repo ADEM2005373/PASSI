@@ -4,6 +4,9 @@ export interface SafeProfile {
   id: string;
   email: string;
   full_name?: string | null;
+  sell_point_name?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
   role: string;
   is_suspended: boolean;
   instagram_handle?: string | null;
@@ -117,7 +120,9 @@ export async function getOrCreateProfile(
   }
 
   // Full name determination
+  const sellPointName = meta.sell_point_name || null;
   const fullName =
+    sellPointName ||
     meta.full_name ||
     [meta.first_name, meta.last_name].filter(Boolean).join(' ') ||
     (email ? email.split('@')[0] : 'Utilisateur');
@@ -134,6 +139,7 @@ export async function getOrCreateProfile(
     instagram_handle: instagramHandle,
   };
 
+  if (sellPointName) baselinePayload.sell_point_name = sellPointName;
   if (meta.first_name) baselinePayload.first_name = meta.first_name;
   if (meta.last_name) baselinePayload.last_name = meta.last_name;
 
@@ -146,7 +152,8 @@ export async function getOrCreateProfile(
         .select('id, email, full_name, role, is_suspended, instagram_handle, created_at')
         .single();
 
-      if (insertError && (insertError.message?.includes('first_name') || insertError.message?.includes('last_name'))) {
+      if (insertError && (insertError.message?.includes('first_name') || insertError.message?.includes('last_name') || insertError.message?.includes('sell_point_name'))) {
+        delete baselinePayload.sell_point_name;
         delete baselinePayload.first_name;
         delete baselinePayload.last_name;
         const retryResult = await adminClient
@@ -162,6 +169,7 @@ export async function getOrCreateProfile(
         return {
           profile: {
             ...newProfile,
+            sell_point_name: (newProfile as any).sell_point_name || sellPointName,
             role: normalizeRole(newProfile.role),
             is_suspended: Boolean(newProfile.is_suspended),
           },
@@ -181,6 +189,7 @@ export async function getOrCreateProfile(
     id: userId,
     email: email || `${userId.slice(0, 8)}@passi.local`,
     full_name: fullName,
+    sell_point_name: sellPointName,
     role: inferredRole,
     is_suspended: false,
     instagram_handle: instagramHandle,

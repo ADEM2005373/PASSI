@@ -9,6 +9,9 @@ export type User = {
   is_suspended?: boolean;
   original_role?: string;
   full_name?: string;
+  sell_point_name?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
   created_at?: string;
 };
 
@@ -843,13 +846,30 @@ export const api = {
     }
   },
 
-  async adminCreateUser(email: string, password: string, instagramHandle: string, role: string): Promise<void> {
+  async adminCreateUser(
+    email: string,
+    password: string,
+    instagramHandle: string,
+    role: string,
+    sellPointName?: string,
+    firstName?: string,
+    lastName?: string
+  ): Promise<void> {
     const res = await fetch('/api/admin/users', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ email, password, instagramHandle, role }),
+      body: JSON.stringify({
+        email,
+        password,
+        instagramHandle,
+        role,
+        sellPointName,
+        sell_point_name: sellPointName,
+        firstName,
+        lastName,
+      }),
     });
 
     if (!res.ok) {
