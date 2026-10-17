@@ -13,6 +13,7 @@ export type User = {
   first_name?: string | null;
   last_name?: string | null;
   created_at?: string;
+  instagram?: string | null;
 };
 
 export type PromoCode = {
@@ -195,7 +196,18 @@ export const api = {
       }
     }
 
-    let userProfile = profile as User;
+    const meta = user.user_metadata || {};
+    const firstName = profile?.first_name || meta.first_name || (profile?.full_name ? profile.full_name.split(' ')[0] : '') || '';
+    const lastName = profile?.last_name || meta.last_name || (profile?.full_name ? profile.full_name.split(' ').slice(1).join(' ') : '') || '';
+    const instagram = profile?.instagram_handle || meta.instagram_handle || meta.instagram || '';
+
+    let userProfile = {
+      ...(profile || {}),
+      first_name: firstName,
+      last_name: lastName,
+      instagram_handle: instagram,
+      instagram: instagram,
+    } as User;
     const actualRole = (userProfile.role || '').toUpperCase();
     if (actualRole === 'ADMIN' && typeof document !== 'undefined') {
       const match = document.cookie.match(/(?:^|; )passi_impersonate_role=([^;]*)/);
@@ -345,31 +357,31 @@ export const api = {
 
   async getUserPasses(userId: string): Promise<Pass[]> {
     const supabase = createClient();
+    if (!userId) return [];
     
-    // First, fetch the passes with their events (including drinks JSONB)
-    const { data: passes, error } = await supabase
+    // Fetch passes strictly belonging to the user via user_id (never created_by)
+    let { data: passes, error } = await supabase
       .from('passes')
-      .select('*, events(id, title, date, location, drinks)')
+      .select(`
+        *,
+        events(id, title, date, location, drinks),
+        owner:profiles!passes_user_id_fkey(first_name, last_name, email)
+      `)
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
 
-    let activePasses = passes || [];
-
-    // Fallback for admin simulation: if an admin simulating a user has no personal passes,
-    // load available passes so the simulator user interface and mock actions can be tested
-    const match = typeof document !== 'undefined' ? document.cookie.match(/(?:^|; )passi_impersonate_role=([^;]*)/) : null;
-    const isSimulating = Boolean(match && match[1]);
-
-    if (isSimulating && activePasses.length === 0) {
-      const { data: samplePasses } = await supabase
+    // Defensive fallback if foreign key alias passes_user_id_fkey is not available in schema
+    if (error) {
+      const fallback = await supabase
         .from('passes')
         .select('*, events(id, title, date, location, drinks)')
-        .limit(10)
+        .eq('user_id', userId)
         .order('created_at', { ascending: false });
-      if (samplePasses && samplePasses.length > 0) {
-        activePasses = samplePasses;
-      }
+      passes = fallback.data;
+      error = fallback.error;
     }
+
+    let activePasses = passes || [];
       
     if (error && activePasses.length === 0) {
       console.error("Error fetching passes:", error);

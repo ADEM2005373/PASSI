@@ -20,8 +20,15 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
   const [user, setUser] = useState<User | null>(null);
   const [userPasses, setUserPasses] = useState<Pass[]>([]);
   const [numPasses, setNumPasses] = useState(1);
-  const [guests, setGuests] = useState<{ firstName: string; lastName: string; drinkId: string; selectedAromas: string[] }[]>([
-    { firstName: "", lastName: "", drinkId: "", selectedAromas: [] }
+  const [passes, setPasses] = useState<{
+    isPrimary?: boolean;
+    firstName: string;
+    lastName: string;
+    instagram: string;
+    drinkId: string;
+    selectedAromas: string[];
+  }[]>([
+    { isPrimary: true, firstName: "", lastName: "", instagram: "", drinkId: "", selectedAromas: [] }
   ]);
   const [promoCode, setPromoCode] = useState("");
   const [isBooking, setIsBooking] = useState(false);
@@ -30,22 +37,52 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
   useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
-    setGuests(prev => {
-      const newGuests = [...prev];
-      if (newGuests.length < numPasses) {
-        for (let i = newGuests.length; i < numPasses; i++) {
-          newGuests.push({ firstName: "", lastName: "", drinkId: "", selectedAromas: [] });
+    setPasses(prev => {
+      const primaryFirst = user?.first_name || prev[0]?.firstName || "";
+      const primaryLast = user?.last_name || prev[0]?.lastName || "";
+      const primaryIg = user?.instagram || user?.instagram_handle || prev[0]?.instagram || "";
+
+      const newPasses = [...prev];
+      if (newPasses.length === 0) {
+        newPasses.push({
+          isPrimary: true,
+          firstName: primaryFirst,
+          lastName: primaryLast,
+          instagram: primaryIg,
+          drinkId: "",
+          selectedAromas: []
+        });
+      } else {
+        newPasses[0] = {
+          ...newPasses[0],
+          isPrimary: true,
+          firstName: primaryFirst || newPasses[0].firstName,
+          lastName: primaryLast || newPasses[0].lastName,
+          instagram: primaryIg || newPasses[0].instagram
+        };
+      }
+
+      if (newPasses.length < numPasses) {
+        for (let i = newPasses.length; i < numPasses; i++) {
+          newPasses.push({
+            isPrimary: false,
+            firstName: "",
+            lastName: "",
+            instagram: "",
+            drinkId: "",
+            selectedAromas: []
+          });
         }
       } else { 
-        newGuests.length = numPasses; 
+        newPasses.length = numPasses; 
       }
-      return newGuests;
+      return newPasses;
     });
-  }, [numPasses]);
+  }, [numPasses, user]);
 
   const fetchPasses = async (userId: string, eventId: string) => {
-    const passes = await api.getUserPasses(userId);
-    setUserPasses(passes.filter(p => p.event_id === eventId));
+    const p = await api.getUserPasses(userId);
+    setUserPasses(p.filter(item => item.event_id === eventId));
   };
 
   useEffect(() => {
@@ -56,6 +93,33 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
       const eventData = await api.getEvent(resolvedParams.id);
       if (eventData) setEvent(eventData);
       await fetchPasses(currentUser.id, resolvedParams.id);
+
+      const primaryFirst = currentUser.first_name || '';
+      const primaryLast = currentUser.last_name || '';
+      const primaryIg = currentUser.instagram || currentUser.instagram_handle || '';
+
+      setPasses(prev => {
+        const next = [...prev];
+        if (next.length === 0) {
+          next.push({
+            isPrimary: true,
+            firstName: primaryFirst,
+            lastName: primaryLast,
+            instagram: primaryIg,
+            drinkId: "",
+            selectedAromas: []
+          });
+        } else {
+          next[0] = {
+            ...next[0],
+            isPrimary: true,
+            firstName: primaryFirst,
+            lastName: primaryLast,
+            instagram: primaryIg
+          };
+        }
+        return next;
+      });
     };
     fetchData();
   }, [resolvedParams.id, router]);
@@ -70,18 +134,26 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
     e.preventDefault();
     if (!event || !user) return;
     setIsBooking(true);
-    const formattedGuests = guests.map(g => ({
-      ...g,
-      drinkName: g.drinkId || undefined,
-      drinkId: g.drinkId || undefined,
-      selectedAromas: g.selectedAromas || []
+    const formattedGuests = passes.map((pass, index) => ({
+      firstName: (index === 0 ? (user.first_name || pass.firstName) : pass.firstName).trim(),
+      lastName: (index === 0 ? (user.last_name || pass.lastName) : pass.lastName).trim(),
+      drinkName: pass.drinkId || undefined,
+      drinkId: pass.drinkId || undefined,
+      selectedAromas: pass.selectedAromas || []
     }));
     await api.bookPasses(event.id, user.id, formattedGuests, promoCode.trim() || undefined);
     await fetchPasses(user.id, event.id);
     setIsBooking(false);
     setNumPasses(1);
     setPromoCode("");
-    setGuests([{ firstName: "", lastName: "", drinkId: "", selectedAromas: [] }]);
+    setPasses([{
+      isPrimary: true,
+      firstName: user.first_name || '',
+      lastName: user.last_name || '',
+      instagram: user.instagram || user.instagram_handle || '',
+      drinkId: "",
+      selectedAromas: []
+    }]);
   };
 
   const statusInfo: Record<string, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
@@ -323,36 +395,98 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
                 </select>
               </div>
 
-              {guests.map((guest, index) => (
+              {passes.map((pass, index) => (
                 <div key={index} className="p-5 rounded-2xl space-y-4" style={{ backgroundColor: 'var(--bg-input)', border: '1.5px solid var(--border)' }}>
-                  <h3 className="font-extrabold text-sm tracking-wide uppercase" style={{ color: 'var(--text-primary)' }}>Pass #{index + 1}</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="label">Prénom</label>
-                      <input type="text" required value={guest.firstName}
-                        onChange={e => { const g=[...guests]; g[index].firstName=e.target.value; setGuests(g); }}
-                        className="input" placeholder="Prénom"/>
-                    </div>
-                    <div>
-                      <label className="label">Nom</label>
-                      <input type="text" required value={guest.lastName}
-                        onChange={e => { const g=[...guests]; g[index].lastName=e.target.value; setGuests(g); }}
-                        className="input" placeholder="Nom de famille"/>
-                    </div>
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+                      {index === 0 ? "🎫 Pass Principal (Titulaire du compte)" : `🎫 Pass Invité #${index}`}
+                    </h4>
+                    {index === 0 && (
+                      <span className="text-xs bg-purple-500/10 text-purple-400 border border-purple-500/20 px-2 py-0.5 rounded-md font-medium">
+                        Pré-rempli automatiquement
+                      </span>
+                    )}
                   </div>
+
+                  {index === 0 ? (
+                    /* PRIMARY USER: LOCKED / PRE-FILLED SUMMARY */
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                      <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800/60">
+                        <span className="text-xs text-slate-400 block">Prénom</span>
+                        <span className="font-semibold text-white">{pass.firstName || user?.first_name || "—"}</span>
+                      </div>
+                      <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800/60">
+                        <span className="text-xs text-slate-400 block">Nom</span>
+                        <span className="font-semibold text-white">{pass.lastName || user?.last_name || "—"}</span>
+                      </div>
+                      <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800/60">
+                        <span className="text-xs text-slate-400 block">Instagram</span>
+                        <span className="font-semibold text-white">{pass.instagram || user?.instagram || user?.instagram_handle || "—"}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    /* ADDITIONAL GUESTS: EDITABLE INPUTS */
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div>
+                        <label className="label">Prénom</label>
+                        <input
+                          type="text"
+                          placeholder="Prénom de l'invité"
+                          value={pass.firstName}
+                          onChange={(e) => {
+                            const updated = [...passes];
+                            updated[index].firstName = e.target.value;
+                            setPasses(updated);
+                          }}
+                          className="input"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="label">Nom</label>
+                        <input
+                          type="text"
+                          placeholder="Nom de l'invité"
+                          value={pass.lastName}
+                          onChange={(e) => {
+                            const updated = [...passes];
+                            updated[index].lastName = e.target.value;
+                            setPasses(updated);
+                          }}
+                          className="input"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="label">Instagram</label>
+                        <input
+                          type="text"
+                          placeholder="Profil Instagram (@pseudo)"
+                          value={pass.instagram}
+                          onChange={(e) => {
+                            const updated = [...passes];
+                            updated[index].instagram = e.target.value;
+                            setPasses(updated);
+                          }}
+                          className="input"
+                          required
+                        />
+                      </div>
+                    </div>
+                  )}
 
                   {(((event as any).drink_menus && (event as any).drink_menus.length > 0) || ((event as any).drinks && (event as any).drinks.length > 0)) && (
                     <DrinkSelector
                       drinks={(event as any).drink_menus && (event as any).drink_menus.length > 0 ? (event as any).drink_menus : ((event as any).drinks || [])}
-                      selectedDrinkId={guest.drinkId}
-                      selectedAromas={guest.selectedAromas}
-                      name={`arome-guest-${index}`}
+                      selectedDrinkId={pass.drinkId}
+                      selectedAromas={pass.selectedAromas}
+                      name={`arome-pass-${index}`}
                       required
                       onChange={(drinkId, selectedAromas) => {
-                        const g = [...guests];
-                        g[index].drinkId = drinkId;
-                        g[index].selectedAromas = selectedAromas;
-                        setGuests(g);
+                        const updated = [...passes];
+                        updated[index].drinkId = drinkId;
+                        updated[index].selectedAromas = selectedAromas;
+                        setPasses(updated);
                       }}
                     />
                   )}

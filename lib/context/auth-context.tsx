@@ -53,9 +53,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .eq("id", authUser.id)
       .maybeSingle()
 
+    const meta = authUser.user_metadata || {};
+
     if (!profile) {
       // Profile row not yet created: populate from user_metadata
-      const meta = authUser.user_metadata || {};
       const fullName = meta.full_name || [meta.first_name, meta.last_name].filter(Boolean).join(' ') || null;
       const ig = meta.instagram_handle || meta.instagram || null;
 
@@ -73,9 +74,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .eq("id", authUser.id)
         .maybeSingle()
 
-      setUser(newProfile ?? null)
+      const firstName = (newProfile as any)?.first_name || meta.first_name || ((newProfile as any)?.full_name ? (newProfile as any).full_name.split(' ')[0] : '') || '';
+      const lastName = (newProfile as any)?.last_name || meta.last_name || ((newProfile as any)?.full_name ? (newProfile as any).full_name.split(' ').slice(1).join(' ') : '') || '';
+      const instagram = (newProfile as any)?.instagram_handle || meta.instagram_handle || meta.instagram || '';
+
+      setUser({
+        ...(newProfile || {}),
+        first_name: firstName,
+        last_name: lastName,
+        instagram_handle: instagram,
+        instagram: instagram,
+      } as User);
     } else {
-      let userProfile = profile as User;
+      const firstName = profile?.first_name || meta.first_name || (profile?.full_name ? profile.full_name.split(' ')[0] : '') || '';
+      const lastName = profile?.last_name || meta.last_name || (profile?.full_name ? profile.full_name.split(' ').slice(1).join(' ') : '') || '';
+      const instagram = profile?.instagram_handle || meta.instagram_handle || meta.instagram || '';
+
+      let userProfile = {
+        ...profile,
+        first_name: firstName,
+        last_name: lastName,
+        instagram_handle: instagram,
+        instagram: instagram,
+      } as User;
       const actualRole = (userProfile.role || '').toUpperCase();
       if (actualRole === 'ADMIN' && typeof document !== 'undefined') {
         const match = document.cookie.match(/(?:^|; )passi_impersonate_role=([^;]*)/);
@@ -87,6 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               role: override as any,
               original_role: (userProfile.original_role || userProfile.role || 'admin').toLowerCase(),
               instagram_handle: userProfile.instagram_handle || '@admin_simulated',
+              instagram: userProfile.instagram || userProfile.instagram_handle || '@admin_simulated',
             };
           }
         }
