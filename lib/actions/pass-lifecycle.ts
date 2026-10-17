@@ -393,7 +393,7 @@ export async function approvePassPaymentAction(passId: string) {
   // Verify role: allow 'admin' (even in simulation) or 'payment_point'
   let { data: profile, error: profileError } = await supabaseAdmin
     .from('profiles')
-    .select('id, role, is_suspended, full_name, first_name, last_name, email')
+    .select('id, role, is_suspended, full_name, email')
     .eq('id', user.id)
     .maybeSingle();
 
@@ -403,8 +403,6 @@ export async function approvePassPaymentAction(passId: string) {
     const meta = user.user_metadata || {};
     const inferredRole = (meta.role || (user.email?.includes('passi.com') ? 'admin' : 'payment_point')).toLowerCase();
     const fullName = meta.full_name || [meta.first_name, meta.last_name].filter(Boolean).join(' ') || (user.email ? user.email.split('@')[0] : 'Caissier');
-    const firstName = meta.first_name || fullName.split(' ')[0] || 'Caissier';
-    const lastName = meta.last_name || fullName.split(' ').slice(1).join(' ') || '';
 
     const { data: newProfile, error: insertError } = await supabaseAdmin
       .from('profiles')
@@ -412,12 +410,10 @@ export async function approvePassPaymentAction(passId: string) {
         id: user.id,
         email: user.email || '',
         full_name: fullName,
-        first_name: firstName,
-        last_name: lastName,
-        role: inferredRole,
+        role: inferredRole === 'admin' ? 'admin' : 'payment_point',
         is_suspended: false,
       }, { onConflict: 'id' })
-      .select('id, role, is_suspended, full_name, first_name, last_name, email')
+      .select('id, role, is_suspended, full_name, email')
       .single();
 
     if (newProfile) {
@@ -454,7 +450,7 @@ export async function approvePassPaymentAction(passId: string) {
   const isPreApproved = pass.entry_status === 'awaiting_payment' || (pass as any).status === 'PENDING_PAYMENT';
   if (!isPreApproved && pass.entry_status !== 'pending') {
     if (['activated', 'scanned'].includes(pass.entry_status)) {
-      return { success: true, pass, message: 'Pass déjà activé et payé.' };
+      return { success: true, pass: { ...pass, status: 'PAID' }, message: 'Pass déjà activé et payé.' };
     }
   }
 
@@ -462,10 +458,9 @@ export async function approvePassPaymentAction(passId: string) {
   const now = new Date().toISOString();
   const entryQr = pass.entry_qr_uuid || crypto.randomUUID();
 
-  // Explicitly update status, approved_by and payment_approved_at
+  // Explicitly update entry_status, approved_by and payment_approved_at (no non-existent status column)
   const updatePayload: Record<string, any> = {
     entry_status: 'activated',
-    status: 'PAID',
     payment_point_id: user.id,
     approved_by: user.id, // Explicitly tracking the Admin/Cashier ID
     payment_approved_at: now,
@@ -486,20 +481,22 @@ export async function approvePassPaymentAction(passId: string) {
     .from('passes')
     .update(updatePayload)
     .eq('id', passId)
-    .select('id, entry_status, status, final_price, payment_point_id, approved_by, payment_approved_at, drink_id, drink_name, drink_status, drink_qr_uuid, drink_qr_code')
+    .select('id, entry_status, final_price, payment_point_id, approved_by, payment_approved_at, drink_id, drink_name, drink_status, drink_qr_uuid, drink_qr_code')
     .single();
 
   updatedPass = updateResult.data;
   let updateError = updateResult.error;
 
-  // Fallback if approved_by schema column issue arises
-  if (updateError && (updateError.message?.includes('approved_by') || updateError.details?.includes('approved_by'))) {
+  // Fallback if approved_by or payment_approved_at schema column issue arises
+  if (updateError && (updateError.message?.includes('approved_by') || updateError.message?.includes('payment_approved_at') || updateError.details?.includes('approved_by'))) {
+    console.warn('[approvePassPaymentAction] Retrying without approved_by and payment_approved_at:', updateError.message);
     delete updatePayload.approved_by;
+    delete updatePayload.payment_approved_at;
     const fallbackResult = await supabaseAdmin
       .from('passes')
       .update(updatePayload)
       .eq('id', passId)
-      .select('id, entry_status, status, final_price, payment_point_id, payment_approved_at, drink_id, drink_name, drink_status, drink_qr_uuid, drink_qr_code')
+      .select('id, entry_status, final_price, payment_point_id, drink_id, drink_name, drink_status, drink_qr_uuid, drink_qr_code')
       .single();
     updatedPass = fallbackResult.data;
     updateError = fallbackResult.error;
@@ -513,19 +510,23 @@ export async function approvePassPaymentAction(passId: string) {
   try {
     revalidatePath('/admin');
     revalidatePath('/admin/approbations');
+    revalidatePath('/admin/passes');
     revalidatePath('/payment-point/dashboard');
+    revalidatePath('/dashboard');
   } catch (e) {
     // Safe ignore when executed outside Next request cycle
   }
 
-  const approverDisplayName = [profile.first_name, profile.last_name].filter(Boolean).join(' ') 
-    || profile.full_name 
+  const approverDisplayName = profile.full_name 
     || profile.email?.split('@')[0] 
     || 'Administrateur';
 
   return {
     success: true,
-    pass: updatedPass,
+    pass: {
+      ...updatedPass,
+      status: 'PAID',
+    },
     message: 'Paiement approuvé avec succès. Le pass est désormais activé.',
     approverId: user.id,
     approverName: approverDisplayName,

@@ -34,8 +34,6 @@ export async function requireRole(allowedRoles: string[]) {
             id: user.id,
             email: user.email || '',
             full_name: fullName,
-            first_name: meta.first_name || fullName.split(' ')[0] || '',
-            last_name: meta.last_name || fullName.split(' ').slice(1).join(' ') || '',
             role: inferredRole,
             is_suspended: false,
           }, { onConflict: 'id' })

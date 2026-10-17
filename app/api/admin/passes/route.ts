@@ -215,7 +215,7 @@ export async function PATCH(req: NextRequest) {
 
   } catch (error: any) {
     console.error("Server error in passes PATCH:", error);
-    return NextResponse.json({ error: "Une erreur interne est survenue" }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Une erreur interne est survenue" }, { status: 500 });
   }
 }
 

@@ -671,7 +671,10 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ passId, action: 'mark_paid' }),
     });
-    if (!res.ok) throw new Error("Failed to activate pass");
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || "Failed to activate pass");
+    }
   },
 
   async rejectPass(passId: string, reason?: string): Promise<void> {
@@ -1033,7 +1036,7 @@ export const api = {
       : passesData;
 
     // Get profiles for workers and pass owners
-    const { data: allProfiles } = await supabase.from('profiles').select('id, email, full_name, first_name, last_name, instagram_handle, role');
+    const { data: allProfiles } = await supabase.from('profiles').select('id, email, full_name, instagram_handle, role');
     const profilesMap = new Map<string, any>((allProfiles || []).map((p: any) => [p.id, p]));
 
     const workerMap = new Map<string, {
