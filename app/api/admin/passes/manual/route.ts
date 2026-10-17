@@ -7,8 +7,8 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
 export async function POST(req: NextRequest) {
-  const { error: authError } = await requireRole(['admin']);
-  if (authError) return authError;
+  const { error: authError, user: adminUser } = await requireRole(['admin']);
+  if (authError || !adminUser) return authError || NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
 
   try {
     const body = await req.json();
@@ -140,7 +140,7 @@ export async function POST(req: NextRequest) {
     const resolvedLastName = guestLastName?.trim() 
       || (profile.full_name && profile.full_name.split(' ').length > 1 ? profile.full_name.split(' ').slice(1).join(' ') : '');
 
-    // 5. Insert pass with drink_name, selected_aromas, promo_used, and final_price
+    // 5. Insert pass with created_by (admin), pass_origin, drink_name, selected_aromas, promo_used, and final_price
     const insertPayload: Record<string, any> = {
       user_id: userId,
       event_id: eventId,
@@ -158,12 +158,19 @@ export async function POST(req: NextRequest) {
       drink_status: drinkStatus,
       drink_qr_uuid: drinkQrUuid,
       drink_qr_code: drinkQrUuid,
+      created_by: adminUser.id,
+      pass_origin: 'ADMIN',
     };
+
+    if (normalizedPassType === 'GIFT' || normalizedPassType === 'VIP') {
+      insertPayload.approved_by = adminUser.id;
+      insertPayload.payment_approved_at = new Date().toISOString();
+    }
 
     let { data: newPass, error: insertError } = await supabaseAdmin
       .from('passes')
       .insert(insertPayload)
-      .select('*, events(title, date, location)')
+      .select('*, events(title, date, location), creator:profiles!passes_created_by_fkey(id, email, full_name, role)')
       .single();
 
     if (insertError) {
@@ -172,7 +179,7 @@ export async function POST(req: NextRequest) {
       const { data: retryPass, error: retryError } = await supabaseAdmin
         .from('passes')
         .insert(insertPayload)
-        .select('*, events(title, date, location)')
+        .select('*, events(title, date, location), creator:profiles!passes_created_by_fkey(id, email, full_name, role)')
         .single();
 
       if (retryError) {

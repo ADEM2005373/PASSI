@@ -23,7 +23,12 @@ export async function GET(req: NextRequest) {
   try {
     let query = supabaseAdmin
       .from('passes')
-      .select('*, event:events(*), user:profiles!passes_user_id_fkey(*), creator:profiles!passes_created_by_fkey(id, email, full_name, first_name, last_name, role), approver:profiles!passes_approved_by_fkey(id, email, full_name, first_name, last_name, role)')
+      .select(`
+        *,
+        event:events(*),
+        creator:profiles!passes_created_by_fkey(id, email, full_name, role),
+        approver:profiles!passes_approved_by_fkey(id, email, full_name, role)
+      `)
       .order('created_at', { ascending: false });
 
     if (statusFilter && statusFilter !== 'all') {
@@ -38,12 +43,12 @@ export async function GET(req: NextRequest) {
 
     let { data, error } = await query;
 
-    // Fallback if relationship embedding fails (e.g. if passes_created_by_fkey is not yet applied)
+    // Fallback if relationship embedding fails (e.g. if foreign keys are not yet applied)
     if (error) {
       console.warn("Foreign relationship select failed in GET /api/admin/passes, falling back:", error);
       let fallbackQuery = supabaseAdmin
         .from('passes')
-        .select('*, event:events(*), user:profiles!passes_user_id_fkey(*), approver:profiles!passes_approved_by_fkey(id, email, full_name, first_name, last_name, role)')
+        .select('*, event:events(*)')
         .order('created_at', { ascending: false });
 
       if (statusFilter && statusFilter !== 'all') {
@@ -107,6 +112,33 @@ export async function GET(req: NextRequest) {
       );
       const passOrigin = pass.pass_origin || (isManualAdmin ? 'ADMIN' : 'USER');
 
+      // Format creator with full_name, first_name, last_name, email, role
+      const formattedCreator = creatorProf ? {
+        ...creatorProf,
+        first_name: creatorProf.first_name || (creatorProf.full_name ? creatorProf.full_name.split(' ')[0] : (creatorProf.email ? creatorProf.email.split('@')[0] : '')),
+        last_name: creatorProf.last_name || (creatorProf.full_name && creatorProf.full_name.split(' ').length > 1 ? creatorProf.full_name.split(' ').slice(1).join(' ') : ''),
+      } : null;
+
+      // Format owner with full_name, first_name, last_name, email, instagram
+      const formattedOwner = prof && prof.id ? {
+        ...prof,
+        first_name: prof.first_name || (prof.full_name ? prof.full_name.split(' ')[0] : (pass.guest_first_name || '')),
+        last_name: prof.last_name || (prof.full_name && prof.full_name.split(' ').length > 1 ? prof.full_name.split(' ').slice(1).join(' ') : (pass.guest_last_name || '')),
+        instagram: prof.instagram_handle || '',
+      } : null;
+
+      // Resolve instagram_handle: avoid '@unknown' fallback
+      let resolvedInstagram = '';
+      if (prof.instagram_handle && prof.instagram_handle.trim() !== '') {
+        resolvedInstagram = prof.instagram_handle.trim();
+      } else if (pass.instagram_handle && pass.instagram_handle.trim() !== '' && pass.instagram_handle !== '@unknown') {
+        resolvedInstagram = pass.instagram_handle.trim();
+      } else if (prof.email) {
+        resolvedInstagram = `(${prof.email})`;
+      } else if (prof.full_name) {
+        resolvedInstagram = `@${prof.full_name.toLowerCase().replace(/\s+/g, '.')}`;
+      }
+
       return {
         ...pass,
         status: pass.entry_status || pass.status,
@@ -116,9 +148,10 @@ export async function GET(req: NextRequest) {
         event: evt,
         profiles: prof,
         user: prof,
+        owner: formattedOwner,
         approver: approverProf,
-        creator: creatorProf,
-        instagram_handle: prof.instagram_handle || pass.instagram_handle || '@unknown',
+        creator: formattedCreator,
+        instagram_handle: resolvedInstagram,
         drink_menus: pass.drink_name ? { name: pass.drink_name } : (pass.drink_menus || null),
       };
     });

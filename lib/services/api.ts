@@ -66,6 +66,16 @@ export type Pass = {
     email?: string | null;
     role?: string | null;
   } | null;
+  owner?: {
+    id?: string;
+    first_name?: string | null;
+    last_name?: string | null;
+    full_name?: string | null;
+    email?: string | null;
+    instagram?: string | null;
+    instagram_handle?: string | null;
+    role?: string | null;
+  } | null;
   approver?: {
     id?: string;
     first_name?: string | null;
@@ -490,6 +500,17 @@ export const api = {
     return passesData.map((pass: any) => {
       const profile = profilesMap.get(pass.user_id) || pass.user || pass.profiles;
       const evt = pass.event || pass.events;
+      let resolvedInstagram = '';
+      if (profile?.instagram_handle && profile.instagram_handle.trim() !== '') {
+        resolvedInstagram = profile.instagram_handle.trim();
+      } else if (pass.instagram_handle && pass.instagram_handle.trim() !== '' && pass.instagram_handle !== '@unknown') {
+        resolvedInstagram = pass.instagram_handle.trim();
+      } else if (profile?.email) {
+        resolvedInstagram = `(${profile.email})`;
+      } else if (profile?.full_name) {
+        resolvedInstagram = `@${profile.full_name.toLowerCase().replace(/\s+/g, '.')}`;
+      }
+
       return {
         ...pass,
         event: evt,
@@ -498,7 +519,7 @@ export const api = {
         profiles: profile,
         status: pass.entry_status || pass.status,
         entry_status: pass.entry_status || pass.status,
-        instagram_handle: profile?.instagram_handle || pass.instagram_handle || '@unknown',
+        instagram_handle: resolvedInstagram,
         drink_menus: pass.drink_name ? { name: pass.drink_name } : (pass.drink_menus || null),
       };
     });
@@ -507,7 +528,7 @@ export const api = {
   async getAllPasses(eventId?: string): Promise<Pass[]> {
     // 1. Try server endpoint with service role (no caching)
     try {
-      const url = '/api/admin/passes' + (eventId && eventId !== 'all' ? `&eventId=${eventId}` : '');
+      const url = '/api/admin/passes' + (eventId && eventId !== 'all' ? `?eventId=${eventId}` : '');
       const res = await fetch(url, {
         cache: 'no-store',
         headers: { 'Cache-Control': 'no-cache' }
@@ -526,7 +547,12 @@ export const api = {
     const supabase = createClient();
     let query = supabase
       .from('passes')
-      .select('*, event:events(*), user:profiles!passes_user_id_fkey(*), creator:profiles!passes_created_by_fkey(id, email, full_name, first_name, last_name, role), approver:profiles!passes_approved_by_fkey(id, email, full_name, first_name, last_name, role)')
+      .select(`
+        *,
+        event:events(*),
+        creator:profiles!passes_created_by_fkey(id, email, full_name, role),
+        approver:profiles!passes_approved_by_fkey(id, email, full_name, role)
+      `)
       .order('created_at', { ascending: false });
 
     if (eventId && eventId !== 'all' && eventId.trim() !== '') {
@@ -539,7 +565,7 @@ export const api = {
     if (error || !passesData) {
       let fallbackQuery = supabase
         .from('passes')
-        .select('*, event:events(*), user:profiles!passes_user_id_fkey(*), approver:profiles!passes_approved_by_fkey(id, email, full_name, first_name, last_name, role)')
+        .select('*, event:events(*)')
         .order('created_at', { ascending: false });
       if (eventId && eventId !== 'all' && eventId.trim() !== '') {
         fallbackQuery = fallbackQuery.eq('event_id', eventId);
@@ -571,7 +597,7 @@ export const api = {
     // Map profiles and relations for users, creators, and approvers
     const { data: profilesData } = await supabase
       .from('profiles')
-      .select('id, instagram_handle, full_name, first_name, last_name, email, role');
+      .select('id, instagram_handle, full_name, email, role');
     const profilesMap = new Map((profilesData || []).map((p: any) => [p.id, p]));
 
     return passesData.map((pass: any) => {
@@ -584,9 +610,33 @@ export const api = {
       const isManualAdmin = Boolean(
         pass.created_by ||
         pass.pass_origin === 'ADMIN' ||
-        ['VIP', 'GIFT', 'INVITATION'].includes(pass.pass_type)
+        ['VIP', 'GIFT', 'INVITATION'].includes((pass.pass_type || '').toUpperCase())
       );
-      const passOrigin = isManualAdmin ? 'ADMIN' : 'USER';
+      const passOrigin = pass.pass_origin || (isManualAdmin ? 'ADMIN' : 'USER');
+
+      const formattedCreator = creatorProfile ? {
+        ...creatorProfile,
+        first_name: creatorProfile.first_name || (creatorProfile.full_name ? creatorProfile.full_name.split(' ')[0] : (creatorProfile.email ? creatorProfile.email.split('@')[0] : '')),
+        last_name: creatorProfile.last_name || (creatorProfile.full_name && creatorProfile.full_name.split(' ').length > 1 ? creatorProfile.full_name.split(' ').slice(1).join(' ') : ''),
+      } : null;
+
+      const formattedOwner = profile ? {
+        ...profile,
+        first_name: profile.first_name || (profile.full_name ? profile.full_name.split(' ')[0] : (pass.guest_first_name || '')),
+        last_name: profile.last_name || (profile.full_name && profile.full_name.split(' ').length > 1 ? profile.full_name.split(' ').slice(1).join(' ') : (pass.guest_last_name || '')),
+        instagram: profile.instagram_handle || '',
+      } : null;
+
+      let resolvedInstagram = '';
+      if (profile?.instagram_handle && profile.instagram_handle.trim() !== '') {
+        resolvedInstagram = profile.instagram_handle.trim();
+      } else if (pass.instagram_handle && pass.instagram_handle.trim() !== '' && pass.instagram_handle !== '@unknown') {
+        resolvedInstagram = pass.instagram_handle.trim();
+      } else if (profile?.email) {
+        resolvedInstagram = `(${profile.email})`;
+      } else if (profile?.full_name) {
+        resolvedInstagram = `@${profile.full_name.toLowerCase().replace(/\s+/g, '.')}`;
+      }
 
       return {
         ...pass,
@@ -595,11 +645,12 @@ export const api = {
         events: evt,
         user: profile,
         profiles: profile,
-        creator: creatorProfile,
+        owner: formattedOwner,
+        creator: formattedCreator,
         approver: approverProfile,
         status: pass.entry_status || pass.status,
         entry_status: pass.entry_status || pass.status,
-        instagram_handle: profile?.instagram_handle || pass.instagram_handle || '@unknown',
+        instagram_handle: resolvedInstagram,
         drink_menus: pass.drink_name ? { name: pass.drink_name } : (pass.drink_menus || null),
       };
     });

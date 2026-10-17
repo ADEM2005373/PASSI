@@ -1172,8 +1172,30 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
                               {pass.entry_status === 'pending' ? '!' : pass.entry_status === 'awaiting_payment' ? '$' : pass.entry_status === 'rejected' ? 'X' : '✓'}
                             </div>
                             <div>
-                              <p className="font-bold text-base" style={{ color: 'var(--text-primary)' }}>{pass.guest_first_name} {pass.guest_last_name}</p>
-                              <p className="text-sm truncate max-w-[200px]" title={pass.instagram_handle} style={{ color: 'var(--text-secondary)' }}>{pass.instagram_handle}</p>
+                              <p className="font-bold text-base" style={{ color: 'var(--text-primary)' }}>
+                                {[pass.guest_first_name, pass.guest_last_name].filter(Boolean).join(' ') || (pass as any).owner?.full_name || (pass as any).user?.full_name || 'Invité'}
+                              </p>
+                              {(() => {
+                                const owner = (pass as any).owner || (pass as any).user || (pass as any).profiles;
+                                let displayHandle = pass.instagram_handle;
+                                if (!displayHandle || displayHandle === '@unknown') {
+                                  if (owner?.instagram_handle && owner.instagram_handle.trim() !== '') {
+                                    displayHandle = owner.instagram_handle.trim();
+                                  } else if (owner?.email) {
+                                    displayHandle = `(${owner.email})`;
+                                  } else if (owner?.full_name) {
+                                    displayHandle = `@${owner.full_name.toLowerCase().replace(/\s+/g, '.')}`;
+                                  } else {
+                                    displayHandle = '';
+                                  }
+                                }
+                                if (!displayHandle) return null;
+                                return (
+                                  <p className="text-sm truncate max-w-[200px]" title={displayHandle} style={{ color: 'var(--text-secondary)' }}>
+                                    {displayHandle}
+                                  </p>
+                                );
+                              })()}
                               <p className="text-xs font-semibold mt-1" style={{ color: 'var(--text-muted)' }}>
                                 Événement: {pass.events?.title || 'Inconnu'}
                               </p>
@@ -1187,21 +1209,11 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
                                 const isUserCreated = !(
                                   pass.pass_origin === 'ADMIN' ||
                                   Boolean(pass.created_by) ||
+                                  Boolean(pass.creator) ||
                                   ['VIP', 'GIFT', 'INVITATION'].includes((pass.pass_type || '').toUpperCase())
                                 );
 
-                                let creatorName = "Admin";
                                 const creator = pass.creator;
-                                if (creator?.first_name || creator?.last_name) {
-                                  creatorName = [creator.first_name, creator.last_name].filter(Boolean).join(" ");
-                                } else if (creator?.full_name) {
-                                  creatorName = creator.full_name;
-                                } else if (creator?.email) {
-                                  creatorName = creator.email.split("@")[0];
-                                } else if (pass.created_by) {
-                                  creatorName = `ID: ${pass.created_by.slice(0, 8)}`;
-                                }
-
                                 const approver = pass.approver;
                                 let approverName = "";
                                 if (approver?.first_name || approver?.last_name) {
@@ -1226,14 +1238,24 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
                                   <>
                                     <div className="flex flex-wrap items-center gap-2 mt-2">
                                       <span className={`badge inline-block ${sc.bg} ${sc.color}`}>{sc.label}</span>
-                                      {isUserCreated ? (
-                                        <span className="bg-blue-500/10 text-blue-400 text-xs px-2 py-0.5 rounded-md font-medium">
-                                          👤 Créé par l'utilisateur
-                                        </span>
+                                      {creator ? (
+                                        <div className="flex items-center gap-1.5 text-purple-400 bg-purple-500/10 px-2.5 py-1 rounded-md text-xs font-medium border border-purple-500/20">
+                                          <span>👑 Créé par l'Admin :</span>
+                                          <span className="font-bold">
+                                            {creator.first_name || creator.last_name
+                                              ? [creator.first_name, creator.last_name].filter(Boolean).join(" ")
+                                              : (creator.full_name || creator.email?.split("@")[0] || "Admin")}
+                                          </span>
+                                          {creator.email && <span className="text-slate-400">({creator.email})</span>}
+                                        </div>
+                                      ) : (!isUserCreated || pass.pass_origin === 'ADMIN') ? (
+                                        <div className="flex items-center gap-1.5 text-purple-400 bg-purple-500/10 px-2.5 py-1 rounded-md text-xs font-medium border border-purple-500/20">
+                                          <span>👑 Créé par l'Admin</span>
+                                        </div>
                                       ) : (
-                                        <span className="bg-purple-500/10 text-purple-400 text-xs px-2 py-0.5 rounded-md font-medium">
-                                          👑 Créé par l'Admin ({creatorName})
-                                        </span>
+                                        <div className="flex items-center gap-1.5 text-blue-400 bg-blue-500/10 px-2.5 py-1 rounded-md text-xs font-medium border border-blue-500/20">
+                                          <span>👤 Créé par l'utilisateur (Auto-réservation)</span>
+                                        </div>
                                       )}
                                     </div>
 
