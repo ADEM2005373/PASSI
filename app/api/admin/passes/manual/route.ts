@@ -1,14 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { createClient } from '@supabase/supabase-js';
-import { requireRole } from '@/lib/supabase/api-security';
+import { createClient as createServerClient } from '@/lib/supabase/server';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
 export async function POST(req: NextRequest) {
-  const { error: authError, user: adminUser } = await requireRole(['admin']);
-  if (authError || !adminUser) return authError || NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
+  // 1. Get the CURRENT active user session dynamically from cookies
+  const supabase = await createServerClient();
+  const { data: { user: adminUser }, error: authError } = await supabase.auth.getUser();
+
+  if (authError || !adminUser) {
+    return NextResponse.json({ error: 'Non autorisé : Veuillez vous reconnecter.' }, { status: 401 });
+  }
+
+  // Verify active admin role
+  const { data: adminProfile } = await supabaseAdmin
+    .from('profiles')
+    .select('role, is_suspended')
+    .eq('id', adminUser.id)
+    .maybeSingle();
+
+  if (!adminProfile || adminProfile.is_suspended || (adminProfile.role || '').toLowerCase() !== 'admin') {
+    return NextResponse.json({ error: 'Action non autorisée : droits administrateur requis.' }, { status: 403 });
+  }
 
   try {
     const body = await req.json();
@@ -190,6 +207,15 @@ export async function POST(req: NextRequest) {
         );
       }
       newPass = retryPass;
+    }
+
+    try {
+      revalidatePath('/admin');
+      revalidatePath('/admin/approbations');
+      revalidatePath('/admin/passes');
+      revalidatePath('/dashboard');
+    } catch (e) {
+      // safe fallback outside Next request context
     }
 
     return NextResponse.json({

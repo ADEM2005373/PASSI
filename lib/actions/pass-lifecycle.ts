@@ -15,8 +15,20 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
  * Server Action: Approve Phase 1 (moves pass to 'awaiting_payment' and sends Payment Points email)
  */
 export async function approvePhase1PassAction(passId: string) {
-  const { error: authError } = await requireRole(['admin']);
-  if (authError) {
+  // 1. Get the CURRENT active user session dynamically
+  const supabase = await createServerClient();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) {
+    throw new Error('Action non autorisée : Veuillez vous reconnecter.');
+  }
+
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('role, is_suspended')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  if (!profile || profile.is_suspended || (profile.role || '').toLowerCase() !== 'admin') {
     throw new Error('Action non autorisée : droits administrateur requis');
   }
 
@@ -35,11 +47,12 @@ export async function approvePhase1PassAction(passId: string) {
     throw new Error('Les passes déjà validés ou payés ne peuvent pas être modifiés.');
   }
 
-  // 2. Update pass status to awaiting_payment
+  // 2. Update pass status to awaiting_payment and track active admin approver
   const { error: updateError } = await supabaseAdmin
     .from('passes')
     .update({ 
       entry_status: 'awaiting_payment', 
+      approved_by: user.id,
       updated_at: new Date().toISOString() 
     })
     .eq('id', passId);
@@ -160,6 +173,15 @@ export async function approvePhase1PassAction(passId: string) {
     console.warn(`[approvePhase1PassAction] Aucun email trouvé pour l'utilisateur ${pass.user_id}`);
   }
 
+  try {
+    revalidatePath('/admin');
+    revalidatePath('/admin/approbations');
+    revalidatePath('/admin/passes');
+    revalidatePath('/dashboard');
+  } catch (e) {
+    // safe fallback
+  }
+
   return { success: true, status: 'awaiting_payment' };
 }
 
@@ -167,8 +189,20 @@ export async function approvePhase1PassAction(passId: string) {
  * Server Action: Reject Pass (sets status to 'rejected' and sends 48h notification email)
  */
 export async function rejectPassAction(passId: string, rejectionReason?: string) {
-  const { error: authError } = await requireRole(['admin']);
-  if (authError) {
+  // 1. Get the CURRENT active user session dynamically
+  const supabase = await createServerClient();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) {
+    throw new Error('Action non autorisée : Veuillez vous reconnecter.');
+  }
+
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('role, is_suspended')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  if (!profile || profile.is_suspended || (profile.role || '').toLowerCase() !== 'admin') {
     throw new Error('Action non autorisée : droits administrateur requis');
   }
 
@@ -287,6 +321,15 @@ export async function rejectPassAction(passId: string, rejectionReason?: string)
     }
   } else {
     console.warn(`[rejectPassAction] Aucun email trouvé pour l'utilisateur ${pass.user_id}`);
+  }
+
+  try {
+    revalidatePath('/admin');
+    revalidatePath('/admin/approbations');
+    revalidatePath('/admin/passes');
+    revalidatePath('/dashboard');
+  } catch (e) {
+    // safe fallback
   }
 
   return { success: true, status: 'rejected' };
@@ -666,14 +709,66 @@ export interface CreateAdminPassPayload {
 }
 
 /**
- * Server Action: createAdminPassAction
+ * Server Action: createAdminPassAction / createAdminPass
  * Creates a manual admin pass (VIP, GIFT/CADEAU, INVITATION, NORMAL)
  * with selected drink and aromas.
+ *
+ * CRITICAL: Dynamically fetches the current active user session with auth.getUser()
+ * and uses user.id for created_by and approved_by audit fields.
  */
-export async function createAdminPassAction(payload: CreateAdminPassPayload) {
-  const { error: authError, user: caller } = await requireRole(['admin']);
-  if (authError || !caller) {
-    throw new Error('Action non autorisée : Admin non authentifié.');
+export async function createAdminPassAction(payloadOrFormData: CreateAdminPassPayload | FormData) {
+  // 1. Get the CURRENT active user session dynamically from incoming request cookies
+  const supabase = await createServerClient();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    throw new Error("Non autorisé : Veuillez vous reconnecter.");
+  }
+
+  // 2. Verify active admin privileges dynamically
+  const { data: callerProfile, error: profileErr } = await supabaseAdmin
+    .from('profiles')
+    .select('id, role, is_suspended')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  if (profileErr || !callerProfile || callerProfile.is_suspended || (callerProfile.role || '').toLowerCase() !== 'admin') {
+    throw new Error("Action non autorisée : droits administrateur requis.");
+  }
+
+  // 3. Normalize input: support both FormData and JSON CreateAdminPassPayload
+  let payload: CreateAdminPassPayload;
+  if (typeof (payloadOrFormData as any)?.get === 'function') {
+    const fd = payloadOrFormData as FormData;
+    const rawAromas = fd.get('selected_aromas') || fd.get('selectedAromas') || fd.get('aromas');
+    let parsedAromas: string[] = [];
+    if (typeof rawAromas === 'string') {
+      try {
+        const parsed = JSON.parse(rawAromas);
+        parsedAromas = Array.isArray(parsed) ? parsed : [rawAromas];
+      } catch {
+        parsedAromas = rawAromas.split(',').map((s: string) => s.trim()).filter(Boolean);
+      }
+    }
+
+    payload = {
+      userId: (fd.get('userId') || fd.get('user_id')) as string,
+      eventId: (fd.get('eventId') || fd.get('event_id')) as string,
+      passType: (fd.get('passType') || fd.get('pass_type') || fd.get('status') || 'NORMAL') as any,
+      guestFirstName: (fd.get('guestFirstName') || fd.get('guest_first_name') || fd.get('firstName')) as string || undefined,
+      guestLastName: (fd.get('guestLastName') || fd.get('guest_last_name') || fd.get('lastName')) as string || undefined,
+      drink_name: (fd.get('drink_name') || fd.get('drinkName') || fd.get('drink')) as string || undefined,
+      drinkName: (fd.get('drinkName') || fd.get('drink_name') || fd.get('drink')) as string || undefined,
+      selected_aromas: parsedAromas,
+      selectedAromas: parsedAromas,
+      promo_code: (fd.get('promo_code') || fd.get('promoCode') || fd.get('promo_used')) as string || undefined,
+      promoCode: (fd.get('promoCode') || fd.get('promo_code') || fd.get('promo_used')) as string || undefined,
+      promo_used: (fd.get('promo_used') || fd.get('promoCode') || fd.get('promo_code')) as string || undefined,
+      final_price: fd.get('final_price') ? Number(fd.get('final_price')) : undefined,
+      finalPrice: fd.get('finalPrice') ? Number(fd.get('finalPrice')) : undefined,
+    };
+  } else {
+    payload = payloadOrFormData as CreateAdminPassPayload;
   }
 
   const {
@@ -796,7 +891,7 @@ export async function createAdminPassAction(payload: CreateAdminPassPayload) {
   const resolvedLastName = guestLastName?.trim() 
     || (profile.full_name && profile.full_name.split(' ').length > 1 ? profile.full_name.split(' ').slice(1).join(' ') : '');
 
-  // 5. Direct DB insertion with Admin attribution (created_by: caller.id)
+  // 5. Direct DB insertion with dynamic Admin attribution (created_by: user.id)
   const now = new Date().toISOString();
   const insertPayload: Record<string, any> = {
     user_id: userId,
@@ -805,7 +900,7 @@ export async function createAdminPassAction(payload: CreateAdminPassPayload) {
     guest_last_name: resolvedLastName,
     pass_type: normalizedPassType,
     pass_origin: 'ADMIN',
-    created_by: caller.id,
+    created_by: user.id, // CRITICAL: This ensures the active admin's ID is saved
     invitation_status: invitationStatus,
     entry_status: entryStatus,
     entry_qr_uuid: entryQrUuid,
@@ -821,7 +916,7 @@ export async function createAdminPassAction(payload: CreateAdminPassPayload) {
 
   if (normalizedPassType === 'GIFT' || normalizedPassType === 'VIP') {
     insertPayload.entry_status = 'activated';
-    insertPayload.approved_by = caller.id;
+    insertPayload.approved_by = user.id; // Active admin dynamic approval
     insertPayload.payment_approved_at = now;
   }
 
@@ -846,6 +941,16 @@ export async function createAdminPassAction(payload: CreateAdminPassPayload) {
     newPass = retryPass;
   }
 
+  // 6. Clear Next.js Router / Fetch Caching
+  try {
+    revalidatePath('/admin');
+    revalidatePath('/admin/approbations');
+    revalidatePath('/admin/passes');
+    revalidatePath('/dashboard');
+  } catch (e) {
+    // safe fallback outside Next request context
+  }
+
   return { success: true, pass: newPass, passId: newPass.id };
 }
 
@@ -857,8 +962,20 @@ export const generatePassByAdmin = createAdminPassAction;
  * Server Action: Permanently delete a pass strictly by id (Admin only)
  */
 export async function deletePassAction(passId: string, holderNameConfirmation?: string) {
-  const { error: authError } = await requireRole(['admin']);
-  if (authError) {
+  // 1. Get CURRENT active user session dynamically
+  const supabase = await createServerClient();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) {
+    throw new Error('Action non autorisée : Veuillez vous reconnecter.');
+  }
+
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('role, is_suspended')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  if (!profile || profile.is_suspended || (profile.role || '').toLowerCase() !== 'admin') {
     throw new Error('Action non autorisée : droits administrateur requis');
   }
 
@@ -931,6 +1048,8 @@ export async function deletePassAction(passId: string, holderNameConfirmation?: 
   try {
     revalidatePath('/admin');
     revalidatePath('/admin/approbations');
+    revalidatePath('/admin/passes');
+    revalidatePath('/dashboard');
   } catch (e) {
     // Safe ignore outside Next request cycle
   }

@@ -20,6 +20,7 @@ import {
   Tag
 } from 'lucide-react';
 import { api, User, Event } from '@/lib/services/api';
+import { createAdminPassAction } from '@/lib/actions/pass-lifecycle';
 
 interface PassCreationSectionProps {
   users: User[];
@@ -184,7 +185,7 @@ export function PassCreationSection({ users, events, onPassCreated }: PassCreati
     setStatusMessage(null);
 
     try {
-      const result = await api.createManualPass({
+      const passPayload = {
         userId: selectedUser.id,
         eventId: selectedEventId,
         passType: selectedPassType,
@@ -199,12 +200,22 @@ export function PassCreationSection({ users, events, onPassCreated }: PassCreati
         promo_used: selectedPassType === 'NORMAL' && appliedPromo ? appliedPromo.code : undefined,
         final_price: calculatedFinalPrice,
         finalPrice: calculatedFinalPrice,
-      });
+      };
+
+      let createdPass: any = null;
+      try {
+        const actionResult = await createAdminPassAction(passPayload);
+        createdPass = actionResult.pass;
+      } catch (actionErr: any) {
+        console.warn('Server Action direct call failed, falling back to API route:', actionErr);
+        const apiResult = await api.createManualPass(passPayload);
+        createdPass = apiResult.pass;
+      }
 
       setStatusMessage({
         type: 'success',
-        text: result.message || `Pass ${selectedPassType} émis avec succès pour ${selectedUser.email} !`,
-        pass: result.pass,
+        text: `Pass ${selectedPassType} émis avec succès pour ${selectedUser.email} !`,
+        pass: createdPass,
       });
 
       setSelectedDrinkName('');

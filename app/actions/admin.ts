@@ -1,7 +1,11 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
+import { createClient as createServerClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/supabase/api-security";
+import { createAdminPassAction } from "@/lib/actions/pass-lifecycle";
+import type { CreateAdminPassPayload } from "@/lib/actions/pass-lifecycle";
 
 // Initialize Supabase Admin client with the service role key
 // NEVER expose this client or SUPABASE_SERVICE_ROLE_KEY to the frontend
@@ -41,9 +45,24 @@ export interface CreateStaffAccountResponse {
 export async function createStaffAccount(
   payload: CreateStaffAccountPayload
 ): Promise<CreateStaffAccountResponse> {
-  // 1. Authorization: verify caller has active ADMIN privileges
-  const { error: authError, user: caller } = await requireRole(['admin']);
+  // 1. Authorization: verify caller has active ADMIN privileges dynamically
+  const supabase = await createServerClient();
+  const { data: { user: caller }, error: authError } = await supabase.auth.getUser();
+
   if (authError || !caller) {
+    return {
+      success: false,
+      error: "Non autorisé : Seuls les administrateurs peuvent créer des comptes staff ou admin.",
+    };
+  }
+
+  const { data: callerProfile } = await supabaseAdmin
+    .from('profiles')
+    .select('role, is_suspended')
+    .eq('id', caller.id)
+    .maybeSingle();
+
+  if (!callerProfile || callerProfile.is_suspended || (callerProfile.role || '').toLowerCase() !== 'admin') {
     return {
       success: false,
       error: "Non autorisé : Seuls les administrateurs peuvent créer des comptes staff ou admin.",
@@ -118,6 +137,12 @@ export async function createStaffAccount(
       };
     }
 
+    try {
+      revalidatePath('/admin');
+    } catch (e) {
+      // safe fallback
+    }
+
     return {
       success: true,
       userId: newUserId,
@@ -131,10 +156,18 @@ export async function createStaffAccount(
   }
 }
 
+/**
+ * Server Action: createAdminPass
+ * Accepts either FormData or JSON CreateAdminPassPayload.
+ * Dynamically retrieves user session and sets created_by: user.id.
+ */
+export async function createAdminPass(formDataOrPayload: FormData | CreateAdminPassPayload) {
+  return await createAdminPassAction(formDataOrPayload);
+}
+
 export { 
   createAdminPassAction,
-  createAdminPass,
-  generatePassByAdmin 
-} from '@/lib/actions/pass-lifecycle';
+  createAdminPass as generatePassByAdmin,
+};
 export type { CreateAdminPassPayload } from '@/lib/actions/pass-lifecycle';
 
