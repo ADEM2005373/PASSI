@@ -87,7 +87,7 @@ export async function GET(req: NextRequest) {
     if (allProfileIds.length > 0) {
       const { data: profs } = await supabaseAdmin
         .from('profiles')
-        .select('id, email, full_name, first_name, last_name, instagram_handle, role')
+        .select('id, email, full_name, instagram_handle, role')
         .in('id', allProfileIds);
       if (profs) {
         profs.forEach((pr: any) => { profilesMap[pr.id] = pr; });

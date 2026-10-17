@@ -8,9 +8,10 @@ import { api, Pass, User, Event } from "@/lib/services/api";
 import { useAuth } from "@/lib/context/auth-context";
 import { useSimulation } from "@/lib/context/simulation-context";
 import { Logo } from "@/components/Logo";
-import { Sun, Moon, LogOut, LayoutDashboard, CalendarDays, Users, CheckSquare, Plus, Trash2, Pencil, X, ExternalLink, Check, DollarSign, Download, User as UserIcon, Banknote, ShieldAlert, ShieldCheck, FileSpreadsheet, FileText, Tag, Ticket, Copy, Newspaper } from "lucide-react";
+import { Sun, Moon, LogOut, LayoutDashboard, CalendarDays, Users, CheckSquare, Plus, Trash2, Pencil, X, ExternalLink, Check, DollarSign, Download, User as UserIcon, Banknote, ShieldAlert, ShieldCheck, FileSpreadsheet, FileText, Tag, Ticket, Copy, Newspaper, Wine } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { aggregateDrinksReportData, generateDrinksReportPDF } from "@/lib/utils/drinks-report";
 import { PassCreationSection } from "@/components/admin/PassCreationSection";
 import { NewsManagementSection } from "@/components/admin/NewsManagementSection";
 import { FinancialAnalyticsSection } from "@/components/admin/FinancialAnalyticsSection";
@@ -71,6 +72,7 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
   const [deleteConfirmationInput, setDeleteConfirmationInput] = useState("");
   const [isDeletingPass, setIsDeletingPass] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [drinksReportModal, setDrinksReportModal] = useState<{ eventId: string; eventTitle: string } | null>(null);
 
   useEffect(() => {
     if (user?.full_name) setAdminFullName(user.full_name);
@@ -373,35 +375,8 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
   };
 
   const handleDownloadDrinksReport = (eventId: string, eventTitle: string) => {
-    const eventPasses = passes.filter(p => p.event_id === eventId && p.drink_menus);
-    const drinkCounts: Record<string, number> = {};
-    let totalDrinks = 0;
-    
-    eventPasses.forEach(p => {
-      if (p.drink_menus) {
-        const dName = p.drink_menus.name;
-        drinkCounts[dName] = (drinkCounts[dName] || 0) + 1;
-        totalDrinks++;
-      }
-    });
-
-    const doc = new jsPDF();
-    doc.text(`Rapport des boissons: ${eventTitle}`, 14, 20);
-    
-    let tableData = Object.entries(drinkCounts).map(([name, count]) => [name, count]);
-    
-    if (tableData.length === 0) {
-      tableData = [['Aucune boisson réservée', 0]];
-    }
-    
-    autoTable(doc, {
-      startY: 30,
-      head: [['Boisson', 'Quantité']],
-      body: tableData,
-      foot: [['Total', totalDrinks]],
-    });
-
-    doc.save(`boissons_${eventTitle.replace(/\s+/g, '_')}.pdf`);
+    const { rows, totalDrinks } = aggregateDrinksReportData(passes, eventId);
+    generateDrinksReportPDF(eventTitle, rows, totalDrinks);
   };
 
   const handleSaveUser = async (e: React.FormEvent) => {
@@ -950,7 +925,18 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
                         )}
                       </div>
                       <div className="flex gap-2">
-                        <button onClick={() => handleDownloadDrinksReport(ev.id, ev.title)} className="p-2.5 rounded-xl bg-passi-turquoise/10 text-passi-turquoise hover:bg-passi-turquoise/20 transition-colors" title="Télécharger le rapport des boissons">
+                        <button 
+                          onClick={() => setDrinksReportModal({ eventId: ev.id, eventTitle: ev.title })} 
+                          className="p-2.5 rounded-xl bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-colors" 
+                          title="Consulter le rapport des boissons (Écran & PDF)"
+                        >
+                          <Wine size={16}/>
+                        </button>
+                        <button 
+                          onClick={() => handleDownloadDrinksReport(ev.id, ev.title)} 
+                          className="p-2.5 rounded-xl bg-passi-turquoise/10 text-passi-turquoise hover:bg-passi-turquoise/20 transition-colors" 
+                          title="Télécharger directement le rapport des boissons (PDF)"
+                        >
                           <Download size={16}/>
                         </button>
                         <button onClick={() => handleEditClick(ev)} className="btn-ghost p-2.5 !rounded-xl">
@@ -1552,6 +1538,144 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
                       </button>
                     </div>
                   </form>
+                </div>
+              </div>,
+              document.body
+            );
+          })()}
+
+          {/* ── DRINKS REPORT MODAL (ON-SCREEN & PDF) ── */}
+          {mounted && drinksReportModal && (() => {
+            const { rows, totalDrinks } = aggregateDrinksReportData(passes, drinksReportModal.eventId);
+
+            return createPortal(
+              <div className="fixed inset-0 z-[9999] overflow-y-auto flex items-center justify-center p-4 sm:p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+                <div className="relative my-auto bg-white dark:bg-[#151D2A] p-6 sm:p-8 rounded-[2rem] w-full max-w-2xl shadow-2xl border border-purple-500/30 flex flex-col max-h-[90vh]">
+                  {/* Header */}
+                  <div className="flex items-center justify-between pb-4 border-b border-gray-100 dark:border-neutral-800">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-2xl bg-purple-500/10 flex items-center justify-center text-purple-500 flex-shrink-0">
+                        <Wine size={24} />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-black text-gray-900 dark:text-white">
+                          Rapport des boissons
+                        </h3>
+                        <p className="text-xs text-purple-400 font-bold uppercase tracking-wider">
+                          {drinksReportModal.eventTitle}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setDrinksReportModal(null)}
+                      className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-neutral-800 transition-colors cursor-pointer"
+                      title="Fermer"
+                    >
+                      <X size={20} />
+                    </button>
+                  </div>
+
+                  {/* Summary Metric Cards */}
+                  <div className="grid grid-cols-2 gap-3 my-4">
+                    <div className="p-4 rounded-2xl bg-neutral-100 dark:bg-[#1A2333] border border-neutral-200 dark:border-[#28354D]">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                        Total Consommations
+                      </p>
+                      <p className="text-2xl font-black text-emerald-500 mt-1">
+                        {totalDrinks}
+                      </p>
+                    </div>
+                    <div className="p-4 rounded-2xl bg-neutral-100 dark:bg-[#1A2333] border border-neutral-200 dark:border-[#28354D]">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                        Combinaisons de Goûts
+                      </p>
+                      <p className="text-2xl font-black text-purple-400 mt-1">
+                        {rows.length}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Scrollable Table Area */}
+                  <div className="flex-1 overflow-y-auto rounded-2xl border border-neutral-200 dark:border-neutral-800 my-2">
+                    <table className="w-full text-left text-sm">
+                      <thead className="sticky top-0 bg-neutral-100 dark:bg-[#1E293B] text-xs font-bold uppercase text-neutral-600 dark:text-neutral-300 border-b border-neutral-200 dark:border-neutral-700">
+                        <tr>
+                          <th className="py-3 px-4">Boisson</th>
+                          <th className="py-3 px-4">Arômes / Goûts</th>
+                          <th className="py-3 px-4 text-center">Quantité</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
+                        {rows.length === 0 ? (
+                          <tr>
+                            <td colSpan={3} className="py-8 text-center text-neutral-400">
+                              Aucune boisson réservée pour cet événement.
+                            </td>
+                          </tr>
+                        ) : (
+                          rows.map((row, idx) => (
+                            <tr key={idx} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/40 transition-colors">
+                              <td className="py-3 px-4 font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-purple-400" />
+                                <span>{row.drinkName}</span>
+                              </td>
+                              <td className="py-3 px-4 text-neutral-600 dark:text-neutral-300">
+                                {row.aromasDisplay === '-' ? (
+                                  <span className="text-neutral-400 dark:text-neutral-500 font-mono text-xs">-</span>
+                                ) : (
+                                  <div className="flex flex-wrap gap-1">
+                                    {row.aromasDisplay.split(', ').map((aroma, aIdx) => (
+                                      <span
+                                        key={aIdx}
+                                        className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-purple-500/10 text-purple-300 border border-purple-500/20"
+                                      >
+                                        {aroma}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="py-3 px-4 text-center">
+                                <span className="inline-flex items-center justify-center min-w-[28px] px-2 py-0.5 rounded-full text-xs font-extrabold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                  {row.count}
+                                </span>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                      {rows.length > 0 && (
+                        <tfoot className="bg-neutral-100 dark:bg-[#1A2333] border-t-2 border-neutral-300 dark:border-neutral-700 font-bold text-xs">
+                          <tr>
+                            <td className="py-3 px-4 text-gray-900 dark:text-white uppercase">Total</td>
+                            <td className="py-3 px-4 text-neutral-400">-</td>
+                            <td className="py-3 px-4 text-center text-emerald-400 text-sm font-black">
+                              {totalDrinks}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      )}
+                    </table>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100 dark:border-neutral-800 mt-2">
+                    <button
+                      type="button"
+                      onClick={() => setDrinksReportModal(null)}
+                      className="px-4 py-2.5 rounded-xl text-sm font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+                    >
+                      Fermer
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadDrinksReport(drinksReportModal.eventId, drinksReportModal.eventTitle)}
+                      className="px-5 py-2.5 rounded-xl text-sm font-bold text-neutral-950 bg-gradient-to-r from-teal-400 to-emerald-400 hover:from-teal-300 hover:to-emerald-300 shadow-lg shadow-teal-500/20 transition-all flex items-center gap-2 cursor-pointer font-extrabold"
+                    >
+                      <Download size={16} />
+                      <span>Télécharger le PDF</span>
+                    </button>
+                  </div>
                 </div>
               </div>,
               document.body

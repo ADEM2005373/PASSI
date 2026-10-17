@@ -740,7 +740,7 @@ export function PaymentPointSupervisionSection({
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {supervisionData.cashiersOverview.map((cashier: any) => {
-                  const profileWorker = profiles.find(p => p.id === cashier.id);
+                  const profileWorker = profiles.find(p => p.id === cashier.id) || (cashier as any);
                   const isClosedToday = (supervisionData.allClosures || []).some(
                     (cl: any) => cl.cashier_id === cashier.id && cl.closure_date === new Date().toISOString().split('T')[0]
                   );
@@ -852,7 +852,10 @@ export function PaymentPointSupervisionSection({
                       {profileWorker && (
                         <div className="flex items-center justify-between gap-2 pt-2 border-t border-gray-100 dark:border-neutral-800">
                           <button
-                            onClick={() => onToggleSuspend(profileWorker)}
+                            onClick={async () => {
+                              await onToggleSuspend(profileWorker);
+                              await loadSupervisionData();
+                            }}
                             className={`flex-1 py-1.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                               cashier.is_suspended
                                 ? 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 border border-emerald-500/30'
@@ -873,7 +876,12 @@ export function PaymentPointSupervisionSection({
                           </button>
 
                           <button
-                            onClick={() => onDeleteUser(cashier.id)}
+                            onClick={async () => {
+                              if (window.confirm("Êtes-vous sûr de vouloir supprimer ce point de paiement ?")) {
+                                await onDeleteUser(cashier.id);
+                                await loadSupervisionData();
+                              }
+                            }}
                             className="p-2 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-colors cursor-pointer"
                             title="Supprimer ce compte guichetier"
                           >

@@ -26,7 +26,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Champs requis manquants ou invalides (email, password, role)' }, { status: 400 });
     }
 
-    const normalizedRole = role.toLowerCase();
+    const rawRole = role.toLowerCase();
+    const normalizedRole = rawRole === 'cashier' ? 'payment_point' : rawRole;
     if (!['admin', 'user', 'security', 'barman', 'payment_point'].includes(normalizedRole)) {
       return NextResponse.json({ error: 'Rôle invalide' }, { status: 400 });
     }
@@ -153,7 +154,8 @@ export async function PATCH(req: NextRequest) {
     // 2. Update Profile
     const profileUpdates: any = {};
     if (role) {
-      const normRole = role.toLowerCase();
+      const rawRole = role.toLowerCase();
+      const normRole = rawRole === 'cashier' ? 'payment_point' : rawRole;
       if (['admin', 'user', 'security', 'barman', 'payment_point'].includes(normRole)) {
         profileUpdates.role = normRole;
       }
