@@ -167,22 +167,48 @@ export async function PATCH(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { userId, role, email, password, instagramHandle, is_suspended, sell_point_name, sellPointName, full_name } = body || {};
+    const { 
+      userId, 
+      role, 
+      email, 
+      password, 
+      instagramHandle, 
+      is_suspended, 
+      sell_point_name, 
+      sellPointName, 
+      full_name,
+      first_name,
+      firstName,
+      last_name,
+      lastName,
+    } = body || {};
 
     if (!userId || typeof userId !== 'string') {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
 
     const resolvedSellPoint = sell_point_name !== undefined ? sell_point_name : sellPointName;
+    const resolvedFirstName = first_name !== undefined ? first_name : firstName;
+    const resolvedLastName = last_name !== undefined ? last_name : lastName;
 
     // 1. Update Auth User if email, password, or metadata provided
     const authUpdates: Record<string, any> = {};
     if (email) authUpdates.email = String(email).trim().toLowerCase();
     if (password) authUpdates.password = String(password);
+    
+    const userMetaUpdates: Record<string, any> = {};
     if (resolvedSellPoint !== undefined) {
-      authUpdates.user_metadata = {
-        sell_point_name: resolvedSellPoint ? String(resolvedSellPoint).trim() : null,
-      };
+      userMetaUpdates.sell_point_name = resolvedSellPoint ? String(resolvedSellPoint).trim() : null;
+    }
+    if (resolvedFirstName !== undefined) {
+      userMetaUpdates.first_name = resolvedFirstName ? String(resolvedFirstName).trim() : null;
+    }
+    if (resolvedLastName !== undefined) {
+      userMetaUpdates.last_name = resolvedLastName ? String(resolvedLastName).trim() : null;
+    }
+
+    if (Object.keys(userMetaUpdates).length > 0) {
+      authUpdates.user_metadata = userMetaUpdates;
     }
 
     if (Object.keys(authUpdates).length > 0) {
@@ -206,6 +232,9 @@ export async function PATCH(req: NextRequest) {
     if (instagramHandle !== undefined) profileUpdates.instagram_handle = String(instagramHandle).slice(0, 50);
     if (is_suspended !== undefined) profileUpdates.is_suspended = Boolean(is_suspended);
     if (full_name !== undefined) profileUpdates.full_name = full_name;
+    if (resolvedFirstName !== undefined) profileUpdates.first_name = resolvedFirstName ? String(resolvedFirstName).trim() : null;
+    if (resolvedLastName !== undefined) profileUpdates.last_name = resolvedLastName ? String(resolvedLastName).trim() : null;
+
     if (resolvedSellPoint !== undefined) {
       profileUpdates.sell_point_name = resolvedSellPoint ? String(resolvedSellPoint).trim() : null;
       if (!profileUpdates.full_name && resolvedSellPoint) {

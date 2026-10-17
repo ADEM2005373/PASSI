@@ -180,9 +180,150 @@ export async function createAdminPass(formDataOrPayload: FormData | CreateAdminP
   return await createAdminPassAction(formDataOrPayload);
 }
 
-export { 
-  createAdminPassAction,
-  createAdminPass as generatePassByAdmin,
-};
+export interface UpdatePaymentPointPayload {
+  cashierId: string;
+  sellPointName?: string;
+  sell_point_name?: string;
+  firstName?: string;
+  first_name?: string;
+  lastName?: string;
+  last_name?: string;
+  email?: string;
+  password?: string;
+}
+
+export interface UpdatePaymentPointResponse {
+  success: boolean;
+  error?: string;
+}
+
+/**
+ * Server Action: updatePaymentPointProfile
+ * Updates a cashier / payment point account details in Supabase (sell_point_name, first_name, last_name, etc.)
+ */
+export async function updatePaymentPointProfile(
+  payload: UpdatePaymentPointPayload
+): Promise<UpdatePaymentPointResponse> {
+  const supabase = await createServerClient();
+  const { data: { user: caller }, error: authError } = await supabase.auth.getUser();
+
+  if (authError || !caller) {
+    return {
+      success: false,
+      error: "Non autorisé : Seuls les administrateurs peuvent modifier les points de paiement.",
+    };
+  }
+
+  const { profile: callerProfile } = await getOrCreateProfile(caller, { defaultRole: 'admin' });
+
+  if (callerProfile.is_suspended || normalizeRole(callerProfile.role) !== 'admin') {
+    return {
+      success: false,
+      error: "Non autorisé : Privilèges administrateur requis.",
+    };
+  }
+
+  try {
+    const {
+      cashierId,
+      sellPointName,
+      sell_point_name,
+      firstName,
+      first_name,
+      lastName,
+      last_name,
+      email,
+      password,
+    } = payload;
+
+    if (!cashierId || typeof cashierId !== 'string') {
+      return { success: false, error: "Identifiant du point de vente requis." };
+    }
+
+    const resolvedSellPointName = (sellPointName !== undefined ? sellPointName : sell_point_name)?.trim();
+    const resolvedFirstName = (firstName !== undefined ? firstName : first_name)?.trim();
+    const resolvedLastName = (lastName !== undefined ? lastName : last_name)?.trim();
+    const cleanEmail = email ? email.trim().toLowerCase() : undefined;
+
+    // 1. Update Auth user if email, password, or metadata provided
+    const authUpdates: Record<string, any> = {};
+    if (cleanEmail) authUpdates.email = cleanEmail;
+    if (password && password.length >= 6) authUpdates.password = password;
+    
+    const userMeta: Record<string, any> = {};
+    if (resolvedSellPointName !== undefined) userMeta.sell_point_name = resolvedSellPointName;
+    if (resolvedFirstName !== undefined) userMeta.first_name = resolvedFirstName;
+    if (resolvedLastName !== undefined) userMeta.last_name = resolvedLastName;
+    
+    const effectiveFullName = resolvedSellPointName || 
+      (resolvedFirstName && resolvedLastName ? `${resolvedFirstName} ${resolvedLastName}` : (resolvedFirstName || resolvedLastName));
+    if (effectiveFullName) userMeta.full_name = effectiveFullName;
+
+    if (Object.keys(userMeta).length > 0) {
+      authUpdates.user_metadata = userMeta;
+    }
+
+    if (Object.keys(authUpdates).length > 0) {
+      const { error: authUpdateErr } = await supabaseAdmin.auth.admin.updateUserById(cashierId, authUpdates);
+      if (authUpdateErr) {
+        console.error("[updatePaymentPointProfile] Auth update error:", authUpdateErr);
+        return { success: false, error: authUpdateErr.message || "Erreur lors de la mise à jour des identifiants." };
+      }
+    }
+
+    // 2. Update Profile in Supabase
+    const profileUpdates: Record<string, any> = {};
+    if (resolvedSellPointName !== undefined) profileUpdates.sell_point_name = resolvedSellPointName;
+    if (resolvedFirstName !== undefined) profileUpdates.first_name = resolvedFirstName;
+    if (resolvedLastName !== undefined) profileUpdates.last_name = resolvedLastName;
+    if (cleanEmail) profileUpdates.email = cleanEmail;
+    if (effectiveFullName) profileUpdates.full_name = effectiveFullName;
+
+    if (Object.keys(profileUpdates).length > 0) {
+      let { error: profileErr } = await supabaseAdmin
+        .from('profiles')
+        .update(profileUpdates)
+        .eq('id', cashierId);
+
+      if (profileErr && profileErr.message?.includes('sell_point_name')) {
+        delete profileUpdates.sell_point_name;
+        const retryResult = await supabaseAdmin
+          .from('profiles')
+          .update(profileUpdates)
+          .eq('id', cashierId);
+        profileErr = retryResult.error;
+      }
+
+      if (profileErr) {
+        console.error("[updatePaymentPointProfile] Profile update error:", profileErr);
+        return { success: false, error: profileErr.message || "Erreur lors de la mise à jour du profil." };
+      }
+    }
+
+    try {
+      revalidatePath('/admin/points-de-paiement');
+      revalidatePath('/admin/payment-points');
+      revalidatePath('/admin');
+    } catch (e) {
+      // safe fallback
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    console.error("[updatePaymentPointProfile] Unexpected error:", err);
+    return { success: false, error: err.message || "Une erreur inattendue est survenue." };
+  }
+}
+
+export async function updatePaymentPoint(payload: UpdatePaymentPointPayload) {
+  return await updatePaymentPointProfile(payload);
+}
+
+export { createAdminPassAction };
+export async function generatePassByAdmin(formDataOrPayload: FormData | CreateAdminPassPayload) {
+  return await createAdminPass(formDataOrPayload);
+}
+
 export type { CreateAdminPassPayload } from '@/lib/actions/pass-lifecycle';
+
 

@@ -915,6 +915,32 @@ export const api = {
     }
   },
 
+  async updatePaymentPointProfile(payload: {
+    userId: string;
+    sellPointName?: string;
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    password?: string;
+  }): Promise<void> {
+    const res = await fetch('/api/admin/users', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: payload.userId,
+        sell_point_name: payload.sellPointName,
+        first_name: payload.firstName,
+        last_name: payload.lastName,
+        email: payload.email,
+        password: payload.password,
+      }),
+    });
+    if (!res.ok) {
+      const { error } = await res.json();
+      throw new Error(error || 'Failed to update payment point');
+    }
+  },
+
   async getPaymentPointPasses(eventId?: string): Promise<Pass[]> {
     const supabase = createClient();
     // CRITICAL FIX: Strictly filter passes for Payment Point.

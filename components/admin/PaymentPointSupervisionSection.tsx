@@ -40,8 +40,10 @@ import {
   TrendingUp,
   BarChart3,
   Layers,
-  ChevronRight
+  ChevronRight,
+  Pencil
 } from "lucide-react";
+import { EditPaymentPointModal } from "./EditPaymentPointModal";
 
 interface PaymentPointSupervisionSectionProps {
   events: Event[];
@@ -72,6 +74,20 @@ export function PaymentPointSupervisionSection({
   const [workerPassword, setWorkerPassword] = useState("");
   const [workerMsg, setWorkerMsg] = useState("");
   const [isCreatingWorker, setIsCreatingWorker] = useState(false);
+
+  // Edit Payment Point Modal State
+  const [editingCashier, setEditingCashier] = useState<any | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  const handleOpenEditModal = (cashier: any) => {
+    setEditingCashier(cashier);
+    setIsEditModalOpen(true);
+  };
+
+  const handleCloseEditModal = () => {
+    setIsEditModalOpen(false);
+    setEditingCashier(null);
+  };
 
   // Cash Supervision State
   const [supervisionData, setSupervisionData] = useState<{
@@ -896,6 +912,15 @@ export function PaymentPointSupervisionSection({
                           </button>
 
                           <button
+                            onClick={() => handleOpenEditModal({ ...cashier, ...profileWorker })}
+                            className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 px-3.5 py-1.5 rounded-xl text-xs font-bold border border-slate-700 transition cursor-pointer"
+                            title="Modifier ce point de paiement"
+                          >
+                            <Pencil className="w-3.5 h-3.5 text-blue-400" />
+                            <span>Modifier</span>
+                          </button>
+
+                          <button
                             onClick={async () => {
                               if (window.confirm("Êtes-vous sûr de vouloir supprimer ce point de paiement ?")) {
                                 await onDeleteUser(cashier.id);
@@ -1218,6 +1243,17 @@ export function PaymentPointSupervisionSection({
         )}
 
       </div>
+
+      {/* Edit Payment Point Modal */}
+      <EditPaymentPointModal
+        isOpen={isEditModalOpen}
+        onClose={handleCloseEditModal}
+        cashier={editingCashier}
+        onSuccess={async () => {
+          await onRefreshProfiles();
+          await loadSupervisionData();
+        }}
+      />
 
     </div>
   );
