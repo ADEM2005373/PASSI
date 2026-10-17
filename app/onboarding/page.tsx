@@ -8,6 +8,8 @@ import { AlertCircle, CheckCircle2, Lock, ArrowRight, Sparkles } from "lucide-re
 export default function OnboardingPage() {
   const router = useRouter()
   const [handle, setHandle] = useState("")
+  const [firstName, setFirstName] = useState("")
+  const [lastName, setLastName] = useState("")
   const [error, setError] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
@@ -26,10 +28,10 @@ export default function OnboardingPage() {
 
       setUserId(user.id)
 
-      // Si le profil a déjà un instagram_handle, rediriger directement vers le dashboard
+      // Récupérer le profil existant
       const { data: profile } = await supabase
         .from("profiles")
-        .select("instagram_handle, role")
+        .select("instagram_handle, role, full_name, first_name, last_name")
         .eq("id", user.id)
         .maybeSingle()
 
@@ -41,7 +43,19 @@ export default function OnboardingPage() {
         return
       }
 
-      if (isSimulating || (profile?.instagram_handle && profile.instagram_handle.trim().length > 0)) {
+      // Pré-remplir les champs s'ils existent déjà
+      const meta = user.user_metadata || {}
+      const existingFirst = profile?.first_name || meta.first_name || (profile?.full_name ? profile.full_name.split(' ')[0] : "")
+      const existingLast = profile?.last_name || meta.last_name || (profile?.full_name && profile.full_name.split(' ').length > 1 ? profile.full_name.split(' ').slice(1).join(' ') : "")
+      if (existingFirst) setFirstName(existingFirst)
+      if (existingLast) setLastName(existingLast)
+      if (profile?.instagram_handle) setHandle(profile.instagram_handle)
+
+      // Si le profil a déjà un instagram_handle ET un nom complet, rediriger vers le dashboard
+      const hasName = Boolean(existingFirst && existingLast)
+      const hasInstagram = Boolean(profile?.instagram_handle && profile.instagram_handle.trim().length > 0)
+
+      if (isSimulating || (hasInstagram && hasName)) {
         router.replace("/dashboard")
         return
       }
@@ -55,7 +69,7 @@ export default function OnboardingPage() {
   const validateInput = (value: string): { isValid: boolean; formatted: string; errorMsg?: string } => {
     const raw = value.trim()
     if (!raw) {
-      return { isValid: false, formatted: "", errorMsg: "Veuillez renseigner votre pseudo ou lien Instagram." }
+      return { isValid: false, formatted: "", errorMsg: "Veuillez renseigner votre profil ou lien Instagram." }
     }
 
     // Accepte soit @pseudo, soit pseudo, soit https://instagram.com/pseudo
@@ -84,45 +98,80 @@ export default function OnboardingPage() {
     e.preventDefault()
     setError("")
 
+    const cleanFirst = firstName.trim()
+    const cleanLast = lastName.trim()
+
+    if (!cleanFirst) {
+      setError("Le prénom est obligatoire.")
+      return
+    }
+
+    if (!cleanLast) {
+      setError("Le nom de famille est obligatoire.")
+      return
+    }
+
     const { isValid, formatted, errorMsg } = validateInput(handle)
     if (!isValid || !userId) {
-      setError(errorMsg || "Saisie invalide.")
+      setError(errorMsg || "Saisie Instagram invalide.")
       return
     }
 
     setIsSubmitting(true)
     const supabase = createClient()
+    const resolvedFullName = `${cleanFirst} ${cleanLast}`
 
     let hasSucceeded = false
     let failureMsg = ""
 
     // 1. Essai de mise à jour directe via client
-    const { error: updateError } = await supabase
+    const updatePayload: Record<string, any> = {
+      instagram_handle: formatted,
+      full_name: resolvedFullName,
+      first_name: cleanFirst,
+      last_name: cleanLast,
+    }
+
+    let { error: updateError } = await supabase
       .from("profiles")
-      .update({
-        instagram_handle: formatted,
-      })
+      .update(updatePayload)
       .eq("id", userId)
+
+    if (updateError && (updateError.message?.includes('first_name') || updateError.message?.includes('last_name'))) {
+      delete updatePayload.first_name
+      delete updatePayload.last_name
+      const retryRes = await supabase.from("profiles").update(updatePayload).eq("id", userId)
+      updateError = retryRes.error
+    }
 
     if (!updateError) {
       hasSucceeded = true
     } else {
       console.warn("Client-side profile update failed, trying server API:", updateError)
-      // 2. Fallback via la route serveur sécurisée
-      try {
-        const apiRes = await fetch("/api/user/onboarding", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ instagramHandle: formatted }),
-        })
-        if (apiRes.ok) {
-          hasSucceeded = true
-        } else {
-          const apiData = await apiRes.json().catch(() => ({}))
-          failureMsg = apiData.error || "Erreur serveur"
-        }
-      } catch (apiErr: any) {
-        console.error("API fallback failed:", apiErr)
+    }
+
+    // 2. Toujours notifier/synchroniser via l'API serveur robuste
+    try {
+      const apiRes = await fetch("/api/user/onboarding", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          firstName: cleanFirst,
+          lastName: cleanLast,
+          fullName: resolvedFullName,
+          instagramHandle: formatted,
+          instagramUrl: formatted,
+        }),
+      })
+      if (apiRes.ok) {
+        hasSucceeded = true
+      } else if (!hasSucceeded) {
+        const apiData = await apiRes.json().catch(() => ({}))
+        failureMsg = apiData.error || "Erreur serveur"
+      }
+    } catch (apiErr: any) {
+      console.error("API fallback failed:", apiErr)
+      if (!hasSucceeded) {
         failureMsg = apiErr?.message || "Erreur de connexion"
       }
     }
@@ -202,24 +251,60 @@ export default function OnboardingPage() {
               <p className="text-sm text-gray-400">Redirection vers votre espace...</p>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="first-name" className="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">
+                    Prénom *
+                  </label>
+                  <input
+                    id="first-name"
+                    type="text"
+                    required
+                    placeholder="Ex: Adem"
+                    value={firstName}
+                    onChange={(e) => {
+                      setFirstName(e.target.value)
+                      if (error) setError("")
+                    }}
+                    className="w-full px-4 py-3 rounded-2xl bg-[#090D16] border border-gray-700/80 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-passi-corail focus:ring-2 focus:ring-passi-corail/20 transition-all duration-200"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="last-name" className="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">
+                    Nom *
+                  </label>
+                  <input
+                    id="last-name"
+                    type="text"
+                    required
+                    placeholder="Ex: Ouerhani"
+                    value={lastName}
+                    onChange={(e) => {
+                      setLastName(e.target.value)
+                      if (error) setError("")
+                    }}
+                    className="w-full px-4 py-3 rounded-2xl bg-[#090D16] border border-gray-700/80 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-passi-corail focus:ring-2 focus:ring-passi-corail/20 transition-all duration-200"
+                  />
+                </div>
+              </div>
+
               <div>
-                <label htmlFor="instagram-handle" className="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">
-                  Nom d'utilisateur ou lien Instagram
+                <label htmlFor="instagram-handle" className="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">
+                  Profil Instagram *
                 </label>
                 <div className="relative">
                   <input
                     id="instagram-handle"
                     type="text"
                     required
-                    autoFocus
-                    placeholder="@votre_pseudo ou https://..."
+                    placeholder="https://instagram.com/username ou @pseudo"
                     value={handle}
                     onChange={(e) => {
                       setHandle(e.target.value)
                       if (error) setError("")
                     }}
-                    className="w-full px-5 py-4 rounded-2xl bg-[#090D16] border border-gray-700/80 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-passi-corail focus:ring-2 focus:ring-passi-corail/20 transition-all duration-200"
+                    className="w-full px-4 py-3 rounded-2xl bg-[#090D16] border border-gray-700/80 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-passi-corail focus:ring-2 focus:ring-passi-corail/20 transition-all duration-200"
                   />
                 </div>
               </div>

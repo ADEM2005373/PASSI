@@ -125,7 +125,7 @@ export async function getOrCreateProfile(
   // Instagram handle determination
   const instagramHandle = meta.instagram_handle || meta.instagram || '';
 
-  const baselinePayload = {
+  const baselinePayload: Record<string, any> = {
     id: userId,
     email: email || `${userId.slice(0, 8)}@passi.local`,
     full_name: fullName,
@@ -134,14 +134,29 @@ export async function getOrCreateProfile(
     instagram_handle: instagramHandle,
   };
 
+  if (meta.first_name) baselinePayload.first_name = meta.first_name;
+  if (meta.last_name) baselinePayload.last_name = meta.last_name;
+
   // 4. Provision profile in database
   if (adminClient) {
     try {
-      const { data: newProfile, error: insertError } = await adminClient
+      let { data: newProfile, error: insertError } = await adminClient
         .from('profiles')
         .upsert(baselinePayload, { onConflict: 'id' })
         .select('id, email, full_name, role, is_suspended, instagram_handle, created_at')
         .single();
+
+      if (insertError && (insertError.message?.includes('first_name') || insertError.message?.includes('last_name'))) {
+        delete baselinePayload.first_name;
+        delete baselinePayload.last_name;
+        const retryResult = await adminClient
+          .from('profiles')
+          .upsert(baselinePayload, { onConflict: 'id' })
+          .select('id, email, full_name, role, is_suspended, instagram_handle, created_at')
+          .single();
+        newProfile = retryResult.data;
+        insertError = retryResult.error;
+      }
 
       if (!insertError && newProfile) {
         return {
@@ -163,7 +178,12 @@ export async function getOrCreateProfile(
   // 5. In-Memory Safe Fallback
   // Prevents transaction failure even if database write fails temporarily
   const fallbackProfile: SafeProfile = {
-    ...baselinePayload,
+    id: userId,
+    email: email || `${userId.slice(0, 8)}@passi.local`,
+    full_name: fullName,
+    role: inferredRole,
+    is_suspended: false,
+    instagram_handle: instagramHandle,
     isFallback: true,
   };
 

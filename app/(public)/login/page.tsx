@@ -107,6 +107,10 @@ function LoginContent() {
   const [loadingProvider, setLoadingProvider] = useState<Provider | null>(null);
   const [error, setError] = useState("");
   const [infoMessage, setInfoMessage] = useState("");
+  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [instagramUrl, setInstagramUrl] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -117,7 +121,126 @@ function LoginContent() {
     setMounted(true);
     const urlError = searchParams.get("error");
     if (urlError) setError("La connexion a échoué. Réessayez.");
+    const tab = searchParams.get("tab") || searchParams.get("mode");
+    if (tab === "signup" || tab === "register") {
+      setAuthMode("signup");
+    }
   }, [searchParams]);
+
+  const formatInstagram = (input: string) => {
+    let clean = input.trim();
+    if (clean.startsWith("@")) {
+      clean = clean.substring(1);
+    }
+    if (clean.startsWith("http://") || clean.startsWith("https://")) {
+      const match = clean.match(/instagram\.com\/([a-zA-Z0-9_.]{1,30})/);
+      if (match && match[1]) {
+        return {
+          url: `https://instagram.com/${match[1]}`,
+          handle: `@${match[1]}`,
+        };
+      }
+      return { url: clean, handle: `@${clean.split('/').filter(Boolean).pop() || 'utilisateur'}` };
+    }
+    return {
+      url: `https://instagram.com/${clean}`,
+      handle: `@${clean}`,
+    };
+  };
+
+  const handleEmailSignUp = async () => {
+    setError("");
+    setInfoMessage("");
+
+    const cleanFirst = firstName.trim();
+    const cleanLast = lastName.trim();
+    const cleanIg = instagramUrl.trim();
+    const cleanEmail = email.trim().toLowerCase();
+
+    if (!cleanFirst) {
+      setError("Le prénom est obligatoire.");
+      return;
+    }
+    if (!cleanLast) {
+      setError("Le nom de famille est obligatoire.");
+      return;
+    }
+    if (!cleanIg) {
+      setError("Le profil ou lien Instagram est obligatoire.");
+      return;
+    }
+    if (!cleanEmail) {
+      setError("L'adresse email est requise.");
+      return;
+    }
+    if (!password || password.length < 6) {
+      setError("Le mot de passe doit comporter au moins 6 caractères.");
+      return;
+    }
+
+    setLoading(true);
+
+    // Rate Limiting check
+    try {
+      const rlRes = await fetch('/api/auth/rate-limit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'check', email: cleanEmail }),
+      });
+      if (rlRes.status === 429) {
+        const rlData = await rlRes.json();
+        setError(rlData.error || "Trop de tentatives. Veuillez réessayer demain.");
+        setLoading(false);
+        return;
+      }
+    } catch (e) {}
+
+    const { url: formattedIgUrl, handle: formattedIgHandle } = formatInstagram(cleanIg);
+    const fullName = `${cleanFirst} ${cleanLast}`;
+
+    const supabase = createClient();
+    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+      email: cleanEmail,
+      password,
+      options: {
+        emailRedirectTo: `${getURL()}/auth/callback`,
+        data: {
+          first_name: cleanFirst,
+          last_name: cleanLast,
+          full_name: fullName,
+          instagram: formattedIgUrl,
+          instagram_handle: formattedIgHandle,
+        },
+      },
+    });
+
+    if (signUpError) {
+      setError(signUpError.message || "Erreur lors de la création du compte.");
+      setLoading(false);
+      return;
+    }
+
+    // Provision or update profile immediately if user exists
+    if (signUpData?.user) {
+      try {
+        await supabase
+          .from("profiles")
+          .upsert({
+            id: signUpData.user.id,
+            email: cleanEmail,
+            full_name: fullName,
+            instagram_handle: formattedIgHandle,
+            role: "user",
+            is_suspended: false,
+          }, { onConflict: "id" });
+      } catch (e) {
+        // Safe fallback
+      }
+    }
+
+    setLoading(false);
+    router.push(`/verify-email?email=${encodeURIComponent(cleanEmail)}`);
+  };
 
   const handleEmailLogin = async () => {
     setError("");
@@ -186,25 +309,8 @@ function LoginContent() {
         }
       } catch (e) {}
 
-      // Si identifiants invalides, tenter l'inscription automatique si applicable (pour les utilisateurs réguliers)
       if (signInError.message.includes("Invalid login credentials")) {
-        const { error: signUpError } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            emailRedirectTo: `${getURL()}/auth/callback`,
-          },
-        });
-        
-        if (signUpError) {
-          setError(signUpError.message || "Erreur d'inscription.");
-          setInfoMessage("");
-        } else {
-          setError("");
-          setInfoMessage("");
-          router.push(`/verify-email?email=${encodeURIComponent(email)}`);
-          return;
-        }
+        setError("Identifiants incorrects. Si vous n'avez pas de compte, cliquez sur 'Créer un compte'.");
       } else if (signInError.message.toLowerCase().includes("email not confirmed")) {
         router.push(`/verify-email?email=${encodeURIComponent(email)}`);
         return;
@@ -422,16 +528,42 @@ function LoginContent() {
               className="text-3xl font-extrabold"
               style={{ color: "var(--text-primary)" }}
             >
-              Bienvenue 👋
+              {authMode === "signup" ? "Créer un compte ✨" : "Bon retour 👋"}
             </h1>
             <p
               className="text-sm font-medium"
               style={{ color: "var(--text-secondary)" }}
             >
-              Connectez-vous pour accéder à vos passes.
-              <br />
-              Aucun mot de passe requis.
+              {authMode === "signup"
+                ? "Rejoignez Passi et gérez facilement vos accès d'événements."
+                : "Connectez-vous pour accéder à vos passes et consommations."}
             </p>
+          </div>
+
+          {/* Mode Switcher Tabs */}
+          <div className="flex bg-gray-100 dark:bg-gray-900/80 p-1.5 rounded-2xl border border-gray-200 dark:border-gray-800">
+            <button
+              type="button"
+              onClick={() => { setAuthMode("login"); setError(""); setInfoMessage(""); }}
+              className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all duration-200 cursor-pointer ${
+                authMode === "login"
+                  ? "bg-white dark:bg-black text-gray-900 dark:text-white shadow-sm"
+                  : "text-gray-500 hover:text-gray-900 dark:hover:text-white"
+              }`}
+            >
+              Connexion
+            </button>
+            <button
+              type="button"
+              onClick={() => { setAuthMode("signup"); setError(""); setInfoMessage(""); }}
+              className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all duration-200 cursor-pointer ${
+                authMode === "signup"
+                  ? "bg-white dark:bg-black text-gray-900 dark:text-white shadow-sm"
+                  : "text-gray-500 hover:text-gray-900 dark:hover:text-white"
+              }`}
+            >
+              Créer un compte
+            </button>
           </div>
 
           {/* Success / Email confirmation notification */}
@@ -464,53 +596,151 @@ function LoginContent() {
             </div>
           )}
 
-          {/* Email/Password Form */}
+          {/* Form */}
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              handleEmailLogin();
+              if (authMode === "signup") {
+                handleEmailSignUp();
+              } else {
+                handleEmailLogin();
+              }
             }}
             className="space-y-4"
           >
-            <div>
-              <input
-                type="email"
-                placeholder="Email"
-                aria-label="Adresse email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-5 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-black text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-passi-turquoise/50 transition-all"
-              />
-            </div>
-            <div>
-              <input
-                type="password"
-                placeholder="Mot de passe"
-                aria-label="Mot de passe"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-5 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-black text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-passi-turquoise/50 transition-all"
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full px-5 py-3.5 rounded-2xl text-sm font-bold bg-passi-turquoise text-white hover:opacity-90 disabled:opacity-60 transition-all shadow-sm hover:shadow-md hover:-translate-y-0.5"
-            >
-              {loading ? "Connexion..." : "Se connecter / S'inscrire"}
-            </button>
-          </form>
+            {authMode === "signup" ? (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">
+                      Prénom *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ex: Adem"
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-black text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-passi-turquoise/50 transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">
+                      Nom *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ex: Ouerhani"
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-black text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-passi-turquoise/50 transition-all"
+                    />
+                  </div>
+                </div>
 
-          <div className="flex justify-center -mt-2">
-            <a 
-              href="/forgot-password" 
-              className="text-xs font-semibold text-passi-turquoise hover:text-passi-turquoise/80 transition-colors"
-            >
-              Mot de passe oublié ?
-            </a>
-          </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">
+                    Profil Instagram *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="https://instagram.com/username ou @pseudo"
+                    value={instagramUrl}
+                    onChange={(e) => setInstagramUrl(e.target.value)}
+                    className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-black text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-passi-turquoise/50 transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">
+                    Adresse Email *
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="nom@exemple.com"
+                    aria-label="Adresse email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-black text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-passi-turquoise/50 transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">
+                    Mot de passe *
+                  </label>
+                  <input
+                    type="password"
+                    placeholder="Au moins 6 caractères"
+                    aria-label="Mot de passe"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-black text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-passi-turquoise/50 transition-all"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full px-5 py-3.5 rounded-2xl text-sm font-bold bg-passi-turquoise text-white hover:opacity-90 disabled:opacity-60 transition-all shadow-sm hover:shadow-md hover:-translate-y-0.5 cursor-pointer"
+                >
+                  {loading ? "Création du compte..." : "Créer mon compte"}
+                </button>
+              </>
+            ) : (
+              <>
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">
+                    Adresse Email *
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="nom@exemple.com"
+                    aria-label="Adresse email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full px-5 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-black text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-passi-turquoise/50 transition-all"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex justify-between items-center mb-1.5">
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400">
+                      Mot de passe *
+                    </label>
+                    <a 
+                      href="/forgot-password" 
+                      className="text-xs font-semibold text-passi-turquoise hover:text-passi-turquoise/80 transition-colors"
+                    >
+                      Oublié ?
+                    </a>
+                  </div>
+                  <input
+                    type="password"
+                    placeholder="Votre mot de passe"
+                    aria-label="Mot de passe"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full px-5 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-black text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-passi-turquoise/50 transition-all"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full px-5 py-3.5 rounded-2xl text-sm font-bold bg-passi-turquoise text-white hover:opacity-90 disabled:opacity-60 transition-all shadow-sm hover:shadow-md hover:-translate-y-0.5 cursor-pointer"
+                >
+                  {loading ? "Connexion..." : "Se connecter"}
+                </button>
+              </>
+            )}
+          </form>
 
           <div className="flex items-center gap-3 py-2">
             <div className="flex-1 h-px" style={{ backgroundColor: "var(--border)" }} />

@@ -54,11 +54,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .maybeSingle()
 
     if (!profile) {
-      // Profile row not yet created
+      // Profile row not yet created: populate from user_metadata
+      const meta = authUser.user_metadata || {};
+      const fullName = meta.full_name || [meta.first_name, meta.last_name].filter(Boolean).join(' ') || null;
+      const ig = meta.instagram_handle || meta.instagram || null;
+
       await supabase.from("profiles").upsert({
         id: authUser.id,
         email: authUser.email ?? "",
-        instagram_handle: null,
+        full_name: fullName,
+        instagram_handle: ig,
         role: "user",
       })
 
