@@ -108,9 +108,6 @@ function LoginContent() {
   const [error, setError] = useState("");
   const [infoMessage, setInfoMessage] = useState("");
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [instagramUrl, setInstagramUrl] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -127,48 +124,12 @@ function LoginContent() {
     }
   }, [searchParams]);
 
-  const formatInstagram = (input: string) => {
-    let clean = input.trim();
-    if (clean.startsWith("@")) {
-      clean = clean.substring(1);
-    }
-    if (clean.startsWith("http://") || clean.startsWith("https://")) {
-      const match = clean.match(/instagram\.com\/([a-zA-Z0-9_.]{1,30})/);
-      if (match && match[1]) {
-        return {
-          url: `https://instagram.com/${match[1]}`,
-          handle: `@${match[1]}`,
-        };
-      }
-      return { url: clean, handle: `@${clean.split('/').filter(Boolean).pop() || 'utilisateur'}` };
-    }
-    return {
-      url: `https://instagram.com/${clean}`,
-      handle: `@${clean}`,
-    };
-  };
-
   const handleEmailSignUp = async () => {
     setError("");
     setInfoMessage("");
 
-    const cleanFirst = firstName.trim();
-    const cleanLast = lastName.trim();
-    const cleanIg = instagramUrl.trim();
     const cleanEmail = email.trim().toLowerCase();
 
-    if (!cleanFirst) {
-      setError("Le prénom est obligatoire.");
-      return;
-    }
-    if (!cleanLast) {
-      setError("Le nom de famille est obligatoire.");
-      return;
-    }
-    if (!cleanIg) {
-      setError("Le profil ou lien Instagram est obligatoire.");
-      return;
-    }
     if (!cleanEmail) {
       setError("L'adresse email est requise.");
       return;
@@ -195,22 +156,12 @@ function LoginContent() {
       }
     } catch (e) {}
 
-    const { url: formattedIgUrl, handle: formattedIgHandle } = formatInstagram(cleanIg);
-    const fullName = `${cleanFirst} ${cleanLast}`;
-
     const supabase = createClient();
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email: cleanEmail,
       password,
       options: {
-        emailRedirectTo: `${getURL()}/auth/callback`,
-        data: {
-          first_name: cleanFirst,
-          last_name: cleanLast,
-          full_name: fullName,
-          instagram: formattedIgUrl,
-          instagram_handle: formattedIgHandle,
-        },
+        emailRedirectTo: `${getURL()}auth/callback`,
       },
     });
 
@@ -220,25 +171,14 @@ function LoginContent() {
       return;
     }
 
-    // Provision or update profile immediately if user exists
-    if (signUpData?.user) {
-      try {
-        await supabase
-          .from("profiles")
-          .upsert({
-            id: signUpData.user.id,
-            email: cleanEmail,
-            full_name: fullName,
-            instagram_handle: formattedIgHandle,
-            role: "user",
-            is_suspended: false,
-          }, { onConflict: "id" });
-      } catch (e) {
-        // Safe fallback
-      }
+    setLoading(false);
+
+    // If session is immediately active, navigate directly to /onboarding
+    if (signUpData?.session) {
+      window.location.href = "/onboarding";
+      return;
     }
 
-    setLoading(false);
     router.push(`/verify-email?email=${encodeURIComponent(cleanEmail)}`);
   };
 
@@ -610,48 +550,6 @@ function LoginContent() {
           >
             {authMode === "signup" ? (
               <>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">
-                      Prénom *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Ex: Adem"
-                      value={firstName}
-                      onChange={(e) => setFirstName(e.target.value)}
-                      className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-black text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-passi-turquoise/50 transition-all"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">
-                      Nom *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Ex: Ouerhani"
-                      value={lastName}
-                      onChange={(e) => setLastName(e.target.value)}
-                      className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-black text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-passi-turquoise/50 transition-all"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">
-                    Profil Instagram *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="https://instagram.com/username ou @pseudo"
-                    value={instagramUrl}
-                    onChange={(e) => setInstagramUrl(e.target.value)}
-                    className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-black text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-passi-turquoise/50 transition-all"
-                  />
-                </div>
 
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">
