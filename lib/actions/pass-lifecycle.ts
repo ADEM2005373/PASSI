@@ -673,7 +673,7 @@ export interface CreateAdminPassPayload {
 export async function createAdminPassAction(payload: CreateAdminPassPayload) {
   const { error: authError, user: caller } = await requireRole(['admin']);
   if (authError || !caller) {
-    throw new Error('Action non autorisée : droits administrateur requis');
+    throw new Error('Action non autorisée : Admin non authentifié.');
   }
 
   const {
@@ -796,23 +796,7 @@ export async function createAdminPassAction(payload: CreateAdminPassPayload) {
   const resolvedLastName = guestLastName?.trim() 
     || (profile.full_name && profile.full_name.split(' ').length > 1 ? profile.full_name.split(' ').slice(1).join(' ') : '');
 
-  // 5. Try RPC create_admin_pass first if it exists
-  const { data: rpcData, error: rpcError } = await supabaseAdmin.rpc('create_admin_pass', {
-    p_user_id: userId,
-    p_event_id: eventId,
-    p_pass_type: normalizedPassType,
-    p_guest_first_name: resolvedFirstName,
-    p_guest_last_name: resolvedLastName,
-    p_drink_name: resolvedDrinkName,
-    p_selected_aromas: formattedAromas,
-    p_promo_code: promoUsed,
-  });
-
-  if (!rpcError && rpcData?.success) {
-    return { success: true, pass: rpcData.pass, passId: rpcData.pass_id };
-  }
-
-  // 6. Direct DB insertion
+  // 5. Direct DB insertion with Admin attribution (created_by: caller.id)
   const now = new Date().toISOString();
   const insertPayload: Record<string, any> = {
     user_id: userId,
@@ -836,7 +820,7 @@ export async function createAdminPassAction(payload: CreateAdminPassPayload) {
   };
 
   if (normalizedPassType === 'GIFT' || normalizedPassType === 'VIP') {
-    insertPayload.status = 'PAID';
+    insertPayload.entry_status = 'activated';
     insertPayload.approved_by = caller.id;
     insertPayload.payment_approved_at = now;
   }
@@ -844,21 +828,16 @@ export async function createAdminPassAction(payload: CreateAdminPassPayload) {
   let { data: newPass, error: insertError } = await supabaseAdmin
     .from('passes')
     .insert(insertPayload)
-    .select('*, events(title, date, location)')
+    .select('*, events(title, date, location), creator:profiles!passes_created_by_fkey(id, email, full_name, role)')
     .single();
 
   if (insertError) {
-    // Retry without newly added schema columns if not yet migrated
+    console.warn('[createAdminPassAction] Initial insert failed, retrying without optional drink_qr_code:', insertError);
     delete insertPayload.drink_qr_code;
-    delete insertPayload.created_by;
-    delete insertPayload.pass_origin;
-    if (insertError.message?.includes('approved_by')) {
-      delete insertPayload.approved_by;
-    }
     const { data: retryPass, error: retryError } = await supabaseAdmin
       .from('passes')
       .insert(insertPayload)
-      .select('*, events(title, date, location)')
+      .select('*, events(title, date, location), creator:profiles!passes_created_by_fkey(id, email, full_name, role)')
       .single();
 
     if (retryError || !retryPass) {
@@ -869,6 +848,10 @@ export async function createAdminPassAction(payload: CreateAdminPassPayload) {
 
   return { success: true, pass: newPass, passId: newPass.id };
 }
+
+// Aliases for admin pass generation server action
+export const createAdminPass = createAdminPassAction;
+export const generatePassByAdmin = createAdminPassAction;
 
 /**
  * Server Action: Permanently delete a pass strictly by id (Admin only)

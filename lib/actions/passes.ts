@@ -5,6 +5,8 @@ export {
   rejectPassAction,
   getPassesForPaymentPoint,
   createAdminPassAction,
+  createAdminPass,
+  generatePassByAdmin,
   approvePassPaymentAction,
   markPassAsPaidAction,
   approvePassPayment,
