@@ -291,14 +291,14 @@ export default function OnboardingPage() {
 
               <div>
                 <label htmlFor="instagram-handle" className="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">
-                  Profil Instagram *
+                  Profil Instagram Link *
                 </label>
                 <div className="relative">
                   <input
                     id="instagram-handle"
                     type="text"
                     required
-                    placeholder="https://instagram.com/username ou @pseudo"
+                    placeholder="https://instagram.com/username "
                     value={handle}
                     onChange={(e) => {
                       setHandle(e.target.value)
