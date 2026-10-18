@@ -155,7 +155,7 @@ export default function OnboardingPage() {
       const apiRes = await fetch("/api/user/onboarding", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           firstName: cleanFirst,
           lastName: cleanLast,
           fullName: resolvedFullName,
@@ -261,7 +261,7 @@ export default function OnboardingPage() {
                     id="first-name"
                     type="text"
                     required
-                    placeholder="Ex: Adem"
+                    placeholder="Ex: Flen"
                     value={firstName}
                     onChange={(e) => {
                       setFirstName(e.target.value)
@@ -278,7 +278,7 @@ export default function OnboardingPage() {
                     id="last-name"
                     type="text"
                     required
-                    placeholder="Ex: Ouerhani"
+                    placeholder="Ex: Ben Flen"
                     value={lastName}
                     onChange={(e) => {
                       setLastName(e.target.value)
