@@ -15,11 +15,11 @@ const securityHeaders = [
     key: 'Content-Security-Policy',
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://connect.facebook.net",
+      "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://connect.facebook.net https://www.facebook.com https://*.facebook.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com data:",
-      "img-src 'self' data: blob: https://*.supabase.co https://images.unsplash.com https://*.unsplash.com https://raw.githubusercontent.com https://avatars.githubusercontent.com https://*.githubusercontent.com https://github.com https://i.imgur.com https://*.imgur.com https://www.facebook.com",
-      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://images.unsplash.com https://*.unsplash.com https://www.facebook.com https://connect.facebook.net",
+      "img-src 'self' data: blob: https://*.supabase.co https://images.unsplash.com https://*.unsplash.com https://raw.githubusercontent.com https://avatars.githubusercontent.com https://*.githubusercontent.com https://github.com https://i.imgur.com https://*.imgur.com https://www.facebook.com https://facebook.com https://*.facebook.com https://api.dicebear.com",
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://images.unsplash.com https://*.unsplash.com https://www.facebook.com https://facebook.com https://*.facebook.com https://connect.facebook.net",
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",
@@ -69,6 +69,7 @@ const nextConfig: NextConfig = {
       { protocol: 'https', hostname: 'images.unsplash.com' },
       { protocol: 'https', hostname: '**.unsplash.com' },
       { protocol: 'https', hostname: '**.supabase.co' },
+      { protocol: 'https', hostname: 'api.dicebear.com' },
     ],
   },
   async headers() {

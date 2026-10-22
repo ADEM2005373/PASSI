@@ -40,6 +40,17 @@ export async function updateSession(request: NextRequest) {
     return supabaseResponse
   }
 
+  // Allow PWA manifest, service worker, SEO, and static icons without authentication
+  if (
+    path === '/manifest.webmanifest' ||
+    path === '/sw.js' ||
+    path === '/robots.txt' ||
+    path === '/sitemap.xml' ||
+    path.startsWith('/icons')
+  ) {
+    return supabaseResponse
+  }
+
   if (
     !user &&
     !path.startsWith('/login') &&
