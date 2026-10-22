@@ -147,7 +147,7 @@ export function LandingActualites() {
   };
 
   return (
-    <section id="actualites" className="py-24 px-6 max-w-7xl mx-auto relative scroll-mt-20">
+    <section id="actualites" className="pt-28 md:pt-36 pb-16 px-6 max-w-7xl mx-auto relative scroll-mt-24">
       {/* Decorative ambient background glows */}
       <div className="absolute top-1/2 left-1/4 -translate-y-1/2 w-96 h-96 bg-purple-600/10 dark:bg-purple-600/15 rounded-full blur-3xl -z-10 pointer-events-none" />
       <div className="absolute bottom-10 right-1/4 w-80 h-80 bg-passi-corail/10 dark:bg-passi-corail/15 rounded-full blur-3xl -z-10 pointer-events-none" />

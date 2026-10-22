@@ -55,8 +55,11 @@ export default function LandingPage() {
         </div>
       </header>
 
+      {/* Actualités & Événements Section (FIRST SECTION ON THE LANDING PAGE) */}
+      <LandingActualites />
+
       {/* Hero Section */}
-      <section className="pt-40 pb-20 px-6 max-w-7xl mx-auto flex flex-col lg:flex-row items-center gap-16 relative">
+      <section className="py-20 px-6 max-w-7xl mx-auto flex flex-col lg:flex-row items-center gap-16 relative">
         {/* Decorative elements */}
         <div className="absolute top-20 left-10 w-72 h-72 bg-passi-turquoise/20 rounded-full blur-3xl -z-10 mix-blend-multiply dark:mix-blend-lighten animate-pulse"></div>
         <div className="absolute bottom-20 right-10 w-96 h-96 bg-passi-corail/20 rounded-full blur-3xl -z-10 mix-blend-multiply dark:mix-blend-lighten animate-pulse" style={{ animationDelay: '1s' }}></div>
@@ -74,7 +77,7 @@ export default function LandingPage() {
             <Link href="/login" className="bg-passi-corail text-white px-8 py-4 rounded-full font-extrabold text-lg flex items-center gap-2 hover:scale-105 transition-transform shadow-xl shadow-passi-corail/30 w-full sm:w-auto justify-center">
               Rejoindre l&apos;expérience <ArrowRight size={20} />
             </Link>
-            <Link href="#actualites" className="bg-white dark:bg-gray-800 text-passi-bleu dark:text-white border border-gray-200 dark:border-gray-700 px-8 py-4 rounded-full font-bold text-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors w-full sm:w-auto justify-center flex">
+            <Link href="#features" className="bg-white dark:bg-gray-800 text-passi-bleu dark:text-white border border-gray-200 dark:border-gray-700 px-8 py-4 rounded-full font-bold text-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors w-full sm:w-auto justify-center flex">
               Découvrir
             </Link>
           </div>
@@ -102,9 +105,6 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
-
-      {/* Actualités & Événements Section */}
-      <LandingActualites />
 
       {/* Features Section */}
       <section id="features" className="py-24 bg-white dark:bg-passi-surface transition-colors">
