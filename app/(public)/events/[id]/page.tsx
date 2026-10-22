@@ -88,7 +88,10 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
   useEffect(() => {
     const fetchData = async () => {
       const currentUser = await api.getCurrentUser();
-      if (!currentUser) { router.replace("/login"); return; }
+      if (!currentUser) { 
+        router.replace(`/login?redirect=/events/${resolvedParams.id}`); 
+        return; 
+      }
       setUser(currentUser);
       const eventData = await api.getEvent(resolvedParams.id);
       if (eventData) setEvent(eventData);

@@ -125,7 +125,7 @@ export async function GET(request: NextRequest) {
       if (!hasInstagram) {
         redirectPath = '/onboarding'
       } else {
-        redirectPath = '/dashboard'
+        redirectPath = (next && next !== '/' && next.startsWith('/') && !next.startsWith('//')) ? next : '/dashboard'
       }
     }
   }

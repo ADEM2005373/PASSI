@@ -6,6 +6,7 @@ import { ArrowRight, Moon, Sun, Ticket, ShieldCheck, Zap, Sparkles } from 'lucid
 import { useEffect, useState } from 'react'
 import { Logo } from '@/components/Logo'
 import { ContactInfo } from '@/components/ContactInfo'
+import { LandingActualites } from '@/components/LandingActualites'
 
 export default function LandingPage() {
   const { setTheme, resolvedTheme } = useTheme()
@@ -13,7 +14,8 @@ export default function LandingPage() {
 
   // Avoid hydration mismatch
   useEffect(() => {
-    setMounted(true)
+    const t = setTimeout(() => setMounted(true), 0);
+    return () => clearTimeout(t);
   }, [])
 
   return (
@@ -37,6 +39,9 @@ export default function LandingPage() {
                 {resolvedTheme === 'dark' ? <Sun size={18} className="md:w-5 md:h-5" /> : <Moon size={18} className="md:w-5 md:h-5" />}
               </button>
             )}
+            <Link href="#actualites" className="text-sm md:text-base font-bold text-passi-bleu dark:text-passi-creme hover:text-passi-corail transition-colors hidden md:block">
+              Actualités
+            </Link>
             <Link href="#contact" className="text-sm md:text-base font-bold text-passi-bleu dark:text-passi-creme hover:text-passi-corail transition-colors hidden md:block">
               Contact
             </Link>
@@ -67,9 +72,9 @@ export default function LandingPage() {
 
           <div className="flex flex-col sm:flex-row items-center gap-4 justify-center lg:justify-start pt-2">
             <Link href="/login" className="bg-passi-corail text-white px-8 py-4 rounded-full font-extrabold text-lg flex items-center gap-2 hover:scale-105 transition-transform shadow-xl shadow-passi-corail/30 w-full sm:w-auto justify-center">
-              Rejoindre l'expérience <ArrowRight size={20} />
+              Rejoindre l&apos;expérience <ArrowRight size={20} />
             </Link>
-            <Link href="#features" className="bg-white dark:bg-gray-800 text-passi-bleu dark:text-white border border-gray-200 dark:border-gray-700 px-8 py-4 rounded-full font-bold text-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors w-full sm:w-auto justify-center flex">
+            <Link href="#actualites" className="bg-white dark:bg-gray-800 text-passi-bleu dark:text-white border border-gray-200 dark:border-gray-700 px-8 py-4 rounded-full font-bold text-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors w-full sm:w-auto justify-center flex">
               Découvrir
             </Link>
           </div>
@@ -97,6 +102,9 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
+      {/* Actualités & Événements Section */}
+      <LandingActualites />
 
       {/* Features Section */}
       <section id="features" className="py-24 bg-white dark:bg-passi-surface transition-colors">
@@ -140,7 +148,7 @@ export default function LandingPage() {
                   Un écosystème conçu pour tous les acteurs.
                 </h3>
                 <p className="text-passi-text-sec text-lg font-medium max-w-lg">
-                  De l'organisateur au participant, en passant par la sécurité et le bar. Passi connecte tout le monde en temps réel.
+                  De l&apos;organisateur au participant, en passant par la sécurité et le bar. Passi connecte tout le monde en temps réel.
                 </p>
                 <ul className="space-y-4 pt-4">
                   {[
@@ -169,7 +177,7 @@ export default function LandingPage() {
 
       {/* CTA Section */}
       <section className="py-24 text-center px-6">
-        <h2 className="text-4xl md:text-6xl font-extrabold mb-8 text-passi-bleu dark:text-white">Prêt à vivre l'expérience ?</h2>
+        <h2 className="text-4xl md:text-6xl font-extrabold mb-8 text-passi-bleu dark:text-white">Prêt à vivre l&apos;expérience ?</h2>
         <p className="text-xl text-passi-text-sec font-medium max-w-2xl mx-auto mb-10">Rejoignez la nouvelle génération de billetterie événementielle.</p>
         <Link href="/login" className="inline-block bg-passi-corail text-white px-10 py-5 rounded-full font-extrabold text-xl hover:scale-105 transition-transform shadow-2xl shadow-passi-corail/40">
           Créer un compte gratuit
@@ -212,7 +220,15 @@ export default function LandingPage() {
   )
 }
 
-function FeatureCard({ icon, title, description, color, iconColor = "text-white" }: any) {
+interface FeatureCardProps {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  color: string;
+  iconColor?: string;
+}
+
+function FeatureCard({ icon, title, description, color, iconColor = "text-white" }: FeatureCardProps) {
   return (
     <div className="bg-gray-50 dark:bg-gray-800/50 p-8 rounded-3xl border border-gray-100 dark:border-gray-700 hover:shadow-xl hover:-translate-y-2 transition-all duration-300 group">
       <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-6 ${color} ${iconColor} shadow-lg group-hover:scale-110 transition-transform`}>

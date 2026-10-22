@@ -113,6 +113,11 @@ function LoginContent() {
   const [loading, setLoading] = useState(false);
 
   const searchParams = useSearchParams();
+  const rawRedirect = searchParams.get("redirect") || searchParams.get("returnUrl");
+  // Ensure safe local destination (must start with / and not //)
+  const redirectDestination = (rawRedirect && rawRedirect.startsWith("/") && !rawRedirect.startsWith("//"))
+    ? rawRedirect
+    : null;
 
   useEffect(() => {
     setMounted(true);
@@ -173,9 +178,9 @@ function LoginContent() {
 
     setLoading(false);
 
-    // If session is immediately active, navigate directly to /onboarding
+    // If session is immediately active, navigate directly to redirectDestination or /onboarding
     if (signUpData?.session) {
-      window.location.href = "/onboarding";
+      window.location.href = redirectDestination || "/onboarding";
       return;
     }
 
@@ -294,6 +299,11 @@ function LoginContent() {
         }
       } catch (e) {}
 
+      if (redirectDestination) {
+        window.location.href = redirectDestination;
+        return;
+      }
+
       window.location.href = "/dashboard";
     }
     setLoading(false);
@@ -327,7 +337,7 @@ function LoginContent() {
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: supabaseProvider,
       options: {
-        redirectTo: `${getURL()}/auth/callback?next=/dashboard`,
+        redirectTo: `${getURL()}/auth/callback?next=${encodeURIComponent(redirectDestination || '/dashboard')}`,
         queryParams: {
           prompt: 'select_account',
           ...(provider === "instagram" && { display: "popup" }),

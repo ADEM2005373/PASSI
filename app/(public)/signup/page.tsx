@@ -1,5 +1,12 @@
 import { redirect } from "next/navigation";
 
-export default function SignupRedirectPage() {
-  redirect("/login?tab=signup");
+export default async function SignupRedirectPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const params = await searchParams;
+  const redirectParam = typeof params.redirect === 'string' ? params.redirect : '';
+  const queryString = redirectParam ? `&redirect=${encodeURIComponent(redirectParam)}` : '';
+  redirect(`/login?tab=signup${queryString}`);
 }
