@@ -19,15 +19,18 @@ export const metadata: Metadata = {
   },
 }
 
+import Script from 'next/script'
 import { ImpersonationBanner } from '@/components/ImpersonationBanner'
 import { MetaPixelEvents } from '@/components/MetaPixelEvents'
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="fr" suppressHydrationWarning className={inter.className}>
-      <head>
+      <body className="min-h-screen antialiased transition-colors duration-300">
         {/* Meta Pixel Code */}
-        <script
+        <Script
+          id="meta-pixel"
+          strategy="afterInteractive"
           dangerouslySetInnerHTML={{
             __html: `
               !function(f,b,e,v,n,t,s)
@@ -54,8 +57,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           />
         </noscript>
         {/* End Meta Pixel Code */}
-      </head>
-      <body className="min-h-screen antialiased transition-colors duration-300">
         <Providers>
           <MetaPixelEvents />
           <ImpersonationBanner />
