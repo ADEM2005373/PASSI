@@ -317,17 +317,77 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
                           </div>
                         )}
                         {pass.entry_status === 'pending' && (
-                          <p className="text-xs mt-2 font-medium text-amber-500">En attente d'approbation par les organisateurs...</p>
+                          <div className="mt-2 space-y-2">
+                            <p className="text-xs font-medium text-amber-500">En attente d'approbation par les organisateurs...</p>
+                            {/* POS Payment Location Info */}
+                            <div className="bg-slate-800/60 rounded-xl p-3 border border-slate-700/50 space-y-1 text-xs">
+                              <p className="flex items-center gap-2 text-slate-300">
+                                <span>📍 Point de vente (POS) :</span>
+                                <strong className="text-white">{event.pos_location || (pass.events as any)?.pos_location || "L'Agora Djerba"}</strong>
+                              </p>
+                              <p className="text-[11px] text-slate-400">
+                                Présentez votre QR code ou référence de pass sur place pour régler et valider définitivement votre accès.
+                              </p>
+                            </div>
+                            {/* 48-Hour Urgency Warning */}
+                            {(() => {
+                              const createdAt = new Date(pass.created_at || Date.now());
+                              const expiryDate = new Date(createdAt.getTime() + 48 * 60 * 60 * 1000);
+                              const now = new Date();
+                              const hoursLeft = Math.max(0, Math.floor((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60)));
+                              return (
+                                <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-2.5 flex items-start gap-2.5">
+                                  <span className="text-red-400 text-sm leading-none">⚠️</span>
+                                  <div className="text-xs">
+                                    <p className="font-semibold text-red-300">Attention : Délai de paiement de 48h</p>
+                                    <p className="text-red-400/80 mt-0.5">
+                                      Vous avez <strong>{hoursLeft}h restantes</strong> pour régler votre pass au point de vente. Passé ce délai, votre réservation sera automatiquement annulée et refusée.
+                                    </p>
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                          </div>
                         )}
                         {pass.entry_status === 'awaiting_payment' && (
-                          <div className="mt-3 p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 text-xs text-emerald-300 space-y-1.5">
-                            <p className="font-bold flex items-center gap-1.5 text-emerald-400">
-                              <Mail size={14} />
-                              Demande pré-approuvée
-                            </p>
-                            <p className="text-neutral-300">
-                              Félicitations ! Votre demande est pré-approuvée. 📧 <strong className="font-bold underline text-white">Veuillez vérifier vos e-mails</strong> pour découvrir nos points de vente et finaliser votre règlement de <strong>{passPrice} DT</strong>.
-                            </p>
+                          <div className="mt-3 space-y-2">
+                            <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 text-xs text-emerald-300 space-y-1.5">
+                              <p className="font-bold flex items-center gap-1.5 text-emerald-400">
+                                <Mail size={14} />
+                                Demande pré-approuvée
+                              </p>
+                              <p className="text-neutral-300">
+                                Félicitations ! Votre demande est pré-approuvée. 📧 <strong className="font-bold underline text-white">Veuillez vérifier vos e-mails</strong> pour finaliser votre règlement de <strong>{passPrice} DT</strong>.
+                              </p>
+                            </div>
+                            {/* POS Payment Location Info */}
+                            <div className="bg-slate-800/60 rounded-xl p-3 border border-slate-700/50 space-y-1 text-xs">
+                              <p className="flex items-center gap-2 text-slate-300">
+                                <span>📍 Point de vente (POS) :</span>
+                                <strong className="text-white">{event.pos_location || (pass.events as any)?.pos_location || "L'Agora Djerba"}</strong>
+                              </p>
+                              <p className="text-[11px] text-slate-400">
+                                Présentez votre QR code ou référence de pass sur place pour régler et valider définitivement votre accès.
+                              </p>
+                            </div>
+                            {/* 48-Hour Urgency Warning */}
+                            {(() => {
+                              const createdAt = new Date(pass.created_at || Date.now());
+                              const expiryDate = new Date(createdAt.getTime() + 48 * 60 * 60 * 1000);
+                              const now = new Date();
+                              const hoursLeft = Math.max(0, Math.floor((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60)));
+                              return (
+                                <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-2.5 flex items-start gap-2.5">
+                                  <span className="text-red-400 text-sm leading-none">⚠️</span>
+                                  <div className="text-xs">
+                                    <p className="font-semibold text-red-300">Attention : Délai de paiement de 48h</p>
+                                    <p className="text-red-400/80 mt-0.5">
+                                      Vous avez <strong>{hoursLeft}h restantes</strong> pour régler votre pass au point de vente. Passé ce délai, votre réservation sera automatiquement annulée et refusée.
+                                    </p>
+                                  </div>
+                                </div>
+                              );
+                            })()}
                           </div>
                         )}
                         {pass.entry_status === 'rejected' && (

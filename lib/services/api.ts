@@ -43,6 +43,7 @@ export type Event = {
   dress_code?: string;
   drinks?: DrinkItem[];
   drink_menus?: DrinkItem[];
+  pos_location?: string;
 };
 
 export type Pass = {
@@ -54,6 +55,7 @@ export type Pass = {
   entry_qr_uuid: string | null;
   entry_status: 'pending' | 'awaiting_payment' | 'activated' | 'scanned' | 'rejected';
   status?: string;
+  created_at?: string;
   rejection_reason?: string | null;
   final_price?: number;
   promo_used?: string | null;
@@ -91,7 +93,7 @@ export type Pass = {
   updated_at?: string;
   instagram_handle?: string;
   drink_menus?: { id?: string; name: string; price?: number; image_url?: string; aromas?: string[] } | null;
-  events?: { id?: string; title: string; base_price?: number; date?: string; location?: string } | null;
+  events?: { id?: string; title: string; base_price?: number; date?: string; location?: string; pos_location?: string } | null;
   // Special Pass Types (NORMAL, GIFT, INVITATION, VIP) & Asynchronous Drinks
   pass_type?: 'NORMAL' | 'GIFT' | 'INVITATION' | 'VIP';
   invitation_status?: 'PENDING' | 'ACCEPTED' | 'DECLINED' | null;

@@ -12,6 +12,7 @@ import { getURL } from '@/lib/utils/url'
 import { useAuth } from '@/lib/context/auth-context'
 import { CompleteProfileModal } from '@/components/CompleteProfileModal'
 import { PassCard } from '@/components/PassCard'
+import { ReservationCard } from '@/components/ReservationCard'
 import { SearchBarWithSuggestions } from '@/components/SearchBarWithSuggestions'
 import { searchEventsFaultTolerant } from '@/lib/utils/search'
 import { EventCard } from '@/components/EventCard'
@@ -394,68 +395,63 @@ export default function UserDashboard() {
                 </div>
               ) : (
                 <div className="space-y-8">
-                  {passes.map((pass) => (
-                    <div key={pass.id} className="bg-white dark:bg-passi-surface rounded-[2.5rem] shadow-xl shadow-gray-100/50 border border-gray-100 dark:border-slate-700 overflow-hidden flex flex-col md:flex-row">
-                      {/* Billet Header/Status */}
-                      <div className="bg-passi-bleu text-white p-8 md:w-1/3 flex flex-col justify-between relative overflow-hidden">
-                        <div className="absolute top-0 left-0 w-full h-full opacity-10 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white to-transparent"></div>
-                        <div className="relative z-10">
-                          <h2 className="text-2xl font-extrabold mb-2">{pass.events?.title || 'Événement Passi'}</h2>
-                          <p className="text-passi-creme/80 font-medium">Invité: {pass.guest_first_name} {pass.guest_last_name}</p>
-                        </div>
-                        <div className="relative z-10 mt-12">
-                          <div className="text-xs uppercase tracking-widest font-bold text-passi-creme/60 mb-2">Statut</div>
-                          <span className={`inline-block px-5 py-2.5 rounded-2xl text-sm font-extrabold uppercase tracking-wider
-                            ${pass.pass_type === 'VIP' ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/30' : ''}
-                            ${pass.pass_type === 'GIFT' ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/30' : ''}
-                            ${pass.pass_type === 'INVITATION' ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/30' : ''}
-                            ${!pass.pass_type || pass.pass_type === 'NORMAL' ? (
-                              pass.entry_status === 'activated' ? 'bg-passi-turquoise text-passi-bleu dark:text-white' :
-                              pass.entry_status === 'awaiting_payment' ? 'bg-orange-400 text-white' :
-                              pass.entry_status === 'pending' ? 'bg-white dark:bg-passi-surface/20 text-white' :
-                              pass.entry_status === 'scanned' ? 'bg-gray-500 text-white' :
-                              pass.entry_status === 'rejected' ? 'bg-red-500 text-white' : ''
-                            ) : ''}
-                          `}>
-                            {pass.pass_type === 'VIP' ? 'VIP' :
-                             pass.pass_type === 'GIFT' ? 'CADEAU' :
-                             pass.pass_type === 'INVITATION' ? `INVITATION (${pass.invitation_status === 'ACCEPTED' ? 'ACCEPTÉE' : pass.invitation_status === 'DECLINED' ? 'DÉCLINÉE' : 'EN ATTENTE'})` :
-                             pass.entry_status === 'awaiting_payment' ? 'À PAYER' : 
-                             pass.entry_status === 'rejected' ? 'REJETÉ' : pass.entry_status}
-                          </span>
-                        </div>
-                      </div>
+                  {passes.map((pass) => {
+                    const isSpecialPass = ['INVITATION', 'VIP', 'GIFT'].includes((pass.pass_type || '').toUpperCase());
+                    const isUnpaidReservation = !isSpecialPass && (
+                      pass.entry_status === 'awaiting_payment' || 
+                      (pass as any).status === 'PENDING_PAYMENT' || 
+                      pass.entry_status === 'pending'
+                    );
 
-                      {/* Billet Content */}
-                      <div className="p-8 md:w-2/3 flex items-center justify-center">
-                        {['INVITATION', 'VIP', 'GIFT'].includes((pass.pass_type || '').toUpperCase()) ? (
-                          <PassCard pass={pass} onUpdate={() => fetchUserAndPasses(false)} />
-                        ) : pass.entry_status === 'pending' ? (
-                          <div className="h-full flex flex-col justify-center items-center text-center">
-                            <div className="w-16 h-16 bg-gray-50 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
-                              <Clock className="text-gray-400" size={24} />
-                            </div>
-                            <h3 className="text-xl font-bold text-passi-bleu dark:text-white mb-2">En attente</h3>
-                            <p className="text-gray-500 dark:text-gray-400 font-medium">Votre demande est en cours de validation par notre équipe.</p>
+                    if (isUnpaidReservation) {
+                      return <ReservationCard key={pass.id} reservation={pass} />;
+                    }
+
+                    return (
+                      <div key={pass.id} className="bg-white dark:bg-passi-surface rounded-[2.5rem] shadow-xl shadow-gray-100/50 border border-gray-100 dark:border-slate-700 overflow-hidden flex flex-col md:flex-row">
+                        {/* Billet Header/Status */}
+                        <div className="bg-passi-bleu text-white p-8 md:w-1/3 flex flex-col justify-between relative overflow-hidden">
+                          <div className="absolute top-0 left-0 w-full h-full opacity-10 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white to-transparent"></div>
+                          <div className="relative z-10">
+                            <h2 className="text-2xl font-extrabold mb-2">{pass.events?.title || 'Événement Passi'}</h2>
+                            <p className="text-passi-creme/80 font-medium">Invité: {pass.guest_first_name} {pass.guest_last_name}</p>
                           </div>
-                        ) : (pass.entry_status === 'awaiting_payment' || (pass as any).status === 'PENDING_PAYMENT') ? (
-                          <div className="h-full w-full flex flex-col justify-center bg-emerald-50 dark:bg-emerald-950/20 rounded-3xl p-6 sm:p-8 border border-emerald-200 dark:border-emerald-800/40 shadow-sm animate-in fade-in duration-300">
-                            <div className="flex items-center gap-3 mb-4">
-                              <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0 shadow-sm">
-                                <Mail size={22} />
-                              </div>
-                              <div>
-                                <span className="text-[11px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Étape 1 : Pré-approbation</span>
-                                <h3 className="text-xl sm:text-2xl text-emerald-800 dark:text-emerald-200 font-extrabold leading-tight">Validation réussie ! 🎉</h3>
-                              </div>
-                            </div>
-                            <div className="bg-white/80 dark:bg-slate-900/60 backdrop-blur-sm rounded-2xl p-4 sm:p-5 border border-emerald-100 dark:border-emerald-800/30 shadow-xs">
-                              <p className="text-emerald-900 dark:text-emerald-100 font-medium text-sm sm:text-base leading-relaxed">
-                                Félicitations ! Votre demande est pré-approuvée. 📧 <strong className="font-extrabold text-emerald-700 dark:text-emerald-300 underline decoration-emerald-400 decoration-2 underline-offset-4">Veuillez vérifier vos e-mails</strong> pour découvrir nos points de vente et finaliser votre paiement.
-                              </p>
-                            </div>
+                          <div className="relative z-10 mt-12">
+                            <div className="text-xs uppercase tracking-widest font-bold text-passi-creme/60 mb-2">Statut</div>
+                            <span className={`inline-block px-5 py-2.5 rounded-2xl text-sm font-extrabold uppercase tracking-wider
+                              ${pass.pass_type === 'VIP' ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/30' : ''}
+                              ${pass.pass_type === 'GIFT' ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/30' : ''}
+                              ${pass.pass_type === 'INVITATION' ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/30' : ''}
+                              ${!pass.pass_type || pass.pass_type === 'NORMAL' ? (
+                                pass.entry_status === 'activated' ? 'bg-passi-turquoise text-passi-bleu dark:text-white' :
+                                pass.entry_status === 'awaiting_payment' ? 'bg-orange-400 text-white' :
+                                pass.entry_status === 'pending' ? 'bg-white dark:bg-passi-surface/20 text-white' :
+                                pass.entry_status === 'scanned' ? 'bg-gray-500 text-white' :
+                                pass.entry_status === 'rejected' ? 'bg-red-500 text-white' : ''
+                              ) : ''}
+                            `}>
+                              {pass.pass_type === 'VIP' ? 'VIP' :
+                               pass.pass_type === 'GIFT' ? 'CADEAU' :
+                               pass.pass_type === 'INVITATION' ? `INVITATION (${pass.invitation_status === 'ACCEPTED' ? 'ACCEPTÉE' : pass.invitation_status === 'DECLINED' ? 'DÉCLINÉE' : 'EN ATTENTE'})` :
+                               pass.entry_status === 'awaiting_payment' ? 'À PAYER' : 
+                               pass.entry_status === 'rejected' ? 'REJETÉ' : pass.entry_status}
+                            </span>
                           </div>
-                        ) : (pass.entry_status === 'rejected' || (pass as any).status === 'REJECTED') ? (
+                        </div>
+
+                        {/* Billet Content */}
+                        <div className="p-8 md:w-2/3 flex items-center justify-center">
+                          {['INVITATION', 'VIP', 'GIFT'].includes((pass.pass_type || '').toUpperCase()) ? (
+                            <PassCard pass={pass} onUpdate={() => fetchUserAndPasses(false)} />
+                          ) : pass.entry_status === 'pending' ? (
+                            <div className="w-full">
+                              <ReservationCard reservation={pass} />
+                            </div>
+                          ) : (pass.entry_status === 'awaiting_payment' || (pass as any).status === 'PENDING_PAYMENT') ? (
+                            <div className="w-full">
+                              <ReservationCard reservation={pass} />
+                            </div>
+                          ) : (pass.entry_status === 'rejected' || (pass as any).status === 'REJECTED') ? (
                           <div className="h-full w-full flex flex-col justify-center bg-rose-50 dark:bg-rose-950/20 rounded-3xl p-6 sm:p-8 border border-rose-200 dark:border-rose-900/30 shadow-sm animate-in fade-in duration-300">
                             <div className="flex items-center gap-3 mb-4">
                               <div className="w-12 h-12 rounded-2xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-600 dark:text-rose-400 shrink-0 shadow-sm">
@@ -491,7 +487,8 @@ export default function UserDashboard() {
                         )}
                       </div>
                     </div>
-                  ))}
+                  );
+                })}
                 </div>
               )}
             </div>
