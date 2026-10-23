@@ -119,21 +119,18 @@ function LoginContent() {
     ? rawRedirect
     : null;
 
-  const [hasPendingReservation, setHasPendingReservation] = useState(false);
   const [showEmailForm, setShowEmailForm] = useState(false);
 
-  const isOAuthDirect = Boolean(
+  // Normal login page remains intact. Only activate the direct Google OAuth flow
+  // when specifically arriving from the reservation checkout flow via query params.
+  const isReservationOAuth = Boolean(
     searchParams.get("auth") === "oauth" ||
-    searchParams.get("mode") === "oauth" ||
-    redirectDestination === "/reservations/process" ||
-    hasPendingReservation
+    searchParams.get("from") === "reservation" ||
+    redirectDestination === "/reservations/process"
   );
 
   useEffect(() => {
     setMounted(true);
-    if (typeof window !== 'undefined' && localStorage.getItem('pending_reservation')) {
-      setHasPendingReservation(true);
-    }
     const urlError = searchParams.get("error");
     if (urlError) setError("La connexion a échoué. Réessayez.");
     const tab = searchParams.get("tab") || searchParams.get("mode");
@@ -491,7 +488,7 @@ function LoginContent() {
               className="text-3xl font-extrabold"
               style={{ color: "var(--text-primary)" }}
             >
-              {isOAuthDirect && !showEmailForm
+              {isReservationOAuth && !showEmailForm
                 ? "Finalisez votre pass 🎟️"
                 : authMode === "signup"
                 ? "Créer un compte ✨"
@@ -501,16 +498,16 @@ function LoginContent() {
               className="text-sm font-medium"
               style={{ color: "var(--text-secondary)" }}
             >
-              {isOAuthDirect && !showEmailForm
-                ? "Connectez-vous en 1 clic pour valider votre pass et recevoir vos accès."
+              {isReservationOAuth && !showEmailForm
+                ? "Connectez-vous en 1 clic avec Google pour valider votre pass et recevoir vos accès."
                 : authMode === "signup"
                 ? "Rejoignez Passi et gérez facilement vos accès d'événements."
                 : "Connectez-vous pour accéder à vos passes et consommations."}
             </p>
           </div>
 
-          {/* Pending Reservation Callout */}
-          {(hasPendingReservation || redirectDestination === '/reservations/process' || isOAuthDirect) && (
+          {/* Reservation Callout (only in reservation flow) */}
+          {isReservationOAuth && !showEmailForm && (
             <div className="flex items-center gap-3.5 p-4 rounded-2xl bg-purple-500/15 dark:bg-purple-950/40 border border-purple-500/30 text-purple-950 dark:text-purple-200 shadow-sm animate-in fade-in duration-300">
               <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-purple-600/30">
                 <Ticket size={20} />
@@ -520,7 +517,7 @@ function LoginContent() {
                   Votre pass est pré-configuré !
                 </p>
                 <p className="text-xs text-purple-900/90 dark:text-purple-300 font-medium leading-relaxed">
-                  Un simple clic sur Google ou Meta suffit pour valider votre entrée et vos boissons.
+                  Un simple clic avec Google suffit pour valider votre entrée et vos boissons.
                 </p>
               </div>
             </div>
@@ -536,60 +533,43 @@ function LoginContent() {
             </div>
           )}
 
-          {/* OAUTH DIRECT FLOW (When arriving from reservation validation) */}
-          {isOAuthDirect && !showEmailForm ? (
+          {/* RESERVATION FLOW: Show JUST Google OAuth */}
+          {isReservationOAuth && !showEmailForm ? (
             <div className="space-y-4 pt-1">
-              {/* Provider buttons */}
-              <div className="space-y-3">
-                {PROVIDERS.map(({ id, label, icon, bg, border, text }) => (
-                  <button
-                    key={id}
-                    id={`login-${id}`}
-                    onClick={() => handleOAuth(id)}
-                    disabled={loading}
-                    className={`
-                      w-full flex items-center justify-center gap-3
-                      px-5 py-3.5 rounded-2xl
-                      text-sm font-bold
-                      transition-all duration-200
-                      ${bg} ${border} ${text}
-                      disabled:opacity-60 disabled:cursor-not-allowed
-                      shadow-sm hover:shadow-md hover:-translate-y-0.5
-                      active:scale-95 relative cursor-pointer
-                    `}
+              <button
+                id="login-google"
+                onClick={() => handleOAuth("google")}
+                disabled={loading || Boolean(loadingProvider)}
+                className="w-full flex items-center justify-center gap-3 px-5 py-4 rounded-2xl text-base font-bold transition-all duration-200 bg-white hover:bg-gray-50 border border-gray-200 text-gray-800 disabled:opacity-60 disabled:cursor-not-allowed shadow-md hover:shadow-lg hover:-translate-y-0.5 active:scale-95 relative cursor-pointer"
+              >
+                <span className="absolute -top-2.5 right-4 bg-purple-600 text-white text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider shadow">
+                  1-Clic ✨
+                </span>
+                {loadingProvider === "google" ? (
+                  <svg
+                    className="animate-spin w-5 h-5 text-gray-700"
+                    viewBox="0 0 24 24"
+                    fill="none"
                   >
-                    {id === "google" && (
-                      <span className="absolute -top-2.5 right-4 bg-purple-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider shadow">
-                        Recommandé ✨
-                      </span>
-                    )}
-                    {loadingProvider === id ? (
-                      <svg
-                        className="animate-spin w-5 h-5"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                      >
-                        <circle
-                          className="opacity-25"
-                          cx="12"
-                          cy="12"
-                          r="10"
-                          stroke="currentColor"
-                          strokeWidth="4"
-                        />
-                        <path
-                          className="opacity-75"
-                          fill="currentColor"
-                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                        />
-                      </svg>
-                    ) : (
-                      icon
-                    )}
-                    {loadingProvider === id ? "Redirection…" : label}
-                  </button>
-                ))}
-              </div>
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                    />
+                  </svg>
+                ) : (
+                  <GoogleIcon />
+                )}
+                <span>{loadingProvider === "google" ? "Redirection…" : "Continuer avec Google"}</span>
+              </button>
 
               {/* Discreet toggle for email/password fallback */}
               <div className="text-center pt-2">
@@ -605,14 +585,14 @@ function LoginContent() {
           ) : (
             /* TRADITIONAL FORM (When standard login or user opted into email) */
             <>
-              {isOAuthDirect && showEmailForm && (
+              {isReservationOAuth && showEmailForm && (
                 <div className="text-left">
                   <button
                     type="button"
                     onClick={() => setShowEmailForm(false)}
                     className="text-xs font-bold text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1 cursor-pointer"
                   >
-                    ← Revenir à la connexion rapide (Google / Meta)
+                    ← Revenir à la connexion rapide (Google)
                   </button>
                 </div>
               )}
