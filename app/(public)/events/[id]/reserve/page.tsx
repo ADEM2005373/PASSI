@@ -147,8 +147,8 @@ export default function EventDirectReservePage({
     if (currentUser) {
       router.push("/reservations/process");
     } else {
-      // Directs to login with next destination to process pass creation
-      router.push("/login?next=/reservations/process");
+      // Directs to login with next destination in direct OAuth mode to process pass creation
+      router.push("/login?next=/reservations/process&auth=oauth");
     }
   };
 

@@ -120,6 +120,14 @@ function LoginContent() {
     : null;
 
   const [hasPendingReservation, setHasPendingReservation] = useState(false);
+  const [showEmailForm, setShowEmailForm] = useState(false);
+
+  const isOAuthDirect = Boolean(
+    searchParams.get("auth") === "oauth" ||
+    searchParams.get("mode") === "oauth" ||
+    redirectDestination === "/reservations/process" ||
+    hasPendingReservation
+  );
 
   useEffect(() => {
     setMounted(true);
@@ -483,70 +491,36 @@ function LoginContent() {
               className="text-3xl font-extrabold"
               style={{ color: "var(--text-primary)" }}
             >
-              {authMode === "signup" ? "Créer un compte ✨" : "Bon retour 👋"}
+              {isOAuthDirect && !showEmailForm
+                ? "Finalisez votre pass 🎟️"
+                : authMode === "signup"
+                ? "Créer un compte ✨"
+                : "Bon retour 👋"}
             </h1>
             <p
               className="text-sm font-medium"
               style={{ color: "var(--text-secondary)" }}
             >
-              {authMode === "signup"
+              {isOAuthDirect && !showEmailForm
+                ? "Connectez-vous en 1 clic pour valider votre pass et recevoir vos accès."
+                : authMode === "signup"
                 ? "Rejoignez Passi et gérez facilement vos accès d'événements."
                 : "Connectez-vous pour accéder à vos passes et consommations."}
             </p>
           </div>
 
           {/* Pending Reservation Callout */}
-          {(hasPendingReservation || redirectDestination === '/reservations/process') && (
-            <div className="flex items-center gap-3 p-4 rounded-2xl bg-purple-500/10 border border-purple-500/30 text-purple-300 text-xs font-semibold animate-in fade-in duration-300">
-              <Ticket className="w-5 h-5 text-purple-400 shrink-0" />
-              <div className="space-y-0.5">
-                <p className="font-bold text-white">Votre pass est pré-configuré !</p>
-                <p className="text-purple-300/90 font-normal">Connectez-vous pour confirmer votre réservation instantanément.</p>
+          {(hasPendingReservation || redirectDestination === '/reservations/process' || isOAuthDirect) && (
+            <div className="flex items-center gap-3.5 p-4 rounded-2xl bg-purple-500/15 dark:bg-purple-950/40 border border-purple-500/30 text-purple-950 dark:text-purple-200 shadow-sm animate-in fade-in duration-300">
+              <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-purple-600/30">
+                <Ticket size={20} />
               </div>
-            </div>
-          )}
-
-          {/* Mode Switcher Tabs */}
-          <div className="flex bg-gray-100 dark:bg-gray-900/80 p-1.5 rounded-2xl border border-gray-200 dark:border-gray-800">
-            <button
-              type="button"
-              onClick={() => { setAuthMode("login"); setError(""); setInfoMessage(""); }}
-              className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all duration-200 cursor-pointer ${
-                authMode === "login"
-                  ? "bg-white dark:bg-black text-gray-900 dark:text-white shadow-sm"
-                  : "text-gray-500 hover:text-gray-900 dark:hover:text-white"
-              }`}
-            >
-              Connexion
-            </button>
-            <button
-              type="button"
-              onClick={() => { setAuthMode("signup"); setError(""); setInfoMessage(""); }}
-              className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all duration-200 cursor-pointer ${
-                authMode === "signup"
-                  ? "bg-white dark:bg-black text-gray-900 dark:text-white shadow-sm"
-                  : "text-gray-500 hover:text-gray-900 dark:hover:text-white"
-              }`}
-            >
-              Créer un compte
-            </button>
-          </div>
-
-          {/* Success / Email confirmation notification */}
-          {(infoMessage || (error && error.includes("vérifier vos emails"))) && (
-            <div className="flex items-start gap-3.5 p-4 rounded-2xl bg-passi-turquoise/10 dark:bg-passi-turquoise/15 border border-passi-turquoise/30 shadow-sm animate-in fade-in duration-300">
-              <div className="w-9 h-9 rounded-xl bg-passi-turquoise/20 text-passi-turquoise flex items-center justify-center flex-shrink-0 mt-0.5">
-                <MailCheck size={20} />
-              </div>
-              <div className="space-y-0.5">
-                <h4 className="text-sm font-bold text-passi-turquoise">
-                  Email de confirmation envoyé !
-                </h4>
-                <p className="text-xs font-medium leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-                  {infoMessage || error}
+              <div className="space-y-0.5 text-left">
+                <p className="font-extrabold text-sm text-purple-950 dark:text-white">
+                  Votre pass est pré-configuré !
                 </p>
-                <p className="text-[11px] font-semibold text-passi-turquoise/80 pt-0.5">
-                  💡 Pensez à vérifier vos courriers indésirables (spams).
+                <p className="text-xs text-purple-900/90 dark:text-purple-300 font-medium leading-relaxed">
+                  Un simple clic sur Google ou Meta suffit pour valider votre entrée et vos boissons.
                 </p>
               </div>
             </div>
@@ -562,167 +536,295 @@ function LoginContent() {
             </div>
           )}
 
-          {/* Form */}
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (authMode === "signup") {
-                handleEmailSignUp();
-              } else {
-                handleEmailLogin();
-              }
-            }}
-            className="space-y-4"
-          >
-            {authMode === "signup" ? (
-              <>
-
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">
-                    Adresse Email *
-                  </label>
-                  <input
-                    type="email"
-                    placeholder="nom@exemple.com"
-                    aria-label="Adresse email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-black text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-passi-turquoise/50 transition-all"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">
-                    Mot de passe *
-                  </label>
-                  <input
-                    type="password"
-                    placeholder="Au moins 6 caractères"
-                    aria-label="Mot de passe"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-black text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-passi-turquoise/50 transition-all"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full px-5 py-3.5 rounded-2xl text-sm font-bold bg-passi-turquoise text-white hover:opacity-90 disabled:opacity-60 transition-all shadow-sm hover:shadow-md hover:-translate-y-0.5 cursor-pointer"
-                >
-                  {loading ? "Création du compte..." : "Créer mon compte"}
-                </button>
-              </>
-            ) : (
-              <>
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">
-                    Adresse Email *
-                  </label>
-                  <input
-                    type="email"
-                    placeholder="nom@exemple.com"
-                    aria-label="Adresse email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full px-5 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-black text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-passi-turquoise/50 transition-all"
-                  />
-                </div>
-
-                <div>
-                  <div className="flex justify-between items-center mb-1.5">
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400">
-                      Mot de passe *
-                    </label>
-                    <a 
-                      href="/forgot-password" 
-                      className="text-xs font-semibold text-passi-turquoise hover:text-passi-turquoise/80 transition-colors"
-                    >
-                      Oublié ?
-                    </a>
-                  </div>
-                  <input
-                    type="password"
-                    placeholder="Votre mot de passe"
-                    aria-label="Mot de passe"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full px-5 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-black text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-passi-turquoise/50 transition-all"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full px-5 py-3.5 rounded-2xl text-sm font-bold bg-passi-turquoise text-white hover:opacity-90 disabled:opacity-60 transition-all shadow-sm hover:shadow-md hover:-translate-y-0.5 cursor-pointer"
-                >
-                  {loading ? "Connexion..." : "Se connecter"}
-                </button>
-              </>
-            )}
-          </form>
-
-          <div className="flex items-center gap-3 py-2">
-            <div className="flex-1 h-px" style={{ backgroundColor: "var(--border)" }} />
-            <span className="text-xs font-medium uppercase tracking-widest text-gray-400">Ou</span>
-            <div className="flex-1 h-px" style={{ backgroundColor: "var(--border)" }} />
-          </div>
-
-          {/* Provider buttons */}
-          <div className="space-y-3">
-            {PROVIDERS.map(({ id, label, icon, bg, border, text }) => (
-              <button
-                key={id}
-                id={`login-${id}`}
-                onClick={() => handleOAuth(id)}
-                disabled={loading}
-                className={`
-                  w-full flex items-center justify-center gap-3
-                  px-5 py-3.5 rounded-2xl
-                  text-sm font-bold
-                  transition-all duration-200
-                  ${bg} ${border} ${text}
-                  disabled:opacity-60 disabled:cursor-not-allowed
-                  shadow-sm hover:shadow-md hover:-translate-y-0.5
-                  active:scale-95 relative
-                `}
-              >
-                {id === "google" && (
-                  <span className="absolute -top-2.5 right-4 bg-purple-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider shadow">
-                    Recommandé ✨
-                  </span>
-                )}
-                {loadingProvider === id ? (
-                  <svg
-                    className="animate-spin w-5 h-5"
-                    viewBox="0 0 24 24"
-                    fill="none"
+          {/* OAUTH DIRECT FLOW (When arriving from reservation validation) */}
+          {isOAuthDirect && !showEmailForm ? (
+            <div className="space-y-4 pt-1">
+              {/* Provider buttons */}
+              <div className="space-y-3">
+                {PROVIDERS.map(({ id, label, icon, bg, border, text }) => (
+                  <button
+                    key={id}
+                    id={`login-${id}`}
+                    onClick={() => handleOAuth(id)}
+                    disabled={loading}
+                    className={`
+                      w-full flex items-center justify-center gap-3
+                      px-5 py-3.5 rounded-2xl
+                      text-sm font-bold
+                      transition-all duration-200
+                      ${bg} ${border} ${text}
+                      disabled:opacity-60 disabled:cursor-not-allowed
+                      shadow-sm hover:shadow-md hover:-translate-y-0.5
+                      active:scale-95 relative cursor-pointer
+                    `}
                   >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                    />
-                  </svg>
+                    {id === "google" && (
+                      <span className="absolute -top-2.5 right-4 bg-purple-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider shadow">
+                        Recommandé ✨
+                      </span>
+                    )}
+                    {loadingProvider === id ? (
+                      <svg
+                        className="animate-spin w-5 h-5"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        />
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                        />
+                      </svg>
+                    ) : (
+                      icon
+                    )}
+                    {loadingProvider === id ? "Redirection…" : label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Discreet toggle for email/password fallback */}
+              <div className="text-center pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowEmailForm(true)}
+                  className="text-xs font-semibold text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white transition underline underline-offset-4 cursor-pointer"
+                >
+                  Se connecter avec un email et mot de passe
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* TRADITIONAL FORM (When standard login or user opted into email) */
+            <>
+              {isOAuthDirect && showEmailForm && (
+                <div className="text-left">
+                  <button
+                    type="button"
+                    onClick={() => setShowEmailForm(false)}
+                    className="text-xs font-bold text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    ← Revenir à la connexion rapide (Google / Meta)
+                  </button>
+                </div>
+              )}
+
+              {/* Mode Switcher Tabs */}
+              <div className="flex bg-gray-100 dark:bg-gray-900/80 p-1.5 rounded-2xl border border-gray-200 dark:border-gray-800">
+                <button
+                  type="button"
+                  onClick={() => { setAuthMode("login"); setError(""); setInfoMessage(""); }}
+                  className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all duration-200 cursor-pointer ${
+                    authMode === "login"
+                      ? "bg-white dark:bg-black text-gray-900 dark:text-white shadow-sm"
+                      : "text-gray-500 hover:text-gray-900 dark:hover:text-white"
+                  }`}
+                >
+                  Connexion
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setAuthMode("signup"); setError(""); setInfoMessage(""); }}
+                  className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all duration-200 cursor-pointer ${
+                    authMode === "signup"
+                      ? "bg-white dark:bg-black text-gray-900 dark:text-white shadow-sm"
+                      : "text-gray-500 hover:text-gray-900 dark:hover:text-white"
+                  }`}
+                >
+                  Créer un compte
+                </button>
+              </div>
+
+              {/* Success / Email confirmation notification */}
+              {(infoMessage || (error && error.includes("vérifier vos emails"))) && (
+                <div className="flex items-start gap-3.5 p-4 rounded-2xl bg-passi-turquoise/10 dark:bg-passi-turquoise/15 border border-passi-turquoise/30 shadow-sm animate-in fade-in duration-300">
+                  <div className="w-9 h-9 rounded-xl bg-passi-turquoise/20 text-passi-turquoise flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <MailCheck size={20} />
+                  </div>
+                  <div className="space-y-0.5">
+                    <h4 className="text-sm font-bold text-passi-turquoise">
+                      Email de confirmation envoyé !
+                    </h4>
+                    <p className="text-xs font-medium leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                      {infoMessage || error}
+                    </p>
+                    <p className="text-[11px] font-semibold text-passi-turquoise/80 pt-0.5">
+                      💡 Pensez à vérifier vos courriers indésirables (spams).
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Form */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (authMode === "signup") {
+                    handleEmailSignUp();
+                  } else {
+                    handleEmailLogin();
+                  }
+                }}
+                className="space-y-4"
+              >
+                {authMode === "signup" ? (
+                  <>
+                    <div>
+                      <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">
+                        Adresse Email *
+                      </label>
+                      <input
+                        type="email"
+                        placeholder="nom@exemple.com"
+                        aria-label="Adresse email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-black text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-passi-turquoise/50 transition-all"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">
+                        Mot de passe *
+                      </label>
+                      <input
+                        type="password"
+                        placeholder="Au moins 6 caractères"
+                        aria-label="Mot de passe"
+                        required
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-black text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-passi-turquoise/50 transition-all"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="w-full px-5 py-3.5 rounded-2xl text-sm font-bold bg-passi-turquoise text-white hover:opacity-90 disabled:opacity-60 transition-all shadow-sm hover:shadow-md hover:-translate-y-0.5 cursor-pointer"
+                    >
+                      {loading ? "Création du compte..." : "Créer mon compte"}
+                    </button>
+                  </>
                 ) : (
-                  icon
+                  <>
+                    <div>
+                      <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">
+                        Adresse Email *
+                      </label>
+                      <input
+                        type="email"
+                        placeholder="nom@exemple.com"
+                        aria-label="Adresse email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="w-full px-5 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-black text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-passi-turquoise/50 transition-all"
+                      />
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between items-center mb-1.5">
+                        <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400">
+                          Mot de passe *
+                        </label>
+                        <a 
+                          href="/forgot-password" 
+                          className="text-xs font-semibold text-passi-turquoise hover:text-passi-turquoise/80 transition-colors"
+                        >
+                          Oublié ?
+                        </a>
+                      </div>
+                      <input
+                        type="password"
+                        placeholder="Votre mot de passe"
+                        aria-label="Mot de passe"
+                        required
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="w-full px-5 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-black text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-passi-turquoise/50 transition-all"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="w-full px-5 py-3.5 rounded-2xl text-sm font-bold bg-passi-turquoise text-white hover:opacity-90 disabled:opacity-60 transition-all shadow-sm hover:shadow-md hover:-translate-y-0.5 cursor-pointer"
+                    >
+                      {loading ? "Connexion..." : "Se connecter"}
+                    </button>
+                  </>
                 )}
-                {loadingProvider === id ? "Redirection…" : label}
-              </button>
-            ))}
-          </div>
+              </form>
+
+              <div className="flex items-center gap-3 py-2">
+                <div className="flex-1 h-px" style={{ backgroundColor: "var(--border)" }} />
+                <span className="text-xs font-medium uppercase tracking-widest text-gray-400">Ou</span>
+                <div className="flex-1 h-px" style={{ backgroundColor: "var(--border)" }} />
+              </div>
+
+              {/* Provider buttons */}
+              <div className="space-y-3">
+                {PROVIDERS.map(({ id, label, icon, bg, border, text }) => (
+                  <button
+                    key={id}
+                    id={`login-${id}`}
+                    onClick={() => handleOAuth(id)}
+                    disabled={loading}
+                    className={`
+                      w-full flex items-center justify-center gap-3
+                      px-5 py-3.5 rounded-2xl
+                      text-sm font-bold
+                      transition-all duration-200
+                      ${bg} ${border} ${text}
+                      disabled:opacity-60 disabled:cursor-not-allowed
+                      shadow-sm hover:shadow-md hover:-translate-y-0.5
+                      active:scale-95 relative cursor-pointer
+                    `}
+                  >
+                    {id === "google" && (
+                      <span className="absolute -top-2.5 right-4 bg-purple-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider shadow">
+                        Recommandé ✨
+                      </span>
+                    )}
+                    {loadingProvider === id ? (
+                      <svg
+                        className="animate-spin w-5 h-5"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        />
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                        />
+                      </svg>
+                    ) : (
+                      icon
+                    )}
+                    {loadingProvider === id ? "Redirection…" : label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
 
           {/* Divider & legal */}
           <div className="text-center space-y-3">
