@@ -28,9 +28,10 @@ export interface ReservationCardProps {
     } | null;
     [key: string]: any;
   };
+  onNoticeClick?: () => void;
 }
 
-export function ReservationCard({ reservation }: ReservationCardProps) {
+export function ReservationCard({ reservation, onNoticeClick }: ReservationCardProps) {
   // Calculate remaining time from created_at (72 hours limit)
   const createdAt = reservation.created_at ? new Date(reservation.created_at) : new Date();
   const expiryDate = new Date(createdAt.getTime() + 72 * 60 * 60 * 1000);
@@ -90,6 +91,23 @@ export function ReservationCard({ reservation }: ReservationCardProps) {
           </p>
         </div>
       </div>
+
+      {/* Re-open Full Notification Modal */}
+      {onNoticeClick && (
+        <div className="mt-3.5 pt-3 border-t border-slate-800/80 flex justify-end">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onNoticeClick();
+            }}
+            className="text-xs font-bold text-purple-400 hover:text-purple-300 flex items-center gap-1.5 transition hover:underline cursor-pointer"
+          >
+            <span>Afficher la notification plein écran</span>
+            <span>↗</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

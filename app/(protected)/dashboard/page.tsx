@@ -13,6 +13,7 @@ import { useAuth } from '@/lib/context/auth-context'
 import { CompleteProfileModal } from '@/components/CompleteProfileModal'
 import { PassCard } from '@/components/PassCard'
 import { ReservationCard } from '@/components/ReservationCard'
+import { PaymentNotificationModal } from '@/components/PaymentNotificationModal'
 import { SearchBarWithSuggestions } from '@/components/SearchBarWithSuggestions'
 import { searchEventsFaultTolerant } from '@/lib/utils/search'
 import { EventCard } from '@/components/EventCard'
@@ -36,6 +37,7 @@ export default function UserDashboard() {
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [isSavingInfo, setIsSavingInfo] = useState(false)
+  const [paymentModalPass, setPaymentModalPass] = useState<any | null>(null)
 
   useEffect(() => {
     // Initialize dark mode from localStorage or classList
@@ -156,6 +158,36 @@ export default function UserDashboard() {
     if (showLoading) setLoading(false)
   }
 
+  // Auto-detect unpaid passes and show payment notification modal if not yet acknowledged
+  useEffect(() => {
+    if (!passes || passes.length === 0) return
+    if (typeof window === 'undefined') return
+
+    const unpaidPass = passes.find((p) => {
+      const isSpecial = ['INVITATION', 'VIP', 'GIFT'].includes((p.pass_type || '').toUpperCase())
+      return (
+        !isSpecial &&
+        (p.entry_status === 'awaiting_payment' ||
+          (p as any).status === 'PENDING_PAYMENT' ||
+          p.entry_status === 'pending')
+      )
+    })
+
+    if (unpaidPass) {
+      const hasAcknowledged = localStorage.getItem(`ack_payment_notice_${unpaidPass.id}`)
+      if (!hasAcknowledged) {
+        setPaymentModalPass(unpaidPass)
+      }
+    }
+  }, [passes])
+
+  const handleClosePaymentModal = () => {
+    if (paymentModalPass?.id && typeof window !== 'undefined') {
+      localStorage.setItem(`ack_payment_notice_${paymentModalPass.id}`, 'true')
+    }
+    setPaymentModalPass(null)
+  }
+
   const handleLogout = async () => {
     await contextLogout()
   }
@@ -258,6 +290,15 @@ export default function UserDashboard() {
             await refreshUser()
             setNeedsProfile(false)
           }}
+        />
+      )}
+
+      {/* Payment notification modal — displayed on screen and dismissed after user reads */}
+      {paymentModalPass && (
+        <PaymentNotificationModal
+          reservation={paymentModalPass}
+          isOpen={Boolean(paymentModalPass)}
+          onClose={handleClosePaymentModal}
         />
       )}
 
@@ -404,7 +445,13 @@ export default function UserDashboard() {
                     );
 
                     if (isUnpaidReservation) {
-                      return <ReservationCard key={pass.id} reservation={pass} />;
+                      return (
+                        <ReservationCard
+                          key={pass.id}
+                          reservation={pass}
+                          onNoticeClick={() => setPaymentModalPass(pass)}
+                        />
+                      );
                     }
 
                     return (
@@ -445,11 +492,17 @@ export default function UserDashboard() {
                             <PassCard pass={pass} onUpdate={() => fetchUserAndPasses(false)} />
                           ) : pass.entry_status === 'pending' ? (
                             <div className="w-full">
-                              <ReservationCard reservation={pass} />
+                              <ReservationCard
+                                reservation={pass}
+                                onNoticeClick={() => setPaymentModalPass(pass)}
+                              />
                             </div>
                           ) : (pass.entry_status === 'awaiting_payment' || (pass as any).status === 'PENDING_PAYMENT') ? (
                             <div className="w-full">
-                              <ReservationCard reservation={pass} />
+                              <ReservationCard
+                                reservation={pass}
+                                onNoticeClick={() => setPaymentModalPass(pass)}
+                              />
                             </div>
                           ) : (pass.entry_status === 'rejected' || (pass as any).status === 'REJECTED') ? (
                           <div className="h-full w-full flex flex-col justify-center bg-rose-50 dark:bg-rose-950/20 rounded-3xl p-6 sm:p-8 border border-rose-200 dark:border-rose-900/30 shadow-sm animate-in fade-in duration-300">
