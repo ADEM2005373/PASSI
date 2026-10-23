@@ -31,9 +31,9 @@ export interface ReservationCardProps {
 }
 
 export function ReservationCard({ reservation }: ReservationCardProps) {
-  // Calculate remaining time from created_at (48 hours limit)
+  // Calculate remaining time from created_at (72 hours limit)
   const createdAt = reservation.created_at ? new Date(reservation.created_at) : new Date();
-  const expiryDate = new Date(createdAt.getTime() + 48 * 60 * 60 * 1000);
+  const expiryDate = new Date(createdAt.getTime() + 72 * 60 * 60 * 1000);
   const now = new Date();
   const hoursLeft = Math.max(0, Math.floor((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60)));
 
@@ -80,13 +80,13 @@ export function ReservationCard({ reservation }: ReservationCardProps) {
         </p>
       </div>
 
-      {/* 48-Hour Urgency Warning */}
+      {/* 72-Hour Urgency Warning */}
       <div className="mt-4 bg-red-500/10 border border-red-500/20 rounded-xl p-3 flex items-start gap-3">
         <span className="text-red-400 text-lg leading-none">⚠️</span>
         <div className="text-xs">
-          <p className="font-semibold text-red-300">Attention : Délai de paiement de 48h</p>
+          <p className="font-semibold text-red-300">Attention : Délai de paiement de 72h</p>
           <p className="text-red-400/80 mt-0.5">
-            Vous avez <strong>{hoursLeft}h restantes</strong> pour régler votre pass au point de vente. Passé ce délai, votre réservation sera automatiquement annulée et refusée.
+            Vous avez <strong>{hoursLeft}h restantes</strong> pour régler votre pass au point de vente. Passé ce délai (72h), votre réservation sera automatiquement annulée et refusée.
           </p>
         </div>
       </div>
