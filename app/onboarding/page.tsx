@@ -1,12 +1,13 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect, Suspense } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { AlertCircle, CheckCircle2, Lock, ArrowRight, Sparkles } from "lucide-react"
 
-export default function OnboardingPage() {
+function OnboardingContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [handle, setHandle] = useState("")
   const [firstName, setFirstName] = useState("")
   const [lastName, setLastName] = useState("")
@@ -15,6 +16,11 @@ export default function OnboardingPage() {
   const [isSuccess, setIsSuccess] = useState(false)
   const [loadingUser, setLoadingUser] = useState(true)
   const [userId, setUserId] = useState<string | null>(null)
+
+  const rawNext = searchParams.get('next') || searchParams.get('redirect')
+  const nextTarget = (rawNext && rawNext.startsWith('/') && !rawNext.startsWith('//'))
+    ? rawNext
+    : (typeof window !== 'undefined' && localStorage.getItem('pending_reservation') ? '/reservations/process' : '/dashboard')
 
   useEffect(() => {
     async function checkAuth() {
@@ -51,12 +57,12 @@ export default function OnboardingPage() {
       if (existingLast) setLastName(existingLast)
       if (profile?.instagram_handle) setHandle(profile.instagram_handle)
 
-      // Si le profil a déjà un instagram_handle ET un nom complet, rediriger vers le dashboard
+      // Si le profil a déjà un instagram_handle ET un nom complet, rediriger vers la destination finale
       const hasName = Boolean(existingFirst && existingLast)
       const hasInstagram = Boolean(profile?.instagram_handle && profile.instagram_handle.trim().length > 0)
 
       if (isSimulating || (hasInstagram && hasName)) {
-        router.replace("/dashboard")
+        router.replace(nextTarget)
         return
       }
 
@@ -64,7 +70,7 @@ export default function OnboardingPage() {
     }
 
     checkAuth()
-  }, [router])
+  }, [router, nextTarget])
 
   const validateInput = (value: string): { isValid: boolean; formatted: string; errorMsg?: string } => {
     const raw = value.trim()
@@ -183,9 +189,9 @@ export default function OnboardingPage() {
     }
 
     setIsSuccess(true)
-    // Redirection immédiate vers le Dashboard
+    // Redirection immédiate vers la destination (reservations process ou dashboard)
     setTimeout(() => {
-      window.location.href = "/dashboard"
+      window.location.href = nextTarget
     }, 600)
   }
 
@@ -343,5 +349,20 @@ export default function OnboardingPage() {
         </p>
       </div>
     </div>
+  )
+}
+
+export default function OnboardingPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#0B0F19] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-passi-corail/20 border-t-passi-corail rounded-full animate-spin" />
+          <p className="text-gray-400 text-sm font-medium">Chargement...</p>
+        </div>
+      </div>
+    }>
+      <OnboardingContent />
+    </Suspense>
   )
 }

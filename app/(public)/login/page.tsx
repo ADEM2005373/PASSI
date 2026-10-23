@@ -113,14 +113,19 @@ function LoginContent() {
   const [loading, setLoading] = useState(false);
 
   const searchParams = useSearchParams();
-  const rawRedirect = searchParams.get("redirect") || searchParams.get("returnUrl");
+  const rawRedirect = searchParams.get("redirect") || searchParams.get("returnUrl") || searchParams.get("next");
   // Ensure safe local destination (must start with / and not //)
   const redirectDestination = (rawRedirect && rawRedirect.startsWith("/") && !rawRedirect.startsWith("//"))
     ? rawRedirect
     : null;
 
+  const [hasPendingReservation, setHasPendingReservation] = useState(false);
+
   useEffect(() => {
     setMounted(true);
+    if (typeof window !== 'undefined' && localStorage.getItem('pending_reservation')) {
+      setHasPendingReservation(true);
+    }
     const urlError = searchParams.get("error");
     if (urlError) setError("La connexion a échoué. Réessayez.");
     const tab = searchParams.get("tab") || searchParams.get("mode");
@@ -490,6 +495,17 @@ function LoginContent() {
             </p>
           </div>
 
+          {/* Pending Reservation Callout */}
+          {(hasPendingReservation || redirectDestination === '/reservations/process') && (
+            <div className="flex items-center gap-3 p-4 rounded-2xl bg-purple-500/10 border border-purple-500/30 text-purple-300 text-xs font-semibold animate-in fade-in duration-300">
+              <Ticket className="w-5 h-5 text-purple-400 shrink-0" />
+              <div className="space-y-0.5">
+                <p className="font-bold text-white">Votre pass est pré-configuré !</p>
+                <p className="text-purple-300/90 font-normal">Connectez-vous pour confirmer votre réservation instantanément.</p>
+              </div>
+            </div>
+          )}
+
           {/* Mode Switcher Tabs */}
           <div className="flex bg-gray-100 dark:bg-gray-900/80 p-1.5 rounded-2xl border border-gray-200 dark:border-gray-800">
             <button
@@ -672,9 +688,14 @@ function LoginContent() {
                   ${bg} ${border} ${text}
                   disabled:opacity-60 disabled:cursor-not-allowed
                   shadow-sm hover:shadow-md hover:-translate-y-0.5
-                  active:scale-95
+                  active:scale-95 relative
                 `}
               >
+                {id === "google" && (
+                  <span className="absolute -top-2.5 right-4 bg-purple-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider shadow">
+                    Recommandé ✨
+                  </span>
+                )}
                 {loadingProvider === id ? (
                   <svg
                     className="animate-spin w-5 h-5"

@@ -267,10 +267,8 @@ export function LandingActualites() {
                   })()
                 : "Date à confirmer";
 
-              // Destination URL: Direct reservation if authenticated, else login with preserved return redirect
-              const destinationHref = isAuthenticated
-                ? `/events/${event.id}`
-                : `/login?redirect=/events/${event.id}/reserve`;
+              // Direct reservation flow: leads to pre-auth drink and pass configuration
+              const destinationHref = `/events/${event.id}/reserve`;
 
               return (
                 <div

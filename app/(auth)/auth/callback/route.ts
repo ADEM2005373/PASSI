@@ -123,7 +123,9 @@ export async function GET(request: NextRequest) {
       // Pour les utilisateurs réguliers : vérification Instagram
       const hasInstagram = userProfile?.instagram_handle && userProfile.instagram_handle.trim().length > 0
       if (!hasInstagram) {
-        redirectPath = '/onboarding'
+        redirectPath = next && next !== '/dashboard' && next.startsWith('/') && !next.startsWith('//')
+          ? `/onboarding?next=${encodeURIComponent(next)}`
+          : '/onboarding'
       } else {
         redirectPath = (next && next !== '/' && next.startsWith('/') && !next.startsWith('//')) ? next : '/dashboard'
       }

@@ -59,12 +59,16 @@ export async function updateSession(request: NextRequest) {
     !path.startsWith('/forgot-password') &&
     !path.startsWith('/update-password') &&
     !path.startsWith('/verify-email') &&
+    !path.startsWith('/events') &&
     path !== '/'
   ) {
     if (path.startsWith('/api')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     url.pathname = '/login'
+    if (path && path !== '/dashboard') {
+      url.searchParams.set('next', path)
+    }
     return NextResponse.redirect(url)
   }
 
@@ -116,19 +120,36 @@ export async function updateSession(request: NextRequest) {
     const hasInstagram = profile?.instagram_handle && profile.instagram_handle.trim().length > 0
     if (role === 'user' && actualRole !== 'admin' && !isImpersonating && !hasInstagram && path !== '/onboarding' && !path.startsWith('/api') && path !== '/update-password') {
       url.pathname = '/onboarding'
+      if (path && path !== '/dashboard') {
+        url.searchParams.set('next', path)
+      }
       return NextResponse.redirect(url)
     }
 
-    // 3. If profile is completed and user tries to hit /onboarding, send to dashboard
+    // 3. If profile is completed and user tries to hit /onboarding, send to dashboard or preserved next
     if (path === '/onboarding' && (hasInstagram || actualRole === 'admin' || isImpersonating)) {
-      url.pathname = '/dashboard'
+      const nextParam = url.searchParams.get('next')
+      if (nextParam && nextParam.startsWith('/') && !nextParam.startsWith('//')) {
+        url.pathname = nextParam
+        url.searchParams.delete('next')
+      } else {
+        url.pathname = '/dashboard'
+      }
       return NextResponse.redirect(url)
     }
 
-    // 4. If logged in and hitting public/login pages, force them to their specific domain
+    // 4. If logged in and hitting public/login pages, force them to their specific domain or preserved next
     if (path === '/' || path.startsWith('/login') || path.startsWith('/staff/login') || path.startsWith('/register')) {
+      const nextParam = url.searchParams.get('next') || url.searchParams.get('redirect')
       if (role === 'user' && !hasInstagram) {
         url.pathname = '/onboarding'
+        if (nextParam && nextParam.startsWith('/') && !nextParam.startsWith('//')) {
+          url.searchParams.set('next', nextParam)
+        }
+      } else if (nextParam && nextParam.startsWith('/') && !nextParam.startsWith('//') && role === 'user') {
+        url.pathname = nextParam
+        url.searchParams.delete('next')
+        url.searchParams.delete('redirect')
       } else {
         url.pathname = userHome
       }
