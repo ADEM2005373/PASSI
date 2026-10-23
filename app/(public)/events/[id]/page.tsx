@@ -9,6 +9,7 @@ import { formatImageUrl } from "@/lib/utils/url";
 import { QRCodeSVG } from 'qrcode.react';
 import { Logo } from "@/components/Logo";
 import { DrinkSelector } from "@/components/DrinkSelector";
+import { PaymentNotificationModal } from "@/components/PaymentNotificationModal";
 import { Sun, Moon, ArrowLeft, LogOut, MapPin, Calendar, Clock, Ticket, Wine, CheckCircle, AlertCircle, Info, Shirt, Sparkles, Mail } from "lucide-react";
 
 export default function EventPage({ params }: { params: Promise<{ id: string }> }) {
@@ -19,6 +20,7 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
   const [event, setEvent] = useState<Event | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [userPasses, setUserPasses] = useState<Pass[]>([]);
+  const [paymentModalPass, setPaymentModalPass] = useState<any | null>(null);
   const [numPasses, setNumPasses] = useState(1);
   const [passes, setPasses] = useState<{
     isPrimary?: boolean;
@@ -132,6 +134,32 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
     const interval = setInterval(() => fetchPasses(user.id, resolvedParams.id), 3000);
     return () => clearInterval(interval);
   }, [user]);
+
+  // Auto-detect unpaid pass for this event and show centered payment modal with blur
+  useEffect(() => {
+    if (!userPasses || userPasses.length === 0) return;
+    if (typeof window === 'undefined') return;
+
+    const unpaid = userPasses.find(
+      p => p.entry_status === 'pending' || p.entry_status === 'awaiting_payment'
+    );
+    if (unpaid) {
+      const hasAcknowledged = localStorage.getItem(`ack_payment_notice_${unpaid.id}`);
+      if (!hasAcknowledged) {
+        setPaymentModalPass({
+          ...unpaid,
+          event: event || (unpaid as any).events,
+        });
+      }
+    }
+  }, [userPasses, event]);
+
+  const handleClosePaymentModal = () => {
+    if (paymentModalPass?.id && typeof window !== 'undefined') {
+      localStorage.setItem(`ack_payment_notice_${paymentModalPass.id}`, 'true');
+    }
+    setPaymentModalPass(null);
+  };
 
   const handleBook = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -347,6 +375,14 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
                                 </div>
                               );
                             })()}
+                            <button
+                              type="button"
+                              onClick={() => setPaymentModalPass({ ...pass, event: event || (pass.events as any) })}
+                              className="text-xs font-bold text-purple-400 hover:text-purple-300 flex items-center gap-1 transition hover:underline mt-1 pt-1 cursor-pointer"
+                            >
+                              <span>Afficher la notification plein écran</span>
+                              <span>↗</span>
+                            </button>
                           </div>
                         )}
                         {pass.entry_status === 'awaiting_payment' && (
@@ -388,6 +424,14 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
                                 </div>
                               );
                             })()}
+                            <button
+                              type="button"
+                              onClick={() => setPaymentModalPass({ ...pass, event: event || (pass.events as any) })}
+                              className="text-xs font-bold text-purple-400 hover:text-purple-300 flex items-center gap-1 transition hover:underline mt-1 pt-1 cursor-pointer"
+                            >
+                              <span>Afficher la notification plein écran</span>
+                              <span>↗</span>
+                            </button>
                           </div>
                         )}
                         {pass.entry_status === 'rejected' && (
@@ -624,6 +668,14 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
           </div>
         )}
       </div>
+
+      {paymentModalPass && (
+        <PaymentNotificationModal
+          reservation={paymentModalPass}
+          isOpen={Boolean(paymentModalPass)}
+          onClose={handleClosePaymentModal}
+        />
+      )}
     </div>
   );
 }
