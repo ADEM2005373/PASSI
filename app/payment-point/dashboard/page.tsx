@@ -56,7 +56,9 @@ import {
   CheckCheck
 } from "lucide-react";
 
-type CashierTab = 'guichet' | 'analytics' | 'operations';
+import { POSPassCreationTab } from "@/components/pos/POSPassCreationTab";
+
+type CashierTab = 'guichet' | 'creation' | 'analytics' | 'operations';
 
 export default function PaymentPointDashboard() {
   const router = useRouter();
@@ -840,6 +842,18 @@ export default function PaymentPointDashboard() {
           </button>
 
           <button
+            onClick={() => setActiveTab('creation')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'creation'
+                ? 'bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white shadow-xs'
+                : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white'
+            }`}
+          >
+            <Sparkles className="w-4 h-4 text-purple-500" />
+            <span>⚡ Émission Directe (Vente Guichet)</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('analytics')}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
               activeTab === 'analytics'
@@ -1241,6 +1255,28 @@ export default function PaymentPointDashboard() {
             )}
 
           </div>
+        )}
+
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/* ─── ONGLET 2: ÉMISSION DIRECTE DE PASS (VENTE GUICHET / POS) ─── */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {activeTab === 'creation' && (
+          <POSPassCreationTab
+            eventId={selectedEventId}
+            posName={currentUser?.full_name || currentUser?.email?.split('@')[0] || 'Guichet Point de Vente'}
+            events={events}
+            onPassCreated={async (passRes) => {
+              setSuccessToast(passRes.message || 'Pass émis, payé et activé avec succès !');
+              await loadCashierPosData();
+              if (selectedEventId) {
+                try {
+                  const res = await api.getPaymentPointPasses(selectedEventId);
+                  setPasses(res || []);
+                } catch (e) {}
+              }
+              setTimeout(() => setSuccessToast(null), 5000);
+            }}
+          />
         )}
 
         {/* ═══════════════════════════════════════════════════════════════ */}

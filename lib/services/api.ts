@@ -124,9 +124,14 @@ export type Pass = {
   approved_by?: string | null;
   payment_approved_at?: string | null;
   created_by?: string | null;
-  pass_origin?: 'USER' | 'ADMIN' | 'QUICK_RESERVATION' | string | null;
-  source?: 'QUICK_RESERVATION' | 'STANDARD' | string;
+  pass_origin?: 'USER' | 'ADMIN' | 'QUICK_RESERVATION' | 'POS' | string | null;
+  source?: 'QUICK_RESERVATION' | 'STANDARD' | 'POS' | string;
   reservation_code?: string | null;
+  issued_by_pos?: string | null;
+  cashier_id?: string | null;
+  payment_status?: string | null;
+  total_price?: number | null;
+  full_name?: string | null;
   phone?: string | null;
   email?: string | null;
   selected_drink?: string | null;
@@ -1821,6 +1826,42 @@ export const api = {
       const result = await res.json().catch(() => ({}));
       throw new Error(result.error || "Impossible de supprimer l'actualité");
     }
+  },
+
+  async createPOSPass(formData: {
+    eventId: string;
+    userName?: string;
+    fullName?: string;
+    userEmail?: string;
+    email?: string;
+    phone?: string;
+    drinkName?: string;
+    selectedDrink?: string;
+    aromas?: string[];
+    totalPrice?: number;
+    posLocation?: string;
+    posName?: string;
+    quantity?: number;
+  }): Promise<{
+    success: boolean;
+    message: string;
+    pass: any;
+    passes: any[];
+    reservationCode: string;
+    webPassUrl: string;
+    totalPrice: number;
+    count: number;
+  }> {
+    const res = await fetch('/api/pos/passes/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(formData),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Erreur lors de la création du pass au point de vente');
+    }
+    return data;
   }
 };
 

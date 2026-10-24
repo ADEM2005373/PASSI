@@ -1122,8 +1122,15 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
           {activeTab === 'approbations' && (() => {
             const isPassOverdue = (pass: Pass) => {
               const isUnpaid = pass.status === 'PENDING_PAYMENT' || pass.entry_status === 'awaiting_payment' || pass.entry_status === 'pending';
-              if (!isUnpaid || !pass.expires_at) return false;
-              return new Date() > new Date(pass.expires_at);
+              if (!isUnpaid) return false;
+              if (pass.expires_at) {
+                return new Date() > new Date(pass.expires_at);
+              }
+              if (pass.created_at) {
+                const expiry = new Date(new Date(pass.created_at).getTime() + 72 * 60 * 60 * 1000);
+                return new Date() > expiry;
+              }
+              return false;
             };
 
             const totalOverdueCount = passes.filter(isPassOverdue).length;
@@ -1147,9 +1154,11 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
                 }
               }
               if (approbOriginFilter !== 'all') {
-                const isQuick = pass.source === 'QUICK_RESERVATION' || Boolean(pass.reservation_code);
+                const isPos = pass.source === 'POS' || pass.pass_origin === 'POS' || Boolean(pass.issued_by_pos) || Boolean(pass.reservation_code && pass.reservation_code.startsWith('POS-'));
+                const isQuick = !isPos && (pass.source === 'QUICK_RESERVATION' || Boolean(pass.reservation_code));
+                if (approbOriginFilter === 'POS' && !isPos) return false;
                 if (approbOriginFilter === 'QUICK_RESERVATION' && !isQuick) return false;
-                if (approbOriginFilter === 'STANDARD' && isQuick) return false;
+                if (approbOriginFilter === 'STANDARD' && (isPos || isQuick)) return false;
               }
               if (approbOverdueFilter && !isPassOverdue(pass)) {
                 return false;
@@ -1247,6 +1256,7 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
                         className="input text-xs"
                       >
                         <option value="all">Tous les flux</option>
+                        <option value="POS">📍 Émis au Point de Vente (POS / Guichet)</option>
                         <option value="QUICK_RESERVATION">⚡ Réservation Express (Guest)</option>
                         <option value="STANDARD">👤 Réservation Standard</option>
                       </select>
@@ -1278,7 +1288,7 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
                             : 'bg-neutral-800/80 text-neutral-300 border-neutral-700 hover:border-neutral-500'
                         }`}
                       >
-                        <span>⚠️ En retard (&gt; 48h)</span>
+                        <span>⚠️ En retard (&gt; 72h)</span>
                         <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
                           totalOverdueCount > 0 ? 'bg-red-500 text-white font-extrabold' : 'bg-neutral-700 text-neutral-400'
                         }`}>
@@ -1297,7 +1307,8 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
                 ) : (
                   <div className="space-y-4">
                     {displayedPasses.map(pass => {
-                      const isQuick = pass.source === 'QUICK_RESERVATION' || Boolean(pass.reservation_code);
+                      const isPos = pass.source === 'POS' || pass.pass_origin === 'POS' || Boolean(pass.issued_by_pos) || Boolean(pass.reservation_code && pass.reservation_code.startsWith('POS-'));
+                      const isQuick = !isPos && (pass.source === 'QUICK_RESERVATION' || Boolean(pass.reservation_code));
                       const overdue = isPassOverdue(pass);
                       const isPaid = pass.status === 'PAID' || ['activated', 'scanned'].includes(pass.entry_status);
                       const isExpired = pass.status === 'EXPIRED' || pass.entry_status === 'rejected';
@@ -1334,13 +1345,17 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
                         >
                           <div className="flex items-start sm:items-center gap-4 min-w-0 flex-1">
                             <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl font-bold flex-shrink-0 ${sc.bg} ${sc.color}`}>
-                              {isQuick ? '⚡' : (pass.entry_status === 'pending' ? '!' : isUnpaid ? '$' : isExpired ? 'X' : '✓')}
+                              {isPos ? '📍' : isQuick ? '⚡' : (pass.entry_status === 'pending' ? '!' : isUnpaid ? '$' : isExpired ? 'X' : '✓')}
                             </div>
 
                             <div className="min-w-0 flex-1">
                               {/* Badges Bar: Origin, Code, Overdue, Status */}
                               <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                                {isQuick ? (
+                                {isPos ? (
+                                  <span className="px-2.5 py-0.5 rounded-lg text-[11px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30 flex items-center gap-1">
+                                    📍 Point de Vente (POS) {pass.issued_by_pos ? `· ${pass.issued_by_pos}` : ''}
+                                  </span>
+                                ) : isQuick ? (
                                   <span className="px-2.5 py-0.5 rounded-lg text-[11px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
                                     ⚡ Réservation Express
                                   </span>
@@ -1358,7 +1373,7 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
 
                                 {overdue && (
                                   <span className="px-2.5 py-0.5 rounded-lg text-[11px] font-bold bg-red-600/30 text-red-300 border border-red-500/50 flex items-center gap-1 animate-pulse">
-                                    ⚠️ En retard (&gt; 48h)
+                                    ⚠️ En retard (&gt; 72h)
                                   </span>
                                 )}
 
@@ -1402,7 +1417,7 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
                                 </p>
                               )}
 
-                              {/* Expiration Reference (48h notice) */}
+                              {/* Expiration Reference (72h notice) */}
                               {pass.expires_at && (
                                 <p className={`text-[11px] mt-1 font-medium ${overdue ? 'text-red-400 font-bold' : 'text-neutral-400'}`}>
                                   ⏳ Échéance indicative : {new Date(pass.expires_at).toLocaleString('fr-FR', {
@@ -1411,7 +1426,7 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
                                     hour: '2-digit',
                                     minute: '2-digit',
                                   })}
-                                  {overdue ? ' (Délai dépassé - Expiration manuelle requise)' : ' (48h max)'}
+                                  {overdue ? ' (Délai dépassé - Expiration manuelle requise)' : ' (72h max)'}
                                 </p>
                               )}
 

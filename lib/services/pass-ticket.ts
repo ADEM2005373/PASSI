@@ -383,9 +383,9 @@ export async function dispatchPaidPassEmail(passOrId: any): Promise<{ success: b
       };
     });
 
-    // 2. Check if this is a Quick Reservation flow (Dynamic Web Pass /p/:secretToken)
+    // 2. Check if this is a Quick / POS Reservation flow (Dynamic Web Pass /p/:secretToken)
     const isQuickReservation = passesToDeliver.some(
-      (p) => p.source === 'QUICK_RESERVATION' || Boolean(p.secret_token) || (p.reservation_code && p.reservation_code.startsWith('QCK-'))
+      (p) => p.source === 'QUICK_RESERVATION' || p.source === 'POS' || Boolean(p.secret_token) || (p.reservation_code && (p.reservation_code.startsWith('QCK-') || p.reservation_code.startsWith('POS-')))
     );
 
     const isMultiPass = totalPasses > 1;

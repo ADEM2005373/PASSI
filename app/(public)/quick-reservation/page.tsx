@@ -301,7 +301,7 @@ function QuickReservationContent() {
 
             {/* Core Required Confirmation Message */}
             <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-rose-500/10 to-amber-500/15 border border-amber-500/30 text-amber-200 text-sm md:text-base font-semibold leading-relaxed max-w-xl mx-auto shadow-lg shadow-amber-950/20">
-              &ldquo;{confirmation.message || "Reservation complete. Please pay for your pass at our physical sell points within 48 hours."}&rdquo;
+              &ldquo;{confirmation.message || "Reservation complete. Please pay for your pass at our physical sell points within 72 hours."}&rdquo;
             </div>
           </div>
 
@@ -340,12 +340,12 @@ function QuickReservationContent() {
               </button>
             </div>
 
-            {/* Visual 48-Hour Reference */}
+            {/* Visual 72-Hour Reference */}
             {expiresDate && (
               <div className="flex items-center gap-3 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-200 text-xs">
                 <Clock size={20} className="text-red-400 flex-shrink-0" />
                 <div>
-                  <span className="font-bold">Échéance indicative de 48 heures : </span>
+                  <span className="font-bold">Échéance indicative de 72 heures : </span>
                   <span>
                     À régler avant le{" "}
                     <strong>
@@ -536,7 +536,7 @@ function QuickReservationContent() {
             Réservation <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#FF6B5E] via-rose-400 to-[#4DEEEA]">Express</span>
           </h1>
           <p className="text-sm md:text-base text-neutral-400 leading-relaxed">
-            Choisissez votre événement et vos consommations en quelques secondes. Réglez votre pass à nos points de vente dans les 48 heures.
+            Choisissez votre événement et vos consommations en quelques secondes. Réglez votre pass à nos points de vente dans les 72 heures.
           </p>
         </div>
 
@@ -1062,15 +1062,15 @@ function QuickReservationContent() {
                   </div>
                 </div>
 
-                {/* 48-Hour Lifecycle Notice */}
+                {/* 72-Hour Lifecycle Notice */}
                 <div className="mt-4 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-start gap-3">
                   <Info size={18} className="text-amber-400 flex-shrink-0 mt-0.5" />
                   <div className="space-y-1">
                     <p className="font-bold">
-                      Règlement à nos points de vente physiques dans les 48 heures :
+                      Règlement à nos points de vente physiques dans les 72 heures :
                     </p>
                     <p className="text-amber-200/90 leading-relaxed">
-                      Votre réservation de <strong>{quantity} pass</strong> sera enregistrée en statut <code>PENDING_PAYMENT</code> sous une référence unique. Vous disposerez de 48 heures pour régler vos pass en espèces au guichet. <strong>Un seul e-mail contenant tous vos billets PDF officiels avec leurs QR codes respectifs</strong> vous sera envoyé dès encaissement.
+                      Votre réservation de <strong>{quantity} pass</strong> sera enregistrée en statut <code>PENDING_PAYMENT</code> sous une référence unique. Vous disposerez de 72 heures pour régler vos pass en espèces au guichet. <strong>Un seul e-mail contenant tous vos billets PDF officiels avec leurs QR codes respectifs</strong> vous sera envoyé dès encaissement.
                     </p>
                   </div>
                 </div>

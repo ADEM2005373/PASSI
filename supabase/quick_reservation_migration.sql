@@ -131,12 +131,44 @@ BEGIN
     ALTER TABLE public.passes ADD COLUMN is_drink_used BOOLEAN DEFAULT FALSE NOT NULL;
   END IF;
 
-  -- Drink Voucher Scanned Timestamp
+  -- POS Direct Issuance: Location Name
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.columns 
-    WHERE table_name = 'passes' AND column_name = 'drink_used_at'
+    WHERE table_name = 'passes' AND column_name = 'issued_by_pos'
   ) THEN
-    ALTER TABLE public.passes ADD COLUMN drink_used_at TIMESTAMPTZ DEFAULT NULL;
+    ALTER TABLE public.passes ADD COLUMN issued_by_pos TEXT DEFAULT NULL;
+  END IF;
+
+  -- POS Direct Issuance: Cashier / Operator ID
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'passes' AND column_name = 'cashier_id'
+  ) THEN
+    ALTER TABLE public.passes ADD COLUMN cashier_id UUID DEFAULT NULL;
+  END IF;
+
+  -- Payment Status tracking ('paid', 'pending', etc.)
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'passes' AND column_name = 'payment_status'
+  ) THEN
+    ALTER TABLE public.passes ADD COLUMN payment_status TEXT DEFAULT NULL;
+  END IF;
+
+  -- Optional Full Name column (convenience alias for guest name)
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'passes' AND column_name = 'full_name'
+  ) THEN
+    ALTER TABLE public.passes ADD COLUMN full_name TEXT DEFAULT NULL;
+  END IF;
+
+  -- Optional Total Price column (convenience alias for final price)
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'passes' AND column_name = 'total_price'
+  ) THEN
+    ALTER TABLE public.passes ADD COLUMN total_price NUMERIC DEFAULT NULL;
   END IF;
 END $$;
 
@@ -150,6 +182,8 @@ CREATE INDEX IF NOT EXISTS idx_passes_expires_at ON public.passes(expires_at);
 CREATE INDEX IF NOT EXISTS idx_passes_secret_token ON public.passes(secret_token);
 CREATE INDEX IF NOT EXISTS idx_passes_entry_token ON public.passes(entry_token);
 CREATE INDEX IF NOT EXISTS idx_passes_drink_token ON public.passes(drink_token);
+CREATE INDEX IF NOT EXISTS idx_passes_issued_by_pos ON public.passes(issued_by_pos);
+CREATE INDEX IF NOT EXISTS idx_passes_cashier_id ON public.passes(cashier_id);
 
 -- 4. Automatic Account Sync Trigger:
 -- When a new user account is created or profile inserted, automatically link

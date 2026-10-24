@@ -1092,3 +1092,9 @@ export async function deletePassAction(passId: string, holderNameConfirmation?: 
   return { success: true, message: 'Pass supprimé avec succès' };
 }
 
+export async function createPOSPassAction(formData: any) {
+  const { createPOSPass } = await import('@/lib/actions/pos-pass');
+  return createPOSPass(formData);
+}
+
+

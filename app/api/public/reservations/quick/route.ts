@@ -75,8 +75,8 @@ export async function POST(req: NextRequest) {
     const formattedAromas: string[] = Array.isArray(rawAromas)
       ? rawAromas.filter((a: any) => typeof a === 'string' && a.trim().length > 0).map((a: string) => a.trim())
       : typeof rawAromas === 'string' && rawAromas.trim().length > 0
-      ? [rawAromas.trim()]
-      : [];
+        ? [rawAromas.trim()]
+        : [];
 
     // Quantity normalization (1 to 10 passes)
     const requestedQuantity = parseInt(String(quantity || 1), 10);
@@ -136,9 +136,9 @@ export async function POST(req: NextRequest) {
     const randomHex = crypto.randomBytes(3).toString('hex').toUpperCase();
     const reservationCode = `QCK-${randomHex}`;
 
-    // 4. Set visual reference expires_at = createdAt + 48 hours
+    // 4. Set visual reference expires_at = createdAt + 72 hours
     const createdAt = new Date();
-    const expiresAt = new Date(createdAt.getTime() + 48 * 60 * 60 * 1000).toISOString();
+    const expiresAt = new Date(createdAt.getTime() + 72 * 60 * 60 * 1000).toISOString();
 
     // 5. Account sync check: If an account matching this email already exists, link userId immediately
     let matchedUserId: string | null = null;
@@ -177,8 +177,8 @@ export async function POST(req: NextRequest) {
 
       // Cryptographically secure tracking tokens for Quick Reservation Web Pass view
       const secretToken = crypto.randomBytes(18).toString('base64url');
-      const entryUuid = crypto.randomUUID();
-      const drinkUuid = crypto.randomUUID();
+      const entryToken = crypto.randomBytes(24).toString('hex');
+      const drinkToken = crypto.randomBytes(24).toString('hex');
 
       rowsToInsert.push({
         event_id: event.id,
@@ -201,13 +201,13 @@ export async function POST(req: NextRequest) {
         promo_used: promoUsed,
         expires_at: expiresAt,
         secret_token: secretToken,
-        entry_token: entryUuid,
-        entry_qr_uuid: entryUuid,
+        entry_token: entryToken,
+        entry_qr_uuid: entryToken,
         is_entry_used: false,
         entry_used_at: null,
-        drink_token: drinkUuid,
-        drink_qr_uuid: drinkUuid,
-        drink_qr_code: drinkUuid,
+        drink_token: drinkToken,
+        drink_qr_uuid: drinkToken,
+        drink_qr_code: drinkToken,
         is_drink_used: false,
         drink_used_at: null,
         created_at: createdAt.toISOString(),
@@ -215,41 +215,61 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    let currentRows = rowsToInsert.map(r => ({ ...r }));
-    let insertedPasses: any[] | null = null;
-    let insertError: any = null;
+    let { data: insertedPasses, error: insertError } = await supabaseAdmin
+      .from('passes')
+      .insert(rowsToInsert)
+      .select('id, event_id, user_id, source, reservation_code, guest_first_name, guest_last_name, phone, email, selected_drink, drink_name, status, entry_status, final_price, expires_at, secret_token, entry_token, is_entry_used, entry_used_at, drink_token, is_drink_used, drink_used_at, created_at');
 
-    // Retry loop dynamically removing any column reported missing by PostgREST schema cache
-    for (let attempt = 0; attempt < 15; attempt++) {
-      const { data, error } = await supabaseAdmin
+    // Fallback if newly added columns aren't yet in table
+    if (insertError) {
+      console.warn('[POST /api/public/reservations/quick] Insert retry without optional columns:', insertError.message);
+
+      const fallbackRows = rowsToInsert.map(r => {
+        const row: Record<string, any> = {
+          event_id: r.event_id,
+          user_id: r.user_id,
+          guest_first_name: r.guest_first_name,
+          guest_last_name: r.guest_last_name,
+          entry_status: 'awaiting_payment',
+          drink_name: r.drink_name,
+          selected_drink: r.selected_drink,
+          selected_aromas: r.selected_aromas,
+          final_price: r.final_price,
+          entry_qr_uuid: r.entry_qr_uuid,
+          drink_qr_uuid: r.drink_qr_uuid,
+        };
+        if (!insertError.message.includes('source')) row.source = 'QUICK_RESERVATION';
+        if (!insertError.message.includes('phone')) row.phone = r.phone;
+        if (!insertError.message.includes('email')) row.email = r.email;
+        if (!insertError.message.includes('reservation_code')) row.reservation_code = r.reservation_code;
+        if (!insertError.message.includes('status')) row.status = 'PENDING_PAYMENT';
+        if (!insertError.message.includes('expires_at')) row.expires_at = r.expires_at;
+        if (!insertError.message.includes('secret_token')) row.secret_token = r.secret_token;
+        if (!insertError.message.includes('entry_token')) row.entry_token = r.entry_token;
+        if (!insertError.message.includes('is_entry_used')) row.is_entry_used = r.is_entry_used;
+        if (!insertError.message.includes('drink_token')) row.drink_token = r.drink_token;
+        if (!insertError.message.includes('is_drink_used')) row.is_drink_used = r.is_drink_used;
+        return row;
+      });
+
+      const fallbackResult = await supabaseAdmin
         .from('passes')
-        .insert(currentRows)
+        .insert(fallbackRows)
         .select();
 
-      if (!error && data) {
-        insertedPasses = data;
-        insertError = null;
-        break;
+      if (fallbackResult.error || !fallbackResult.data) {
+        console.error('[POST /api/public/reservations/quick] Fallback insert failed:', fallbackResult.error);
+        return NextResponse.json(
+          { error: fallbackResult.error?.message || 'Erreur lors de la création de la réservation express.' },
+          { status: 500 }
+        );
       }
-
-      insertError = error;
-      const colMatch = (error?.message || '').match(/Could not find the '([^']+)' column/i);
-      if (colMatch && colMatch[1]) {
-        const missingCol = colMatch[1];
-        console.warn(`[POST /api/public/reservations/quick] Pruning missing column '${missingCol}' from insert payload (attempt ${attempt + 1})`);
-        currentRows.forEach(r => {
-          delete (r as any)[missingCol];
-        });
-      } else {
-        // If not a missing column error or unrecognized, break and report error
-        break;
-      }
+      insertedPasses = fallbackResult.data;
     }
 
-    if (insertError || !insertedPasses || insertedPasses.length === 0) {
-      console.error('[POST /api/public/reservations/quick] Final insert failed:', insertError);
+    if (!insertedPasses || insertedPasses.length === 0) {
       return NextResponse.json(
-        { error: insertError?.message || 'Erreur lors de la création de la réservation express.' },
+        { error: 'Erreur inattendue : la réservation n\'a pas pu être créée.' },
         { status: 500 }
       );
     }
@@ -260,7 +280,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         success: true,
-        message: 'Reservation complete. Please pay for your pass at our physical sell points within 48 hours.',
+        message: 'Reservation complete. Please pay for your pass at our physical sell points within 72 hours.',
         reservation: {
           id: firstPass.id,
           reservationCode: firstPass.reservation_code || reservationCode,
@@ -278,18 +298,15 @@ export async function POST(req: NextRequest) {
           status: 'PENDING_PAYMENT',
           expiresAt: firstPass.expires_at || expiresAt,
           createdAt: firstPass.created_at || createdAt.toISOString(),
-          passes: insertedPasses.map((p: any) => {
-            const token = p.secret_token || p.id;
-            return {
-              id: p.id,
-              guestFirstName: p.guest_first_name,
-              guestLastName: p.guest_last_name,
-              selectedDrink: p.selected_drink || p.drink_name,
-              finalPrice: p.final_price,
-              secretToken: token,
-              webPassUrl: getPassWebLink(token),
-            };
-          }),
+          passes: insertedPasses.map((p: any) => ({
+            id: p.id,
+            guestFirstName: p.guest_first_name,
+            guestLastName: p.guest_last_name,
+            selectedDrink: p.selected_drink || p.drink_name,
+            finalPrice: p.final_price,
+            secretToken: p.secret_token,
+            webPassUrl: p.secret_token ? getPassWebLink(p.secret_token) : getPassWebLink(p.id),
+          })),
           isAccountLinked: Boolean(matchedUserId),
         },
       },
