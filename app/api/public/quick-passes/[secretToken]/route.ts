@@ -32,10 +32,7 @@ export async function GET(
     try {
       const { data: passBySecret, error: secretErr } = await supabaseAdmin
         .from('passes')
-        .select(`
-          *,
-          events(title, date, location, doors_open, image_url)
-        `)
+        .select('*, events(*)')
         .eq('secret_token', secretToken)
         .maybeSingle();
 
@@ -46,22 +43,57 @@ export async function GET(
       // Column might not exist in unmigrated schema
     }
 
-    // Fallback: If not found by secret_token, search by pass id or reservation code
+    // 2. If joined query failed, try plain select on passes by secret_token
+    if (!pass) {
+      try {
+        const { data: rawSecretPass, error: rawSecretErr } = await supabaseAdmin
+          .from('passes')
+          .select('*')
+          .eq('secret_token', secretToken)
+          .maybeSingle();
+
+        if (!rawSecretErr && rawSecretPass) {
+          pass = rawSecretPass;
+        }
+      } catch (e) {}
+    }
+
+    // 3. Fallback: If not found by secret_token, search by pass id or reservation code
     if (!pass) {
       const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(secretToken);
-      const query = supabaseAdmin
-        .from('passes')
-        .select(`
-          *,
-          events(title, date, location, doors_open, image_url)
-        `);
 
       if (isUUID) {
-        const { data: fallbackPass } = await query.eq('id', secretToken).maybeSingle();
+        const { data: fallbackPass } = await supabaseAdmin
+          .from('passes')
+          .select('*, events(*)')
+          .eq('id', secretToken)
+          .maybeSingle();
         pass = fallbackPass;
+
+        if (!pass) {
+          const { data: rawIdPass } = await supabaseAdmin
+            .from('passes')
+            .select('*')
+            .eq('id', secretToken)
+            .maybeSingle();
+          pass = rawIdPass;
+        }
       } else {
-        const { data: fallbackPass } = await query.eq('reservation_code', secretToken).maybeSingle();
+        const { data: fallbackPass } = await supabaseAdmin
+          .from('passes')
+          .select('*, events(*)')
+          .eq('reservation_code', secretToken)
+          .maybeSingle();
         pass = fallbackPass;
+
+        if (!pass) {
+          const { data: rawCodePass } = await supabaseAdmin
+            .from('passes')
+            .select('*')
+            .eq('reservation_code', secretToken)
+            .maybeSingle();
+          pass = rawCodePass;
+        }
       }
     }
 
@@ -72,7 +104,18 @@ export async function GET(
       );
     }
 
-    const event = (pass.events as any) || {};
+    // Ensure event metadata is loaded even if relations failed
+    let event = (pass.events as any) || {};
+    if (!event.title && pass.event_id) {
+      const { data: eventData } = await supabaseAdmin
+        .from('events')
+        .select('*')
+        .eq('id', pass.event_id)
+        .maybeSingle();
+      if (eventData) {
+        event = eventData;
+      }
+    }
     const isEntryUsed = Boolean(pass.is_entry_used || pass.entry_status === 'scanned');
     const isDrinkUsed = Boolean(pass.is_drink_used || pass.drink_status === 'scanned');
     const entryToken = pass.entry_token || pass.entry_qr_uuid || pass.id;

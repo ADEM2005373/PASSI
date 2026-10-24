@@ -224,25 +224,27 @@ export async function dispatchPaidPassEmail(passOrId: any): Promise<{ success: b
     // Fetch full pass record if passOrId is just a string ID
     if (typeof passOrId === 'string' || !pass?.events) {
       const passId = typeof passOrId === 'string' ? passOrId : pass.id;
-      const { data: fetchedPass, error: fetchErr } = await supabaseAdmin
-        .from('passes')
-        .select(`
-          *,
-          events(title, date, location, base_price),
-          user:profiles!passes_user_id_fkey(email, full_name)
-        `)
-        .eq('id', passId)
-        .maybeSingle();
+      let fetchedPass: any = null;
 
-      if (fetchErr || !fetchedPass) {
-        // Fallback without user relation
-        const { data: fallbackPass } = await supabaseAdmin
+      try {
+        const { data, error } = await supabaseAdmin
           .from('passes')
-          .select('*, events(title, date, location, base_price)')
+          .select('*, events(*)')
           .eq('id', passId)
-          .single();
-        pass = fallbackPass;
-      } else {
+          .maybeSingle();
+        if (!error && data) fetchedPass = data;
+      } catch (e) {}
+
+      if (!fetchedPass) {
+        const { data: rawPass } = await supabaseAdmin
+          .from('passes')
+          .select('*')
+          .eq('id', passId)
+          .maybeSingle();
+        fetchedPass = rawPass;
+      }
+
+      if (fetchedPass) {
         pass = fetchedPass;
       }
     }
@@ -255,19 +257,50 @@ export async function dispatchPaidPassEmail(passOrId: any): Promise<{ success: b
     // Check if this pass belongs to a multi-pass reservation
     let passesToDeliver = [pass];
     if (pass.reservation_code) {
-      const { data: siblingPasses } = await supabaseAdmin
-        .from('passes')
-        .select(`
-          *,
-          events(title, date, location, base_price),
-          user:profiles!passes_user_id_fkey(email, full_name)
-        `)
-        .eq('reservation_code', pass.reservation_code)
-        .order('created_at', { ascending: true });
+      let siblingPasses: any[] | null = null;
+
+      try {
+        const { data, error } = await supabaseAdmin
+          .from('passes')
+          .select('*, events(*)')
+          .eq('reservation_code', pass.reservation_code)
+          .order('created_at', { ascending: true });
+
+        if (!error && data && data.length > 0) {
+          siblingPasses = data;
+        }
+      } catch (e) {}
+
+      // Fallback: Query without relations if schema relations fail
+      if (!siblingPasses || siblingPasses.length === 0) {
+        const { data: rawSiblings } = await supabaseAdmin
+          .from('passes')
+          .select('*')
+          .eq('reservation_code', pass.reservation_code)
+          .order('created_at', { ascending: true });
+
+        if (rawSiblings && rawSiblings.length > 0) {
+          siblingPasses = rawSiblings;
+        }
+      }
 
       if (siblingPasses && siblingPasses.length > 0) {
         passesToDeliver = siblingPasses;
       }
+    } else if (pass.created_at && (pass.email || pass.phone)) {
+      // Fallback: match passes created at identical timestamp for this guest
+      try {
+        const { data: sameTimePasses } = await supabaseAdmin
+          .from('passes')
+          .select('*')
+          .eq('created_at', pass.created_at)
+          .eq('email', pass.email)
+          .order('created_at', { ascending: true });
+
+        if (sameTimePasses && sameTimePasses.length > 0) {
+          passesToDeliver = sameTimePasses;
+        }
+      } catch (e) {}
     }
 
     const firstPass = passesToDeliver[0];
@@ -297,7 +330,17 @@ export async function dispatchPaidPassEmail(passOrId: any): Promise<{ success: b
       return { success: false, error: 'Adresse email manquante' };
     }
 
-    const event = firstPass.events || firstPass.event || {};
+    let event = firstPass.events || firstPass.event || {};
+    if (!event.title && firstPass.event_id) {
+      const { data: evData } = await supabaseAdmin
+        .from('events')
+        .select('*')
+        .eq('id', firstPass.event_id)
+        .maybeSingle();
+      if (evData) {
+        event = evData;
+      }
+    }
     const reservationCode = firstPass.reservation_code || `PASS-${firstPass.id.slice(0, 8).toUpperCase()}`;
     const eventTitle = event.title || 'Événement Passi';
     const eventLocation = event.location || "L'Agora Djerba";

@@ -424,6 +424,16 @@ export async function approvePassPaymentAction(passId: string) {
     if (siblingPasses && siblingPasses.length > 0) {
       passesToActivate = siblingPasses;
     }
+  } else if (pass.created_at && (pass.email || pass.guest_email)) {
+    const { data: sameTimePasses } = await supabaseAdmin
+      .from('passes')
+      .select('*')
+      .eq('created_at', pass.created_at)
+      .eq('email', pass.email || pass.guest_email);
+
+    if (sameTimePasses && sameTimePasses.length > 0) {
+      passesToActivate = sameTimePasses;
+    }
   }
 
   const now = new Date().toISOString();
