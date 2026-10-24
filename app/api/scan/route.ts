@@ -33,19 +33,31 @@ export async function POST(request: Request) {
       }
 
       // Query Passes table using admin client (supports entry_qr_uuid or entry_token)
-      let { data: pass, error } = await supabaseAdmin
-        .from('passes')
-        .select('*, events(title, date)')
-        .eq('entry_qr_uuid', qrUuid)
-        .maybeSingle();
+      let pass: any = null;
+      let error: any = null;
 
-      if (!pass) {
-        const { data: byToken } = await supabaseAdmin
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(qrUuid);
+      if (isUUID) {
+        const { data: byUuid, error: err } = await supabaseAdmin
           .from('passes')
           .select('*, events(title, date)')
-          .eq('entry_token', qrUuid)
+          .or(`entry_qr_uuid.eq.${qrUuid},id.eq.${qrUuid}`)
           .maybeSingle();
-        pass = byToken;
+        pass = byUuid;
+        error = err;
+      }
+
+      if (!pass) {
+        try {
+          const { data: byToken } = await supabaseAdmin
+            .from('passes')
+            .select('*, events(title, date)')
+            .eq('entry_token', qrUuid)
+            .maybeSingle();
+          if (byToken) pass = byToken;
+        } catch (e) {
+          // ignore if column doesn't exist
+        }
       }
         
       if (error || !pass) return NextResponse.json({ success: false, message: "DENIED: Invalid QR Code" });
@@ -58,22 +70,27 @@ export async function POST(request: Request) {
       const eventTitle = pass.events?.title || 'Unknown Event';
       const now = new Date().toISOString();
 
-      // Update to scanned using admin client
-      const { error: updateError } = await supabaseAdmin
-        .from('passes')
-        .update({ 
-          entry_status: 'scanned',
-          is_entry_used: true,
-          entry_used_at: now,
-          updated_at: now
-        })
-        .eq('id', pass.id);
+      // Update to scanned using admin client with schema resilience
+      const updatePayload: Record<string, any> = { 
+        entry_status: 'scanned',
+        is_entry_used: true,
+        entry_used_at: now,
+        updated_at: now
+      };
 
-      if (updateError) {
-        await supabaseAdmin
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const { error: updateError } = await supabaseAdmin
           .from('passes')
-          .update({ entry_status: 'scanned', updated_at: now })
+          .update(updatePayload)
           .eq('id', pass.id);
+
+        if (!updateError) break;
+        const colMatch = (updateError?.message || '').match(/Could not find the '([^']+)' column/i);
+        if (colMatch && colMatch[1]) {
+          delete updatePayload[colMatch[1]];
+        } else {
+          break;
+        }
       }
 
       return NextResponse.json({ success: true, message: `SUCCESS: ${eventTitle}` });
@@ -84,26 +101,38 @@ export async function POST(request: Request) {
       }
 
       // Query passes table directly using admin client (supports drink_qr_uuid, drink_token, or drink_qr_code)
-      let { data: passDrink, error } = await supabaseAdmin
-        .from('passes')
-        .select('id, entry_status, drink_status, drink_name, selected_drink, drink_id, selected_aromas, guest_first_name, guest_last_name, user_id, is_drink_used, events(title)')
-        .eq('drink_qr_uuid', qrUuid)
-        .maybeSingle();
+      let passDrink: any = null;
+      let error: any = null;
+
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(qrUuid);
+      if (isUUID) {
+        const { data: byUuid, error: err } = await supabaseAdmin
+          .from('passes')
+          .select('*, events(title)')
+          .or(`drink_qr_uuid.eq.${qrUuid},id.eq.${qrUuid}`)
+          .maybeSingle();
+        passDrink = byUuid;
+        error = err;
+      }
 
       if (!passDrink) {
-        const { data: byToken } = await supabaseAdmin
-          .from('passes')
-          .select('id, entry_status, drink_status, drink_name, selected_drink, drink_id, selected_aromas, guest_first_name, guest_last_name, user_id, is_drink_used, events(title)')
-          .eq('drink_token', qrUuid)
-          .maybeSingle();
-        passDrink = byToken;
+        try {
+          const { data: byToken } = await supabaseAdmin
+            .from('passes')
+            .select('*, events(title)')
+            .eq('drink_token', qrUuid)
+            .maybeSingle();
+          if (byToken) passDrink = byToken;
+        } catch (e) {
+          // ignore
+        }
       }
 
       // Fallback matching by drink_qr_code if needed
       if (!passDrink) {
         const { data: byCode } = await supabaseAdmin
           .from('passes')
-          .select('id, entry_status, drink_status, drink_name, selected_drink, drink_id, selected_aromas, guest_first_name, guest_last_name, user_id, is_drink_used, events(title)')
+          .select('*, events(title)')
           .eq('drink_qr_code', qrUuid)
           .maybeSingle();
         passDrink = byCode;
@@ -114,21 +143,26 @@ export async function POST(request: Request) {
       if (passDrink.drink_status !== 'activated') return NextResponse.json({ success: false, message: `DENIED: Non Activé (${passDrink.drink_status || 'en attente'})` });
 
       const now = new Date().toISOString();
-      const { error: updateError } = await supabaseAdmin
-        .from('passes')
-        .update({ 
-          drink_status: 'scanned',
-          is_drink_used: true,
-          drink_used_at: now,
-          updated_at: now
-        })
-        .eq('id', passDrink.id);
-        
-      if (updateError) {
-        await supabaseAdmin
+      const updatePayload: Record<string, any> = { 
+        drink_status: 'scanned',
+        is_drink_used: true,
+        drink_used_at: now,
+        updated_at: now
+      };
+
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const { error: updateError } = await supabaseAdmin
           .from('passes')
-          .update({ drink_status: 'scanned', updated_at: now })
+          .update(updatePayload)
           .eq('id', passDrink.id);
+
+        if (!updateError) break;
+        const colMatch = (updateError?.message || '').match(/Could not find the '([^']+)' column/i);
+        if (colMatch && colMatch[1]) {
+          delete updatePayload[colMatch[1]];
+        } else {
+          break;
+        }
       }
 
       const drinkName = passDrink.drink_name || passDrink.drink_id || 'Boisson';

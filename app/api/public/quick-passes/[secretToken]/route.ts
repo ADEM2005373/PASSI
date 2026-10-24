@@ -26,78 +26,43 @@ export async function GET(
       );
     }
 
-    // 1. Look up pass by secret_token
-    let { data: pass, error: fetchError } = await supabaseAdmin
-      .from('passes')
-      .select(`
-        id,
-        event_id,
-        guest_first_name,
-        guest_last_name,
-        phone,
-        email,
-        reservation_code,
-        source,
-        status,
-        entry_status,
-        drink_status,
-        final_price,
-        selected_drink,
-        drink_name,
-        selected_aromas,
-        secret_token,
-        entry_token,
-        is_entry_used,
-        entry_used_at,
-        drink_token,
-        is_drink_used,
-        drink_used_at,
-        entry_qr_uuid,
-        drink_qr_uuid,
-        payment_approved_at,
-        created_at,
-        events(title, date, location, doors_open, image_url)
-      `)
-      .eq('secret_token', secretToken)
-      .maybeSingle();
+    // 1. Look up pass by secret_token or fallback to id / reservation_code
+    let pass: any = null;
+
+    try {
+      const { data: passBySecret, error: secretErr } = await supabaseAdmin
+        .from('passes')
+        .select(`
+          *,
+          events(title, date, location, doors_open, image_url)
+        `)
+        .eq('secret_token', secretToken)
+        .maybeSingle();
+
+      if (!secretErr && passBySecret) {
+        pass = passBySecret;
+      }
+    } catch (e) {
+      // Column might not exist in unmigrated schema
+    }
 
     // Fallback: If not found by secret_token, search by pass id or reservation code
     if (!pass) {
-      const { data: fallbackPass } = await supabaseAdmin
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(secretToken);
+      const query = supabaseAdmin
         .from('passes')
         .select(`
-          id,
-          event_id,
-          guest_first_name,
-          guest_last_name,
-          phone,
-          email,
-          reservation_code,
-          source,
-          status,
-          entry_status,
-          drink_status,
-          final_price,
-          selected_drink,
-          drink_name,
-          selected_aromas,
-          secret_token,
-          entry_token,
-          is_entry_used,
-          entry_used_at,
-          drink_token,
-          is_drink_used,
-          drink_used_at,
-          entry_qr_uuid,
-          drink_qr_uuid,
-          payment_approved_at,
-          created_at,
+          *,
           events(title, date, location, doors_open, image_url)
-        `)
-        .or(`id.eq.${secretToken},reservation_code.eq.${secretToken}`)
-        .maybeSingle();
+        `);
 
-      pass = fallbackPass;
+      if (isUUID) {
+        const { data: fallbackPass } = await query.eq('id', secretToken).maybeSingle();
+        pass = fallbackPass;
+      } else {
+        const { data: fallbackPass } = await query.eq('reservation_code', secretToken).maybeSingle();
+        pass = fallbackPass;
+      }
     }
 
     if (!pass) {

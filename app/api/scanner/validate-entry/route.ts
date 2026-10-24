@@ -28,21 +28,34 @@ export async function POST(req: NextRequest) {
 
     const cleanToken = rawToken.trim();
 
-    // 1. Query pass matching entry_token (or entry_qr_uuid as fallback)
-    let { data: pass, error: fetchErr } = await supabaseAdmin
-      .from('passes')
-      .select('id, entry_status, status, is_entry_used, entry_used_at, guest_first_name, guest_last_name, reservation_code, event_id, events(title, date)')
-      .eq('entry_token', cleanToken)
-      .maybeSingle();
+    // 1. Query pass matching entry_token (or entry_qr_uuid / id as fallback)
+    let pass: any = null;
 
-    if (!pass) {
-      const { data: fallbackPass } = await supabaseAdmin
+    try {
+      const { data: pToken, error: tokenErr } = await supabaseAdmin
         .from('passes')
-        .select('id, entry_status, status, is_entry_used, entry_used_at, guest_first_name, guest_last_name, reservation_code, event_id, events(title, date)')
-        .eq('entry_qr_uuid', cleanToken)
+        .select('*, events(title, date)')
+        .eq('entry_token', cleanToken)
         .maybeSingle();
 
-      pass = fallbackPass;
+      if (!tokenErr && pToken) {
+        pass = pToken;
+      }
+    } catch (e) {
+      // Column might not exist in unmigrated schema
+    }
+
+    if (!pass) {
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanToken);
+      if (isUUID) {
+        const { data: fallbackPass } = await supabaseAdmin
+          .from('passes')
+          .select('*, events(title, date)')
+          .or(`entry_qr_uuid.eq.${cleanToken},id.eq.${cleanToken}`)
+          .maybeSingle();
+
+        pass = fallbackPass;
+      }
     }
 
     if (!pass) {
@@ -77,26 +90,27 @@ export async function POST(req: NextRequest) {
 
     const now = new Date().toISOString();
 
-    // 4. Update pass status to used
-    const { error: updateErr } = await supabaseAdmin
-      .from('passes')
-      .update({
-        is_entry_used: true,
-        entry_used_at: now,
-        entry_status: 'scanned',
-        updated_at: now,
-      })
-      .eq('id', pass.id);
+    // 4. Update pass status to used with schema resilience
+    const updatePayload: Record<string, any> = {
+      is_entry_used: true,
+      entry_used_at: now,
+      entry_status: 'scanned',
+      updated_at: now,
+    };
 
-    if (updateErr) {
-      // Fallback if is_entry_used column is missing
-      await supabaseAdmin
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const { error: updateErr } = await supabaseAdmin
         .from('passes')
-        .update({
-          entry_status: 'scanned',
-          updated_at: now,
-        })
+        .update(updatePayload)
         .eq('id', pass.id);
+
+      if (!updateErr) break;
+      const colMatch = (updateErr?.message || '').match(/Could not find the '([^']+)' column/i);
+      if (colMatch && colMatch[1]) {
+        delete updatePayload[colMatch[1]];
+      } else {
+        break;
+      }
     }
 
     const guestName = [pass.guest_first_name, pass.guest_last_name].filter(Boolean).join(' ') || 'Invité';

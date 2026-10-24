@@ -27,19 +27,39 @@ export async function GET(
       );
     }
 
-    let { data: pass } = await supabaseAdmin
-      .from('passes')
-      .select('id, entry_status, drink_status, is_entry_used, entry_used_at, drink_token, is_drink_used, drink_used_at, status')
-      .eq('secret_token', secretToken)
-      .maybeSingle();
+    let pass: any = null;
+
+    try {
+      const { data: passBySecret, error: secretErr } = await supabaseAdmin
+        .from('passes')
+        .select('*')
+        .eq('secret_token', secretToken)
+        .maybeSingle();
+
+      if (!secretErr && passBySecret) {
+        pass = passBySecret;
+      }
+    } catch (e) {
+      // Column might not exist in unmigrated schema
+    }
 
     if (!pass) {
-      const { data: fallback } = await supabaseAdmin
-        .from('passes')
-        .select('id, entry_status, drink_status, is_entry_used, entry_used_at, drink_token, is_drink_used, drink_used_at, status')
-        .or(`id.eq.${secretToken},reservation_code.eq.${secretToken}`)
-        .maybeSingle();
-      pass = fallback;
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(secretToken);
+      if (isUUID) {
+        const { data: fallback } = await supabaseAdmin
+          .from('passes')
+          .select('*')
+          .eq('id', secretToken)
+          .maybeSingle();
+        pass = fallback;
+      } else {
+        const { data: fallback } = await supabaseAdmin
+          .from('passes')
+          .select('*')
+          .eq('reservation_code', secretToken)
+          .maybeSingle();
+        pass = fallback;
+      }
     }
 
     if (!pass) {

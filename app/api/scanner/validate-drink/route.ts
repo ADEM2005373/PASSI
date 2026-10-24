@@ -28,21 +28,38 @@ export async function POST(req: NextRequest) {
 
     const cleanToken = rawToken.trim();
 
-    // 1. Query pass matching drink_token (or drink_qr_uuid or drink_qr_code)
-    let { data: pass, error: fetchErr } = await supabaseAdmin
-      .from('passes')
-      .select('id, entry_status, drink_status, status, is_drink_used, drink_used_at, selected_drink, drink_name, selected_aromas, guest_first_name, guest_last_name, reservation_code, events(title)')
-      .eq('drink_token', cleanToken)
-      .maybeSingle();
+    // 1. Query pass matching drink_token (or drink_qr_uuid or drink_qr_code / id)
+    let pass: any = null;
 
-    if (!pass) {
-      const { data: fallbackPass } = await supabaseAdmin
+    try {
+      const { data: pToken, error: tokenErr } = await supabaseAdmin
         .from('passes')
-        .select('id, entry_status, drink_status, status, is_drink_used, drink_used_at, selected_drink, drink_name, selected_aromas, guest_first_name, guest_last_name, reservation_code, events(title)')
-        .or(`drink_qr_uuid.eq.${cleanToken},drink_qr_code.eq.${cleanToken}`)
+        .select('*, events(title)')
+        .eq('drink_token', cleanToken)
         .maybeSingle();
 
-      pass = fallbackPass;
+      if (!tokenErr && pToken) {
+        pass = pToken;
+      }
+    } catch (e) {
+      // Column might not exist in unmigrated schema
+    }
+
+    if (!pass) {
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanToken);
+      let query = supabaseAdmin.from('passes').select('*, events(title)');
+
+      if (isUUID) {
+        const { data: fallbackPass } = await query
+          .or(`drink_qr_uuid.eq.${cleanToken},drink_qr_code.eq.${cleanToken},id.eq.${cleanToken}`)
+          .maybeSingle();
+        pass = fallbackPass;
+      } else {
+        const { data: fallbackPass } = await query
+          .eq('drink_qr_code', cleanToken)
+          .maybeSingle();
+        pass = fallbackPass;
+      }
     }
 
     if (!pass) {
@@ -77,26 +94,27 @@ export async function POST(req: NextRequest) {
 
     const now = new Date().toISOString();
 
-    // 4. Update drink status to claimed
-    const { error: updateErr } = await supabaseAdmin
-      .from('passes')
-      .update({
-        is_drink_used: true,
-        drink_used_at: now,
-        drink_status: 'scanned',
-        updated_at: now,
-      })
-      .eq('id', pass.id);
+    // 4. Update drink status to claimed with schema resilience
+    const updatePayload: Record<string, any> = {
+      is_drink_used: true,
+      drink_used_at: now,
+      drink_status: 'scanned',
+      updated_at: now,
+    };
 
-    if (updateErr) {
-      // Fallback if is_drink_used column is missing
-      await supabaseAdmin
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const { error: updateErr } = await supabaseAdmin
         .from('passes')
-        .update({
-          drink_status: 'scanned',
-          updated_at: now,
-        })
+        .update(updatePayload)
         .eq('id', pass.id);
+
+      if (!updateErr) break;
+      const colMatch = (updateErr?.message || '').match(/Could not find the '([^']+)' column/i);
+      if (colMatch && colMatch[1]) {
+        delete updatePayload[colMatch[1]];
+      } else {
+        break;
+      }
     }
 
     const drinkName = pass.selected_drink || pass.drink_name || 'Boisson standard';

@@ -457,7 +457,10 @@ export async function approvePassPaymentAction(passId: string) {
     if (p.entry_status === 'scanned') continue;
 
     const secretToken = p.secret_token || crypto.randomBytes(18).toString('base64url');
-    const entryToken = p.entry_token || p.entry_qr_uuid || crypto.randomBytes(24).toString('hex');
+    const entryUuid = (p.entry_qr_uuid && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(p.entry_qr_uuid))
+      ? p.entry_qr_uuid
+      : crypto.randomUUID();
+    const entryToken = p.entry_token || entryUuid;
 
     const updatePayload: Record<string, any> = {
       entry_status: 'activated',
@@ -467,7 +470,7 @@ export async function approvePassPaymentAction(passId: string) {
       payment_approved_at: now,
       secret_token: secretToken,
       entry_token: entryToken,
-      entry_qr_uuid: entryToken,
+      entry_qr_uuid: entryUuid,
       is_entry_used: p.is_entry_used ?? false,
       updated_at: now,
     };
@@ -477,40 +480,43 @@ export async function approvePassPaymentAction(passId: string) {
     }
 
     if (p.drink_name || p.selected_drink || p.drink_id) {
-      const drinkToken = p.drink_token || p.drink_qr_uuid || crypto.randomBytes(24).toString('hex');
+      const drinkUuid = (p.drink_qr_uuid && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(p.drink_qr_uuid))
+        ? p.drink_qr_uuid
+        : crypto.randomUUID();
+      const drinkToken = p.drink_token || drinkUuid;
       updatePayload.drink_status = 'activated';
       updatePayload.drink_token = drinkToken;
-      updatePayload.drink_qr_uuid = drinkToken;
-      updatePayload.drink_qr_code = drinkToken;
+      updatePayload.drink_qr_uuid = drinkUuid;
+      updatePayload.drink_qr_code = drinkUuid;
       updatePayload.is_drink_used = p.is_drink_used ?? false;
     }
 
-    const { data: resData, error: updateError } = await supabaseAdmin
-      .from('passes')
-      .update(updatePayload)
-      .eq('id', p.id)
-      .select('id, user_id, email, phone, reservation_code, source, entry_status, status, final_price, payment_point_id, approved_by, payment_approved_at, drink_id, drink_name, selected_drink, drink_status, drink_qr_uuid, drink_qr_code, secret_token, entry_token, is_entry_used, entry_used_at, drink_token, is_drink_used, drink_used_at')
-      .single();
+    let currentPayload = { ...updatePayload };
+    let resData: any = null;
 
-    if (updateError) {
-      // Fallback if status or newly added columns are missing in legacy schema
-      delete updatePayload.status;
-      delete updatePayload.approved_by;
-      delete updatePayload.payment_approved_at;
-      delete updatePayload.secret_token;
-      delete updatePayload.entry_token;
-      delete updatePayload.is_entry_used;
-      delete updatePayload.drink_token;
-      delete updatePayload.is_drink_used;
-      const { data: fallbackData } = await supabaseAdmin
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const { data, error } = await supabaseAdmin
         .from('passes')
-        .update(updatePayload)
+        .update(currentPayload)
         .eq('id', p.id)
         .select()
-        .single();
-      if (p.id === passId) updatedPass = fallbackData;
-    } else {
-      if (p.id === passId) updatedPass = resData;
+        .maybeSingle();
+
+      if (!error && data) {
+        resData = data;
+        break;
+      }
+
+      const colMatch = (error?.message || '').match(/Could not find the '([^']+)' column/i);
+      if (colMatch && colMatch[1]) {
+        delete currentPayload[colMatch[1]];
+      } else {
+        break;
+      }
+    }
+
+    if (p.id === passId && resData) {
+      updatedPass = resData;
     }
   }
 
