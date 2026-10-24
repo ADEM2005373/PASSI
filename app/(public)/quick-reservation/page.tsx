@@ -57,7 +57,6 @@ function QuickReservationContent() {
   // Drink Selection
   const [selectedDrinkName, setSelectedDrinkName] = useState<string>("");
   const [selectedAromas, setSelectedAromas] = useState<string[]>([]);
-  const [customDrink, setCustomDrink] = useState<string>("");
 
   // Submission & Confirmation State
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -168,9 +167,7 @@ function QuickReservationContent() {
       return;
     }
 
-    const resolvedDrink = customDrink.trim()
-      ? customDrink.trim()
-      : selectedDrinkName
+    const resolvedDrink = selectedDrinkName
       ? selectedAromas.length > 0
         ? `${selectedDrinkName} (${selectedAromas.join(", ")})`
         : selectedDrinkName
@@ -581,14 +578,13 @@ function QuickReservationContent() {
                       </label>
                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                         {availableDrinks.map((drink, idx) => {
-                          const isSelected = selectedDrinkName === drink.name && !customDrink.trim();
+                          const isSelected = selectedDrinkName === drink.name;
                           return (
                             <button
                               key={drink.id || idx}
                               type="button"
                               onClick={() => {
                                 setSelectedDrinkName(drink.name);
-                                setCustomDrink("");
                                 setSelectedAromas([]);
                               }}
                               className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
@@ -652,20 +648,6 @@ function QuickReservationContent() {
                       Boisson standard ou au choix du barman incluse à l'entrée.
                     </div>
                   )}
-
-                  {/* Optional Custom Drink */}
-                  <div className="pt-2">
-                    <label className="text-xs font-semibold text-neutral-400 block mb-1">
-                      Ou préciser une boisson personnalisée :
-                    </label>
-                    <input
-                      type="text"
-                      value={customDrink}
-                      onChange={(e) => setCustomDrink(e.target.value)}
-                      placeholder="Ex: Cocktail sans alcool spécial, Soda..."
-                      className="w-full px-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/10 text-white placeholder-neutral-500 text-sm focus:outline-none focus:border-[#4DEEEA]"
-                    />
-                  </div>
                 </div>
               </section>
             )}
