@@ -448,7 +448,7 @@ function QuickReservationContent() {
               <div className="p-3.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-200 text-xs flex items-center gap-2.5">
                 <Sparkles size={18} className="text-purple-400 flex-shrink-0" />
                 <span className="leading-relaxed">
-                  Dès encaissement au point de vente, <strong>un e-mail unique contenant l'intégralité de vos {passCount} billets avec leurs QR Codes officiels distincts</strong> vous sera automatiquement envoyé à <strong>{res.email}</strong>.
+                  Dès encaissement au point de vente, <strong>vos liens Web Pass officiels interactifs (avec QR Codes d'accès et vouchers boissons)</strong> vous seront instantanément expédiés à <strong>{res.email}</strong>, prêts à être transférés directement à vos amis par WhatsApp ou SMS !
                 </span>
               </div>
             </div>

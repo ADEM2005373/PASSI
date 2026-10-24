@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
+import { getPassWebLink } from '@/lib/utils/url';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -174,6 +175,11 @@ export async function POST(req: NextRequest) {
         ? customPass.selectedAromas
         : formattedAromas;
 
+      // Cryptographically secure tracking tokens for Quick Reservation Web Pass view
+      const secretToken = crypto.randomBytes(18).toString('base64url');
+      const entryToken = crypto.randomBytes(24).toString('hex');
+      const drinkToken = crypto.randomBytes(24).toString('hex');
+
       rowsToInsert.push({
         event_id: event.id,
         user_id: matchedUserId,
@@ -194,6 +200,16 @@ export async function POST(req: NextRequest) {
         final_price: unitPrice,
         promo_used: promoUsed,
         expires_at: expiresAt,
+        secret_token: secretToken,
+        entry_token: entryToken,
+        entry_qr_uuid: entryToken,
+        is_entry_used: false,
+        entry_used_at: null,
+        drink_token: drinkToken,
+        drink_qr_uuid: drinkToken,
+        drink_qr_code: drinkToken,
+        is_drink_used: false,
+        drink_used_at: null,
         created_at: createdAt.toISOString(),
         updated_at: createdAt.toISOString(),
       });
@@ -202,7 +218,7 @@ export async function POST(req: NextRequest) {
     let { data: insertedPasses, error: insertError } = await supabaseAdmin
       .from('passes')
       .insert(rowsToInsert)
-      .select('id, event_id, user_id, source, reservation_code, guest_first_name, guest_last_name, phone, email, selected_drink, drink_name, status, entry_status, final_price, expires_at, created_at');
+      .select('id, event_id, user_id, source, reservation_code, guest_first_name, guest_last_name, phone, email, selected_drink, drink_name, status, entry_status, final_price, expires_at, secret_token, entry_token, is_entry_used, entry_used_at, drink_token, is_drink_used, drink_used_at, created_at');
 
     // Fallback if newly added columns aren't yet in table
     if (insertError) {
@@ -216,8 +232,11 @@ export async function POST(req: NextRequest) {
           guest_last_name: r.guest_last_name,
           entry_status: 'awaiting_payment',
           drink_name: r.drink_name,
+          selected_drink: r.selected_drink,
           selected_aromas: r.selected_aromas,
           final_price: r.final_price,
+          entry_qr_uuid: r.entry_qr_uuid,
+          drink_qr_uuid: r.drink_qr_uuid,
         };
         if (!insertError.message.includes('source')) row.source = 'QUICK_RESERVATION';
         if (!insertError.message.includes('phone')) row.phone = r.phone;
@@ -225,6 +244,11 @@ export async function POST(req: NextRequest) {
         if (!insertError.message.includes('reservation_code')) row.reservation_code = r.reservation_code;
         if (!insertError.message.includes('status')) row.status = 'PENDING_PAYMENT';
         if (!insertError.message.includes('expires_at')) row.expires_at = r.expires_at;
+        if (!insertError.message.includes('secret_token')) row.secret_token = r.secret_token;
+        if (!insertError.message.includes('entry_token')) row.entry_token = r.entry_token;
+        if (!insertError.message.includes('is_entry_used')) row.is_entry_used = r.is_entry_used;
+        if (!insertError.message.includes('drink_token')) row.drink_token = r.drink_token;
+        if (!insertError.message.includes('is_drink_used')) row.is_drink_used = r.is_drink_used;
         return row;
       });
 
@@ -280,6 +304,8 @@ export async function POST(req: NextRequest) {
             guestLastName: p.guest_last_name,
             selectedDrink: p.selected_drink || p.drink_name,
             finalPrice: p.final_price,
+            secretToken: p.secret_token,
+            webPassUrl: p.secret_token ? getPassWebLink(p.secret_token) : getPassWebLink(p.id),
           })),
           isAccountLinked: Boolean(matchedUserId),
         },

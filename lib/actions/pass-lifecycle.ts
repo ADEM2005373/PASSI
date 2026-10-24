@@ -456,14 +456,19 @@ export async function approvePassPaymentAction(passId: string) {
     // Skip already scanned/activated if re-running
     if (p.entry_status === 'scanned') continue;
 
-    const entryQr = p.entry_qr_uuid || crypto.randomUUID();
+    const secretToken = p.secret_token || crypto.randomBytes(18).toString('base64url');
+    const entryToken = p.entry_token || p.entry_qr_uuid || crypto.randomBytes(24).toString('hex');
+
     const updatePayload: Record<string, any> = {
       entry_status: 'activated',
       status: 'PAID',
       payment_point_id: user.id,
       approved_by: user.id,
       payment_approved_at: now,
-      entry_qr_uuid: entryQr,
+      secret_token: secretToken,
+      entry_token: entryToken,
+      entry_qr_uuid: entryToken,
+      is_entry_used: p.is_entry_used ?? false,
       updated_at: now,
     };
 
@@ -472,24 +477,31 @@ export async function approvePassPaymentAction(passId: string) {
     }
 
     if (p.drink_name || p.selected_drink || p.drink_id) {
-      const drinkQr = p.drink_qr_uuid || crypto.randomUUID();
+      const drinkToken = p.drink_token || p.drink_qr_uuid || crypto.randomBytes(24).toString('hex');
       updatePayload.drink_status = 'activated';
-      updatePayload.drink_qr_uuid = drinkQr;
-      updatePayload.drink_qr_code = drinkQr;
+      updatePayload.drink_token = drinkToken;
+      updatePayload.drink_qr_uuid = drinkToken;
+      updatePayload.drink_qr_code = drinkToken;
+      updatePayload.is_drink_used = p.is_drink_used ?? false;
     }
 
     const { data: resData, error: updateError } = await supabaseAdmin
       .from('passes')
       .update(updatePayload)
       .eq('id', p.id)
-      .select('id, user_id, email, phone, reservation_code, source, entry_status, status, final_price, payment_point_id, approved_by, payment_approved_at, drink_id, drink_name, selected_drink, drink_status, drink_qr_uuid, drink_qr_code')
+      .select('id, user_id, email, phone, reservation_code, source, entry_status, status, final_price, payment_point_id, approved_by, payment_approved_at, drink_id, drink_name, selected_drink, drink_status, drink_qr_uuid, drink_qr_code, secret_token, entry_token, is_entry_used, entry_used_at, drink_token, is_drink_used, drink_used_at')
       .single();
 
     if (updateError) {
-      // Fallback if status or approved_by audit columns are missing in legacy schema
+      // Fallback if status or newly added columns are missing in legacy schema
       delete updatePayload.status;
       delete updatePayload.approved_by;
       delete updatePayload.payment_approved_at;
+      delete updatePayload.secret_token;
+      delete updatePayload.entry_token;
+      delete updatePayload.is_entry_used;
+      delete updatePayload.drink_token;
+      delete updatePayload.is_drink_used;
       const { data: fallbackData } = await supabaseAdmin
         .from('passes')
         .update(updatePayload)

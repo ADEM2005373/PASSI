@@ -82,6 +82,62 @@ BEGIN
   ) THEN
     ALTER TABLE public.passes ADD COLUMN expires_at TIMESTAMPTZ DEFAULT NULL;
   END IF;
+
+  -- Dynamic Web Pass: Secret Token for public URL /p/:secretToken
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'passes' AND column_name = 'secret_token'
+  ) THEN
+    ALTER TABLE public.passes ADD COLUMN secret_token TEXT UNIQUE DEFAULT NULL;
+  END IF;
+
+  -- Entry Gate QR Token
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'passes' AND column_name = 'entry_token'
+  ) THEN
+    ALTER TABLE public.passes ADD COLUMN entry_token TEXT UNIQUE DEFAULT NULL;
+  END IF;
+
+  -- Entry Gate Consumption Flag
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'passes' AND column_name = 'is_entry_used'
+  ) THEN
+    ALTER TABLE public.passes ADD COLUMN is_entry_used BOOLEAN DEFAULT FALSE NOT NULL;
+  END IF;
+
+  -- Entry Gate Scanned Timestamp
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'passes' AND column_name = 'entry_used_at'
+  ) THEN
+    ALTER TABLE public.passes ADD COLUMN entry_used_at TIMESTAMPTZ DEFAULT NULL;
+  END IF;
+
+  -- Drink Voucher QR Token
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'passes' AND column_name = 'drink_token'
+  ) THEN
+    ALTER TABLE public.passes ADD COLUMN drink_token TEXT UNIQUE DEFAULT NULL;
+  END IF;
+
+  -- Drink Voucher Consumption Flag
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'passes' AND column_name = 'is_drink_used'
+  ) THEN
+    ALTER TABLE public.passes ADD COLUMN is_drink_used BOOLEAN DEFAULT FALSE NOT NULL;
+  END IF;
+
+  -- Drink Voucher Scanned Timestamp
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'passes' AND column_name = 'drink_used_at'
+  ) THEN
+    ALTER TABLE public.passes ADD COLUMN drink_used_at TIMESTAMPTZ DEFAULT NULL;
+  END IF;
 END $$;
 
 -- 3. Indexes for fast lookup
@@ -91,6 +147,9 @@ CREATE INDEX IF NOT EXISTS idx_passes_email ON public.passes(email);
 CREATE INDEX IF NOT EXISTS idx_passes_phone ON public.passes(phone);
 CREATE INDEX IF NOT EXISTS idx_passes_status ON public.passes(status);
 CREATE INDEX IF NOT EXISTS idx_passes_expires_at ON public.passes(expires_at);
+CREATE INDEX IF NOT EXISTS idx_passes_secret_token ON public.passes(secret_token);
+CREATE INDEX IF NOT EXISTS idx_passes_entry_token ON public.passes(entry_token);
+CREATE INDEX IF NOT EXISTS idx_passes_drink_token ON public.passes(drink_token);
 
 -- 4. Automatic Account Sync Trigger:
 -- When a new user account is created or profile inserted, automatically link

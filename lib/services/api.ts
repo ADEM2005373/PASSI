@@ -93,6 +93,8 @@ export type QuickReservationResponse = {
       guestLastName: string;
       selectedDrink?: string | null;
       finalPrice?: number;
+      secretToken?: string;
+      webPassUrl?: string;
     }>;
     isAccountLinked?: boolean;
   };
@@ -108,6 +110,13 @@ export type Pass = {
   entry_status: 'pending' | 'awaiting_payment' | 'activated' | 'scanned' | 'rejected';
   status?: string;
   created_at?: string;
+  secret_token?: string | null;
+  entry_token?: string | null;
+  is_entry_used?: boolean;
+  entry_used_at?: string | null;
+  drink_token?: string | null;
+  is_drink_used?: boolean;
+  drink_used_at?: string | null;
   rejection_reason?: string | null;
   final_price?: number;
   promo_used?: string | null;

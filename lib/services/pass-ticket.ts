@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import { createClient } from '@supabase/supabase-js';
 import { sendTransactionalEmail, buildPassiEmailTemplate } from '@/lib/mailer';
+import { getPassWebLink } from '@/lib/utils/url';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -339,12 +340,170 @@ export async function dispatchPaidPassEmail(passOrId: any): Promise<{ success: b
       };
     });
 
-    // 2. Generate the PDF tickets Buffer (multi-page if totalPasses > 1)
-    console.log(`[dispatchPaidPassEmail] Génération du PDF pour ${totalPasses} pass(es) [${reservationCode}]...`);
-    const pdfBuffer = await generatePassTicketsPDF(ticketsData);
+    // 2. Check if this is a Quick Reservation flow (Dynamic Web Pass /p/:secretToken)
+    const isQuickReservation = passesToDeliver.some(
+      (p) => p.source === 'QUICK_RESERVATION' || Boolean(p.secret_token) || (p.reservation_code && p.reservation_code.startsWith('QCK-'))
+    );
 
-    // 3. Build email layout
     const isMultiPass = totalPasses > 1;
+
+    // ─── CASE A: QUICK RESERVATION FLOW (SHAREABLE WEB PASS LINKS, NO PDF) ───
+    if (isQuickReservation) {
+      console.log(`[dispatchPaidPassEmail] Quick Reservation détectée [${reservationCode}] : Génération des liens Web Pass dynamiques...`);
+
+      const passLinks = passesToDeliver.map((p, idx) => {
+        const token = p.secret_token || p.id;
+        const webLink = getPassWebLink(token);
+        const gName = [p.guest_first_name, p.guest_last_name].filter(Boolean).join(' ') || (isMultiPass ? `Billet #${idx + 1}` : buyerName);
+        const drink = p.selected_drink || p.drink_name || 'Consommation incluse';
+        const aromas = p.selected_aromas && p.selected_aromas.length > 0 ? ` (${p.selected_aromas.join(', ')})` : '';
+        const whatsappMsg = `Salut ! Voici ton pass officiel Passi pour ${eventTitle} (${gName}) : ${webLink}`;
+        const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(whatsappMsg)}`;
+
+        return {
+          index: idx + 1,
+          name: gName,
+          drink: `${drink}${aromas}`,
+          token,
+          url: webLink,
+          whatsappUrl,
+        };
+      });
+
+      const emailTitle = isMultiPass
+        ? `Vos ${totalPasses} Pass Web officiels sont prêts ! 🎉`
+        : 'Votre Pass Web officiel est prêt ! 🎉';
+
+      const emailHeadline = isMultiPass
+        ? `${totalPasses} Pass Web Confirmés & Payés`
+        : 'Pass Web Confirmé & Payé';
+
+      const emailSubject = isMultiPass
+        ? `Vos ${totalPasses} liens de Pass pour ${eventTitle} 🎟️ (${reservationCode})`
+        : `Votre lien de Pass pour ${eventTitle} 🎟️ (${reservationCode})`;
+
+      const linksHtmlList = `
+        <div style="margin: 24px 0;">
+          <p style="margin: 0 0 14px 0; font-size: 13px; font-weight: 800; color: #4ECDC4; text-transform: uppercase; letter-spacing: 0.5px;">
+            📱 ${isMultiPass ? `Vos ${totalPasses} Liens de Pass individuels à partager :` : 'Votre Lien de Pass officiel :'}
+          </p>
+          ${passLinks.map((item) => `
+            <div style="margin: 12px 0; padding: 18px; background-color: #172033; border-radius: 14px; border: 1px solid #28354D;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                <tr>
+                  <td style="color: #FFFFFF; font-size: 15px; font-weight: 800;">
+                    🎟️ Pass ${item.index} : <strong>${item.name}</strong>
+                  </td>
+                  <td align="right" style="color: #4ECDC4; font-size: 12px; font-weight: 700;">
+                    ${reservationCode}
+                  </td>
+                </tr>
+                <tr>
+                  <td colspan="2" style="padding: 6px 0 12px 0; color: #FF6B5E; font-size: 13px; font-weight: 600;">
+                    🍹 Boisson : ${item.drink}
+                  </td>
+                </tr>
+                <tr>
+                  <td colspan="2" style="padding-bottom: 14px;">
+                    <span style="font-size: 12px; color: #94A3B8;">Lien direct :</span><br />
+                    <a href="${item.url}" style="color: #38BDF8; font-size: 13px; font-weight: 700; word-break: break-all; text-decoration: underline;">
+                      ${item.url}
+                    </a>
+                  </td>
+                </tr>
+                <tr>
+                  <td colspan="2">
+                    <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                      <tr>
+                        <td style="padding-right: 10px;">
+                          <a href="${item.url}" style="display: inline-block; padding: 10px 20px; background-color: #22C55E; color: #FFFFFF; font-size: 13px; font-weight: 800; text-decoration: none; border-radius: 10px;">
+                            📲 Ouvrir ce Pass
+                          </a>
+                        </td>
+                        <td>
+                          <a href="${item.whatsappUrl}" style="display: inline-block; padding: 10px 18px; background-color: #25D366; color: #FFFFFF; font-size: 13px; font-weight: 800; text-decoration: none; border-radius: 10px;">
+                            💬 Transférer sur WhatsApp
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </div>
+          `).join('')}
+        </div>
+      `;
+
+      const htmlBody = buildPassiEmailTemplate({
+        headline: emailHeadline,
+        title: emailTitle,
+        badgeText: 'Payé & Activé',
+        badgeColor: '#4ECDC4',
+        contentHtml: `
+          <p style="margin: 0 0 16px 0;">Bonjour <strong>${buyerName}</strong>,</p>
+          <p style="margin: 0 0 16px 0;">
+            Votre règlement en espèces a bien été validé auprès de notre point de vente. ${isMultiPass ? `Vos <strong>${totalPasses} pass d'accès</strong>` : 'Votre pass d’accès'} pour <strong>${eventTitle}</strong> ${isMultiPass ? 'sont immédiatement <strong>actifs et prêts</strong>' : 'est immédiatement <strong>actif et prêt</strong>'} !
+          </p>
+          
+          <div style="margin: 20px 0; padding: 20px; background-color: #121824; border-radius: 16px; border: 1px solid #28354D;">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+              <tr>
+                <td style="padding: 6px 0; color: #94A3B8; font-size: 13px;">Référence commande :</td>
+                <td align="right" style="padding: 6px 0; color: #4ECDC4; font-size: 14px; font-weight: 800;">${reservationCode}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; color: #94A3B8; font-size: 13px;">Événement :</td>
+                <td align="right" style="padding: 6px 0; color: #FFFFFF; font-size: 13px; font-weight: 700;">${eventTitle}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; color: #94A3B8; font-size: 13px;">Date :</td>
+                <td align="right" style="padding: 6px 0; color: #FFFFFF; font-size: 13px;">${eventDate}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; color: #94A3B8; font-size: 13px;">Lieu :</td>
+                <td align="right" style="padding: 6px 0; color: #FFFFFF; font-size: 13px;">${eventLocation}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; color: #94A3B8; font-size: 13px;">Nombre de pass :</td>
+                <td align="right" style="padding: 6px 0; color: #FFFFFF; font-size: 13px; font-weight: 700;">${totalPasses} place(s)</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; color: #94A3B8; font-size: 13px;">Total réglé :</td>
+                <td align="right" style="padding: 6px 0; color: #22C55E; font-size: 15px; font-weight: 800;">${totalSettled.toFixed(2)} TND</td>
+              </tr>
+            </table>
+
+            ${linksHtmlList}
+          </div>
+
+          <div style="margin: 20px 0; padding: 16px; background-color: #0F172A; border-radius: 12px; border: 1px solid #1E293B;">
+            <p style="margin: 0 0 6px 0; font-size: 13px; font-weight: 700; color: #38BDF8;">
+              💡 Comment utiliser vos pass :
+            </p>
+            <ul style="margin: 0; padding-left: 20px; font-size: 12px; color: #94A3B8; line-height: 1.6;">
+              <li>Cliquez sur <strong>« Ouvrir ce Pass »</strong> pour afficher votre QR code d'accès en direct.</li>
+              ${isMultiPass ? '<li>Utilisez le bouton <strong>« Transférer sur WhatsApp »</strong> pour envoyer chaque pass directement à la personne correspondante.</li>' : ''}
+              <li>Chaque page contient le QR Code d'entrée et le bon de boisson en temps réel qui se valide automatiquement dès son scan !</li>
+            </ul>
+          </div>
+        `,
+      });
+
+      console.log(`[dispatchPaidPassEmail] Envoi des liens Web Pass à ${recipientEmail}...`);
+      const emailResult = await sendTransactionalEmail({
+        to: recipientEmail,
+        subject: emailSubject,
+        htmlBody,
+      });
+
+      console.log('[dispatchPaidPassEmail] Résultat envoi Quick Reservation:', emailResult);
+      return emailResult;
+    }
+
+    // ─── CASE B: STANDARD ACCOUNT RESERVATION FLOW (PRESERVED PDF GENERATION) ───
+    console.log(`[dispatchPaidPassEmail] Standard Pass détecté : Génération du PDF pour ${totalPasses} pass(es) [${reservationCode}]...`);
+    const pdfBuffer = await generatePassTicketsPDF(ticketsData);
 
     let ticketsHtmlList = '';
     if (isMultiPass) {
@@ -463,7 +622,6 @@ export async function dispatchPaidPassEmail(passOrId: any): Promise<{ success: b
       `,
     });
 
-    // 4. Dispatch transactional email with consolidated PDF attachment
     console.log(`[dispatchPaidPassEmail] Envoi de l'e-mail avec ${totalPasses} billet(s) PDF à ${recipientEmail}...`);
     const emailResult = await sendTransactionalEmail({
       to: recipientEmail,
@@ -478,7 +636,7 @@ export async function dispatchPaidPassEmail(passOrId: any): Promise<{ success: b
       ],
     });
 
-    console.log('[dispatchPaidPassEmail] Résultat envoi:', emailResult);
+    console.log('[dispatchPaidPassEmail] Résultat envoi Standard Pass:', emailResult);
     return emailResult;
   } catch (error: any) {
     console.error('[dispatchPaidPassEmail] Erreur lors de l’envoi du pass:', error);

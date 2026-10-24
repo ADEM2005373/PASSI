@@ -23,3 +23,13 @@ export function formatImageUrl(url?: string | null): string {
   }
   return trimmed;
 }
+
+/**
+ * Returns the canonical public URL for dynamic web passes (/p/:secretToken)
+ */
+export function getPassWebLink(secretToken: string): string {
+  const base = process?.env?.NEXT_PUBLIC_SITE_URL || process?.env?.NEXT_PUBLIC_APP_URL || getURL();
+  const cleanBase = base.endsWith('/') ? base.slice(0, -1) : base;
+  return `${cleanBase}/p/${secretToken}`;
+}
+
