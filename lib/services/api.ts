@@ -46,12 +46,21 @@ export type Event = {
   pos_location?: string;
 };
 
+export type QuickReservationPassItem = {
+  guestFirstName?: string;
+  guestLastName?: string;
+  selectedDrink?: string | null;
+  selectedAromas?: string[];
+};
+
 export type QuickReservationPayload = {
   eventId: string;
   firstName: string;
   lastName: string;
   phone: string;
   email: string;
+  quantity?: number;
+  passes?: QuickReservationPassItem[];
   selectedDrink?: string | null;
   selectedAromas?: string[];
   instagram?: string | null;
@@ -70,11 +79,21 @@ export type QuickReservationResponse = {
     guestLastName: string;
     email: string;
     phone: string;
-    selectedDrink?: string | null;
+    quantity: number;
+    unitPrice: number;
     finalPrice: number;
+    totalPrice?: number;
+    selectedDrink?: string | null;
     status: string;
     expiresAt: string;
     createdAt: string;
+    passes?: Array<{
+      id: string;
+      guestFirstName: string;
+      guestLastName: string;
+      selectedDrink?: string | null;
+      finalPrice?: number;
+    }>;
     isAccountLinked?: boolean;
   };
 };

@@ -47,6 +47,7 @@ function QuickReservationContent() {
   const [error, setError] = useState<string | null>(null);
 
   // Form Fields (Minimal: First Name, Last Name, Phone, Email, optional Instagram)
+  // Form Fields (Minimal: First Name, Last Name, Phone, Email, optional Instagram)
   const [firstName, setFirstName] = useState<string>("");
   const [lastName, setLastName] = useState<string>("");
   const [phone, setPhone] = useState<string>("");
@@ -54,9 +55,18 @@ function QuickReservationContent() {
   const [instagram, setInstagram] = useState<string>("");
   const [promoCode, setPromoCode] = useState<string>("");
 
-  // Drink Selection
+  // Multi-pass & Drink Selection
+  const [quantity, setQuantity] = useState<number>(1);
+  const [sameDrinkForAll, setSameDrinkForAll] = useState<boolean>(true);
+  const [activePassIndex, setActivePassIndex] = useState<number>(0);
   const [selectedDrinkName, setSelectedDrinkName] = useState<string>("");
   const [selectedAromas, setSelectedAromas] = useState<string[]>([]);
+  const [customPasses, setCustomPasses] = useState<Array<{
+    guestFirstName: string;
+    guestLastName: string;
+    drinkName: string;
+    selectedAromas: string[];
+  }>>([]);
 
   // Submission & Confirmation State
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -64,6 +74,26 @@ function QuickReservationContent() {
   const [confirmation, setConfirmation] = useState<QuickReservationResponse | null>(null);
   const [copiedCode, setCopiedCode] = useState<boolean>(false);
   const [showNewsModal, setShowNewsModal] = useState<NewsItem | null>(null);
+
+  // Sync customPasses length when quantity changes
+  useEffect(() => {
+    setCustomPasses(prev => {
+      const next = [...prev];
+      while (next.length < quantity) {
+        const idx = next.length;
+        next.push({
+          guestFirstName: "",
+          guestLastName: "",
+          drinkName: selectedDrinkName || "",
+          selectedAromas: [],
+        });
+      }
+      return next.slice(0, quantity);
+    });
+    if (activePassIndex >= quantity) {
+      setActivePassIndex(0);
+    }
+  }, [quantity, selectedDrinkName, activePassIndex]);
 
   // Load events and news
   useEffect(() => {
@@ -129,7 +159,8 @@ function QuickReservationContent() {
   // Reset drink choice when event changes
   useEffect(() => {
     if (availableDrinks.length > 0) {
-      setSelectedDrinkName(availableDrinks[0].name || "");
+      const defaultDrink = availableDrinks[0].name || "";
+      setSelectedDrinkName(defaultDrink);
       setSelectedAromas([]);
     } else {
       setSelectedDrinkName("");
@@ -147,6 +178,7 @@ function QuickReservationContent() {
     return match ? Number(match.discount_amount) : 0;
   }, [promoCode, selectedEvent]);
   const finalPrice = Math.max(0, basePrice - discountAmount);
+  const totalPrice = finalPrice * quantity;
 
   // Form Submit Handler
   const handleSubmit = async (e: React.FormEvent) => {
@@ -173,6 +205,29 @@ function QuickReservationContent() {
         : selectedDrinkName
       : undefined;
 
+    // Build per-pass array
+    const passesPayload = Array.from({ length: quantity }, (_, idx) => {
+      if (sameDrinkForAll) {
+        return {
+          guestFirstName: idx === 0 ? firstName.trim() : (customPasses[idx]?.guestFirstName?.trim() || firstName.trim()),
+          guestLastName: idx === 0 ? lastName.trim() : (customPasses[idx]?.guestLastName?.trim() || `${lastName.trim()} (Invité ${idx + 1})`),
+          selectedDrink: resolvedDrink,
+          selectedAromas: selectedAromas,
+        };
+      } else {
+        const cp = customPasses[idx] || { guestFirstName: "", guestLastName: "", drinkName: selectedDrinkName, selectedAromas: [] };
+        const dName = cp.drinkName || selectedDrinkName;
+        const aList = cp.selectedAromas || [];
+        const passFormattedDrink = dName ? (aList.length > 0 ? `${dName} (${aList.join(', ')})` : dName) : resolvedDrink;
+        return {
+          guestFirstName: idx === 0 ? firstName.trim() : (cp.guestFirstName?.trim() || firstName.trim()),
+          guestLastName: idx === 0 ? lastName.trim() : (cp.guestLastName?.trim() || `${lastName.trim()} (Invité ${idx + 1})`),
+          selectedDrink: passFormattedDrink,
+          selectedAromas: aList,
+        };
+      }
+    });
+
     setIsSubmitting(true);
     setSubmitError(null);
 
@@ -183,8 +238,11 @@ function QuickReservationContent() {
         lastName: lastName.trim(),
         phone: phone.trim(),
         email: email.trim(),
+        quantity,
+        passes: passesPayload,
         instagram: instagram.trim() ? instagram.trim() : undefined,
         selectedDrink: resolvedDrink,
+        selectedAromas: selectedAromas,
         promoCode: promoCode.trim() ? promoCode.trim() : undefined,
       });
 
@@ -207,6 +265,8 @@ function QuickReservationContent() {
   if (confirmation) {
     const res = confirmation.reservation;
     const expiresDate = res.expiresAt ? new Date(res.expiresAt) : null;
+    const passCount = res.quantity || quantity || 1;
+    const grandTotal = res.totalPrice ?? (res.quantity * (res.finalPrice || finalPrice));
 
     return (
       <div className="min-h-screen bg-[#07090E] text-white flex flex-col font-sans selection:bg-rose-500/30">
@@ -217,7 +277,7 @@ function QuickReservationContent() {
           </Link>
           <div className="flex items-center gap-2">
             <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">
-              ⚡ Réservation Express
+              ⚡ Réservation Express ({passCount} pass)
             </span>
           </div>
         </header>
@@ -229,12 +289,14 @@ function QuickReservationContent() {
               <CheckCircle2 size={44} className="animate-pulse" />
             </div>
 
-            <div className="inline-block px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              PENDING_PAYMENT
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              <span>PENDING_PAYMENT</span>
+              <span>•</span>
+              <span>{passCount} pass réservé{passCount > 1 ? "s" : ""}</span>
             </div>
 
             <h1 className="text-2xl md:text-4xl font-extrabold tracking-tight">
-              Réservation Validée !
+              {passCount > 1 ? `Réservation de vos ${passCount} passes validée !` : "Réservation Validée !"}
             </h1>
 
             {/* Core Required Confirmation Message */}
@@ -249,13 +311,13 @@ function QuickReservationContent() {
             <div className="p-6 rounded-2xl bg-neutral-900/90 border border-neutral-700/80 flex flex-col sm:flex-row items-center justify-between gap-4">
               <div>
                 <p className="text-xs uppercase font-bold tracking-wider text-neutral-400">
-                  Votre Code de Réservation
+                  Votre Code de Réservation Unique
                 </p>
                 <p className="text-2xl md:text-3xl font-mono font-extrabold text-[#FF6B5E] tracking-wider mt-1">
                   {res.reservationCode}
                 </p>
                 <p className="text-xs text-neutral-400 mt-0.5">
-                  Présentez ce code ou votre numéro de téléphone au guichet
+                  Présentez ce code unique ou votre numéro de téléphone ({res.phone}) au guichet pour régler l'ensemble de vos {passCount} passes.
                 </p>
               </div>
 
@@ -304,7 +366,7 @@ function QuickReservationContent() {
               </div>
             )}
 
-            {/* Recap Grid */}
+            {/* Summary Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm pt-2">
               <div className="p-4 rounded-xl bg-white/[0.03] border border-white/5 space-y-1">
                 <span className="text-xs text-neutral-400 block">Événement</span>
@@ -312,7 +374,7 @@ function QuickReservationContent() {
               </div>
 
               <div className="p-4 rounded-xl bg-white/[0.03] border border-white/5 space-y-1">
-                <span className="text-xs text-neutral-400 block">Titulaire</span>
+                <span className="text-xs text-neutral-400 block">Titulaire de la commande</span>
                 <span className="font-bold text-white text-base block">
                   {res.guestFirstName} {res.guestLastName}
                 </span>
@@ -322,19 +384,55 @@ function QuickReservationContent() {
               </div>
 
               <div className="p-4 rounded-xl bg-white/[0.03] border border-white/5 space-y-1">
-                <span className="text-xs text-neutral-400 block">Boisson sélectionnée</span>
-                <span className="font-bold text-[#4DEEEA] block">
-                  🍹 {res.selectedDrink || "Sélection standard"}
+                <span className="text-xs text-neutral-400 block">Nombre total de pass</span>
+                <span className="font-bold text-[#4DEEEA] text-lg block">
+                  🎟️ {passCount} pass d'accès
                 </span>
               </div>
 
               <div className="p-4 rounded-xl bg-white/[0.03] border border-white/5 space-y-1">
-                <span className="text-xs text-neutral-400 block">Montant à régler sur place</span>
-                <span className="font-bold text-emerald-400 text-xl block">
-                  {res.finalPrice} TND
+                <span className="text-xs text-neutral-400 block">Montant global à régler sur place</span>
+                <span className="font-bold text-emerald-400 text-2xl block">
+                  {grandTotal} TND
                 </span>
+                {passCount > 1 && (
+                  <span className="text-[11px] text-neutral-400 block">
+                    ({passCount} × {res.finalPrice || finalPrice} TND)
+                  </span>
+                )}
               </div>
             </div>
+
+            {/* Breakdown of passes */}
+            {res.passes && res.passes.length > 0 && (
+              <div className="space-y-2 pt-2">
+                <h4 className="text-xs uppercase font-bold tracking-wider text-neutral-400">
+                  Détail de vos {res.passes.length} billets :
+                </h4>
+                <div className="space-y-2">
+                  {res.passes.map((p, idx) => (
+                    <div
+                      key={p.id || idx}
+                      className="p-3.5 rounded-xl bg-white/[0.03] border border-white/10 flex items-center justify-between text-xs"
+                    >
+                      <div>
+                        <span className="font-bold text-white block">
+                          Billet #{idx + 1} : {[p.guestFirstName, p.guestLastName].filter(Boolean).join(" ") || `Invité ${idx + 1}`}
+                        </span>
+                        {p.selectedDrink && (
+                          <span className="text-amber-400 mt-0.5 block">
+                            🍹 Boisson : {p.selectedDrink}
+                          </span>
+                        )}
+                      </div>
+                      <span className="font-mono font-bold text-emerald-400 text-sm">
+                        {p.finalPrice ?? res.finalPrice} TND
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Sell Points Guidance */}
             <div className="p-5 rounded-2xl bg-white/[0.03] border border-white/10 space-y-3">
@@ -344,14 +442,13 @@ function QuickReservationContent() {
               </h4>
               <p className="text-xs text-neutral-300 leading-relaxed">
                 Rendez-vous à l'un de nos guichets ou points de vente partenaires officiels. Donnez votre{" "}
-                <strong className="text-white">code de réservation ({res.reservationCode})</strong> ou votre numéro de téléphone (
-                <strong className="text-white">{res.phone}</strong>) au caissier.
+                <strong className="text-white">code de réservation unique ({res.reservationCode})</strong> ou votre numéro de téléphone (
+                <strong className="text-white">{res.phone}</strong>) au caissier pour régler la totalité ({grandTotal} TND).
               </p>
-              <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-200 text-xs flex items-center gap-2">
-                <Sparkles size={16} className="text-purple-400 flex-shrink-0" />
-                <span>
-                  Dès encaissement, votre billet officiel avec QR code sera généré et expédié directement à{" "}
-                  <strong>{res.email}</strong>.
+              <div className="p-3.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-200 text-xs flex items-center gap-2.5">
+                <Sparkles size={18} className="text-purple-400 flex-shrink-0" />
+                <span className="leading-relaxed">
+                  Dès encaissement au point de vente, <strong>un e-mail unique contenant l'intégralité de vos {passCount} billets avec leurs QR Codes officiels distincts</strong> vous sera automatiquement envoyé à <strong>{res.email}</strong>.
                 </span>
               </div>
             </div>
@@ -363,7 +460,7 @@ function QuickReservationContent() {
                 <strong className="text-neutral-200">{res.email}</strong> ?
               </p>
               <p className="text-neutral-500 mt-0.5">
-                Votre pass sera automatiquement lié et synchronisé dans votre espace personnel lors de votre connexion.
+                Tous vos pass seront automatiquement liés et synchronisés dans votre espace personnel lors de votre connexion.
               </p>
             </div>
 
@@ -379,6 +476,7 @@ function QuickReservationContent() {
                 type="button"
                 onClick={() => {
                   setConfirmation(null);
+                  setQuantity(1);
                   setFirstName("");
                   setLastName("");
                   setPhone("");
@@ -553,39 +651,220 @@ function QuickReservationContent() {
               )}
             </section>
 
-            {/* ── STEP 2: CHOOSE DRINK OPTION ── */}
+            {/* ── STEP 2: NOMBRE DE PASSES & CONSOMMATION(S) ── */}
             {selectedEvent && (
               <section className="space-y-4">
-                <div className="flex items-center gap-2.5">
-                  <span className="w-7 h-7 rounded-xl bg-[#4DEEEA] text-slate-950 flex items-center justify-center font-extrabold text-xs shadow-md shadow-[#4DEEEA]/30">
-                    2
-                  </span>
-                  <div>
-                    <h2 className="text-lg md:text-xl font-extrabold text-white">
-                      Choisissez votre consommation
-                    </h2>
-                    <p className="text-xs text-neutral-400">
-                      Incluse avec votre pass d'entrée
-                    </p>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-7 h-7 rounded-xl bg-[#4DEEEA] text-slate-950 flex items-center justify-center font-extrabold text-xs shadow-md shadow-[#4DEEEA]/30">
+                      2
+                    </span>
+                    <div>
+                      <h2 className="text-lg md:text-xl font-extrabold text-white">
+                        Nombre de passes & Consommation(s)
+                      </h2>
+                      <p className="text-xs text-neutral-400">
+                        Choisissez la quantité de billets et vos boissons incluses
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Quantity Stepper Pill */}
+                  <div className="flex items-center gap-2 bg-white/[0.04] border border-white/10 rounded-2xl p-1.5 shadow-inner">
+                    <button
+                      type="button"
+                      onClick={() => setQuantity(prev => Math.max(1, prev - 1))}
+                      disabled={quantity <= 1}
+                      className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 text-white font-black text-sm flex items-center justify-center transition disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                      title="Diminuer le nombre de pass"
+                    >
+                      -
+                    </button>
+                    <div className="px-2 text-center">
+                      <span className="text-base font-black font-mono text-white block leading-none">
+                        {quantity}
+                      </span>
+                      <span className="text-[10px] uppercase font-bold text-neutral-400 block tracking-wider">
+                        {quantity > 1 ? 'passes' : 'pass'}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setQuantity(prev => Math.min(10, prev + 1))}
+                      disabled={quantity >= 10}
+                      className="w-8 h-8 rounded-xl bg-[#4DEEEA] hover:bg-cyan-300 text-slate-950 font-black text-sm flex items-center justify-center transition disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer shadow-sm shadow-[#4DEEEA]/30"
+                      title="Ajouter un pass"
+                    >
+                      +
+                    </button>
                   </div>
                 </div>
 
+                {/* Multi-pass Pricing Notice */}
+                {quantity > 1 && (
+                  <div className="p-3.5 rounded-2xl bg-gradient-to-r from-purple-500/15 via-rose-500/10 to-amber-500/15 border border-purple-500/30 flex items-center justify-between text-xs text-purple-200">
+                    <div className="flex items-center gap-2">
+                      <Sparkles size={16} className="text-purple-400 shrink-0" />
+                      <span>
+                        Commande groupée de <strong>{quantity} billets</strong> sous le même code de réservation.
+                      </span>
+                    </div>
+                    <span className="font-mono font-bold text-white bg-white/10 px-2 py-1 rounded-lg">
+                      {quantity} × {finalPrice} = {totalPrice} TND
+                    </span>
+                  </div>
+                )}
+
                 <div className="p-5 rounded-2xl bg-white/[0.03] border border-white/10 space-y-4">
+                  {/* Multi-pass Mode Toggle */}
+                  {quantity > 1 && (
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-white/10">
+                      <div>
+                        <span className="text-xs font-bold text-white block">
+                          Configuration des boissons
+                        </span>
+                        <span className="text-[11px] text-neutral-400 block">
+                          {sameDrinkForAll
+                            ? "Tous les passes bénéficieront de la même consommation sélectionnée ci-dessous."
+                            : "Personnalisez la boisson et l'invité pour chaque billet individuel."}
+                        </span>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setSameDrinkForAll(!sameDrinkForAll)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border cursor-pointer shrink-0 ${
+                          sameDrinkForAll
+                            ? "bg-[#4DEEEA]/15 text-[#4DEEEA] border-[#4DEEEA]/30 hover:bg-[#4DEEEA]/25"
+                            : "bg-purple-500/20 text-purple-300 border-purple-500/40 hover:bg-purple-500/30"
+                        }`}
+                      >
+                        {sameDrinkForAll ? (
+                          <>
+                            <Check size={14} />
+                            <span>Même boisson pour tous ({quantity})</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>✏️ Personnaliser par pass</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Individual Pass Selector Tabs if customized */}
+                  {quantity > 1 && !sameDrinkForAll && (
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+                        {Array.from({ length: quantity }, (_, idx) => {
+                          const isTabActive = activePassIndex === idx;
+                          const customP = customPasses[idx];
+                          const tabLabel = customP?.guestFirstName
+                            ? `${customP.guestFirstName}`
+                            : idx === 0 ? "Billet #1 (Moi)" : `Billet #${idx + 1}`;
+                          return (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => setActivePassIndex(idx)}
+                              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer border ${
+                                isTabActive
+                                  ? "bg-gradient-to-r from-[#FF6B5E] to-rose-600 text-white border-transparent shadow-md shadow-rose-950/30"
+                                  : "bg-white/[0.04] text-neutral-400 border-white/10 hover:text-white"
+                              }`}
+                            >
+                              🎟️ {tabLabel}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Guest name input for active pass */}
+                      <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[11px] font-bold text-neutral-300 block mb-1">
+                            Prénom du titulaire du billet #{activePassIndex + 1} (Optionnel)
+                          </label>
+                          <input
+                            type="text"
+                            placeholder={activePassIndex === 0 ? (firstName || "Mon prénom") : `Invité ${activePassIndex + 1}`}
+                            value={customPasses[activePassIndex]?.guestFirstName || ""}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setCustomPasses(prev => {
+                                const copy = [...prev];
+                                copy[activePassIndex] = {
+                                  ...(copy[activePassIndex] || { guestLastName: "", drinkName: selectedDrinkName, selectedAromas: [] }),
+                                  guestFirstName: val,
+                                };
+                                return copy;
+                              });
+                            }}
+                            className="w-full px-3 py-2 rounded-lg bg-white/[0.04] border border-white/10 text-white placeholder-neutral-500 text-xs focus:outline-none focus:border-[#4DEEEA]"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-bold text-neutral-300 block mb-1">
+                            Nom du titulaire (Optionnel)
+                          </label>
+                          <input
+                            type="text"
+                            placeholder={activePassIndex === 0 ? (lastName || "Mon nom") : lastName || "Nom"}
+                            value={customPasses[activePassIndex]?.guestLastName || ""}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setCustomPasses(prev => {
+                                const copy = [...prev];
+                                copy[activePassIndex] = {
+                                  ...(copy[activePassIndex] || { guestFirstName: "", drinkName: selectedDrinkName, selectedAromas: [] }),
+                                  guestLastName: val,
+                                };
+                                return copy;
+                              });
+                            }}
+                            className="w-full px-3 py-2 rounded-lg bg-white/[0.04] border border-white/10 text-white placeholder-neutral-500 text-xs focus:outline-none focus:border-[#4DEEEA]"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Drink Selector Component (applies to all or active tab) */}
                   {availableDrinks.length > 0 ? (
                     <div className="space-y-3">
                       <label className="text-xs font-bold text-neutral-300 block">
-                        Boisson incluse disponible :
+                        {quantity > 1 && !sameDrinkForAll
+                          ? `Boisson incluse pour le Billet #${activePassIndex + 1} :`
+                          : "Boisson incluse disponible :"}
                       </label>
                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                         {availableDrinks.map((drink, idx) => {
-                          const isSelected = selectedDrinkName === drink.name;
+                          const currentChosenDrink = (quantity > 1 && !sameDrinkForAll)
+                            ? (customPasses[activePassIndex]?.drinkName || selectedDrinkName)
+                            : selectedDrinkName;
+
+                          const isSelected = currentChosenDrink === drink.name;
+
                           return (
                             <button
                               key={drink.id || idx}
                               type="button"
                               onClick={() => {
-                                setSelectedDrinkName(drink.name);
-                                setSelectedAromas([]);
+                                if (quantity > 1 && !sameDrinkForAll) {
+                                  setCustomPasses(prev => {
+                                    const copy = [...prev];
+                                    copy[activePassIndex] = {
+                                      ...(copy[activePassIndex] || { guestFirstName: "", guestLastName: "" }),
+                                      drinkName: drink.name,
+                                      selectedAromas: [],
+                                    };
+                                    return copy;
+                                  });
+                                } else {
+                                  setSelectedDrinkName(drink.name);
+                                  setSelectedAromas([]);
+                                }
                               }}
                               className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
                                 isSelected
@@ -604,28 +883,51 @@ function QuickReservationContent() {
 
                       {/* Aromas if available for selected drink */}
                       {(() => {
-                        const currentDrinkObj = availableDrinks.find(d => d.name === selectedDrinkName);
+                        const currentChosenDrinkName = (quantity > 1 && !sameDrinkForAll)
+                          ? (customPasses[activePassIndex]?.drinkName || selectedDrinkName)
+                          : selectedDrinkName;
+
+                        const currentDrinkObj = availableDrinks.find(d => d.name === currentChosenDrinkName);
                         if (!currentDrinkObj || !currentDrinkObj.aromas || currentDrinkObj.aromas.length === 0) {
                           return null;
                         }
 
+                        const activeAromas = (quantity > 1 && !sameDrinkForAll)
+                          ? (customPasses[activePassIndex]?.selectedAromas || [])
+                          : selectedAromas;
+
                         return (
                           <div className="pt-3 border-t border-white/5 space-y-2">
                             <label className="text-xs font-semibold text-neutral-400 block">
-                              Arômes disponibles pour {selectedDrinkName} (optionnel) :
+                              Arômes disponibles pour {currentChosenDrinkName} (optionnel) :
                             </label>
                             <div className="flex flex-wrap gap-2">
                               {currentDrinkObj.aromas.map((aroma: string, aIdx: number) => {
-                                const isChecked = selectedAromas.includes(aroma);
+                                const isChecked = activeAromas.includes(aroma);
                                 return (
                                   <button
                                     key={aIdx}
                                     type="button"
                                     onClick={() => {
-                                      if (isChecked) {
-                                        setSelectedAromas(selectedAromas.filter(a => a !== aroma));
+                                      if (quantity > 1 && !sameDrinkForAll) {
+                                        setCustomPasses(prev => {
+                                          const copy = [...prev];
+                                          const prevAromas = copy[activePassIndex]?.selectedAromas || [];
+                                          const nextAromas = isChecked
+                                            ? prevAromas.filter(a => a !== aroma)
+                                            : [...prevAromas, aroma];
+                                          copy[activePassIndex] = {
+                                            ...(copy[activePassIndex] || { guestFirstName: "", guestLastName: "", drinkName: currentChosenDrinkName }),
+                                            selectedAromas: nextAromas,
+                                          };
+                                          return copy;
+                                        });
                                       } else {
-                                        setSelectedAromas([...selectedAromas, aroma]);
+                                        if (isChecked) {
+                                          setSelectedAromas(selectedAromas.filter(a => a !== aroma));
+                                        } else {
+                                          setSelectedAromas([...selectedAromas, aroma]);
+                                        }
                                       }
                                     }}
                                     className={`px-3 py-1 rounded-lg text-xs font-medium border transition cursor-pointer ${
@@ -768,7 +1070,7 @@ function QuickReservationContent() {
                       Règlement à nos points de vente physiques dans les 48 heures :
                     </p>
                     <p className="text-amber-200/90 leading-relaxed">
-                      Votre réservation sera enregistrée en statut <code>PENDING_PAYMENT</code>. Vous disposerez de 48 heures pour régler votre pass en espèces au guichet. Un e-mail contenant votre billet QR vous sera envoyé immédiatement après confirmation.
+                      Votre réservation de <strong>{quantity} pass</strong> sera enregistrée en statut <code>PENDING_PAYMENT</code> sous une référence unique. Vous disposerez de 48 heures pour régler vos pass en espèces au guichet. <strong>Un seul e-mail contenant tous vos billets PDF officiels avec leurs QR codes respectifs</strong> vous sera envoyé dès encaissement.
                     </p>
                   </div>
                 </div>
@@ -788,15 +1090,20 @@ function QuickReservationContent() {
               <div>
                 <span className="text-xs text-neutral-400 block">Total à régler au guichet</span>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-extrabold text-white">{finalPrice} TND</span>
+                  <span className="text-3xl font-extrabold text-white">{totalPrice} TND</span>
+                  {quantity > 1 && (
+                    <span className="text-xs text-neutral-400 font-semibold">
+                      ({quantity} × {finalPrice} TND)
+                    </span>
+                  )}
                   {discountAmount > 0 && (
                     <span className="text-sm line-through text-neutral-500 font-semibold">
-                      {basePrice} TND (-{discountAmount} TND)
+                      {basePrice * quantity} TND (-{discountAmount * quantity} TND)
                     </span>
                   )}
                 </div>
                 <span className="text-[11px] text-[#4DEEEA] font-medium block mt-0.5">
-                  ✓ Entrée événement + boisson sélectionnée
+                  ✓ {quantity} entrée{quantity > 1 ? "s" : ""} événement + consommation{quantity > 1 ? "s" : ""} incluse{quantity > 1 ? "s" : ""}
                 </span>
               </div>
 
@@ -808,11 +1115,11 @@ function QuickReservationContent() {
                 {isSubmitting ? (
                   <>
                     <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                    <span>Traitement express...</span>
+                    <span>Traitement express ({quantity} pass)...</span>
                   </>
                 ) : (
                   <>
-                    <span>Confirmer la Réservation Express</span>
+                    <span>Confirmer la Réservation ({quantity} {quantity > 1 ? "passes" : "pass"} · {totalPrice} TND)</span>
                     <ArrowRight size={18} />
                   </>
                 )}

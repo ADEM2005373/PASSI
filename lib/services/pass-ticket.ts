@@ -18,19 +18,19 @@ export interface PassTicketData {
   finalPrice?: number;
   entryQrUuid?: string;
   approvedAt?: string;
+  ticketIndex?: number;
+  ticketTotal?: number;
 }
 
 /**
- * Generates a clean, luxury branded Passi PDF ticket using jsPDF.
- * Optimized to run cleanly on the server (Node.js runtime).
+ * Renders an individual luxury Passi ticket page onto a jsPDF document.
  */
-export async function generatePassTicketPDF(data: PassTicketData): Promise<Buffer> {
-  const doc = new jsPDF({
-    orientation: 'portrait',
-    unit: 'mm',
-    format: [100, 180], // Luxury event ticket aspect ratio
-  });
-
+export function renderTicketPage(
+  doc: jsPDF,
+  data: PassTicketData,
+  pageIndex: number = 1,
+  totalPages: number = 1
+): void {
   const reservationRef = data.reservationCode || data.passId.slice(0, 8).toUpperCase();
   const guestName = data.guestName || 'Invité';
   const eventTitle = data.eventTitle || 'Événement Passi';
@@ -64,12 +64,20 @@ export async function generatePassTicketPDF(data: PassTicketData): Promise<Buffe
   doc.setTextColor(255, 107, 94);
   doc.text('i.', 29, 18);
 
-  // Status Badge
-  doc.setFillColor(34, 197, 94); // Emerald 500
-  doc.roundedRect(62, 11, 26, 8, 2, 2, 'F');
-  doc.setFontSize(7.5);
-  doc.setTextColor(255, 255, 255);
-  doc.text('PASS CONFIRMÉ', 64, 16.5);
+  // Status Badge / Multi-ticket indicator
+  if (totalPages > 1) {
+    doc.setFillColor(78, 205, 196); // Teal 400
+    doc.roundedRect(48, 11, 40, 8, 2, 2, 'F');
+    doc.setFontSize(7);
+    doc.setTextColor(11, 14, 20);
+    doc.text(`BILLET ${pageIndex}/${totalPages} • CONFIRMÉ`, 50, 16.5);
+  } else {
+    doc.setFillColor(34, 197, 94); // Emerald 500
+    doc.roundedRect(62, 11, 26, 8, 2, 2, 'F');
+    doc.setFontSize(7.5);
+    doc.setTextColor(255, 255, 255);
+    doc.text('PASS CONFIRMÉ', 64, 16.5);
+  }
 
   // Divider Line
   doc.setDrawColor(30, 41, 59);
@@ -96,7 +104,7 @@ export async function generatePassTicketPDF(data: PassTicketData): Promise<Buffe
   // Reservation Details Section
   doc.setFontSize(8);
   doc.setTextColor(148, 163, 184);
-  doc.text('TITULAIRE DU PASS', 12, 60);
+  doc.text(totalPages > 1 ? `TITULAIRE BILLET ${pageIndex}` : 'TITULAIRE DU PASS', 12, 60);
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(255, 255, 255);
@@ -140,7 +148,7 @@ export async function generatePassTicketPDF(data: PassTicketData): Promise<Buffe
   doc.setFontSize(6.5);
   doc.setTextColor(15, 23, 42);
   doc.setFont('helvetica', 'bold');
-  doc.text('SCAN ENTRÉE PASSI', 33, qrTop + 9);
+  doc.text(`SCAN ENTRÉE ${totalPages > 1 ? `(#${pageIndex})` : 'PASSI'}`, 33, qrTop + 9);
 
   // Simulation of QR barcode visual lines
   doc.setFillColor(15, 23, 42);
@@ -173,13 +181,40 @@ export async function generatePassTicketPDF(data: PassTicketData): Promise<Buffe
   doc.setTextColor(100, 116, 139);
   doc.setFont('helvetica', 'normal');
   doc.text('Pass unique et infalsifiable. Présentez ce pass sur smartphone ou imprimé à l’entrée.', 50, qrTop + 64, { align: 'center', maxWidth: 80 });
+}
+
+/**
+ * Generates a clean, luxury branded Passi multi-page PDF ticket for an array of passes.
+ */
+export async function generatePassTicketsPDF(tickets: PassTicketData[]): Promise<Buffer> {
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: [100, 180],
+  });
+
+  const total = tickets.length || 1;
+  tickets.forEach((ticket, idx) => {
+    if (idx > 0) {
+      doc.addPage([100, 180], 'portrait');
+    }
+    renderTicketPage(doc, ticket, idx + 1, total);
+  });
 
   return Buffer.from(doc.output('arraybuffer'));
 }
 
 /**
+ * Generates a clean, luxury branded Passi PDF ticket using jsPDF (backward compatible).
+ */
+export async function generatePassTicketPDF(data: PassTicketData): Promise<Buffer> {
+  return generatePassTicketsPDF([data]);
+}
+
+/**
  * Dispatches the activated & paid pass immediately to the guest/user via email
- * with the generated PDF ticket attached.
+ * with the generated PDF ticket attached. If the reservation has multiple passes,
+ * sends a SINGLE consolidated email with all tickets in a multi-page PDF!
  */
 export async function dispatchPaidPassEmail(passOrId: any): Promise<{ success: boolean; error?: string }> {
   try {
@@ -216,20 +251,40 @@ export async function dispatchPaidPassEmail(passOrId: any): Promise<{ success: b
       return { success: false, error: 'Pass introuvable' };
     }
 
+    // Check if this pass belongs to a multi-pass reservation
+    let passesToDeliver = [pass];
+    if (pass.reservation_code) {
+      const { data: siblingPasses } = await supabaseAdmin
+        .from('passes')
+        .select(`
+          *,
+          events(title, date, location, base_price),
+          user:profiles!passes_user_id_fkey(email, full_name)
+        `)
+        .eq('reservation_code', pass.reservation_code)
+        .order('created_at', { ascending: true });
+
+      if (siblingPasses && siblingPasses.length > 0) {
+        passesToDeliver = siblingPasses;
+      }
+    }
+
+    const firstPass = passesToDeliver[0];
+
     // Resolve recipient email address
     let recipientEmail = (
-      pass.email ||
-      pass.guest_email ||
-      pass.user?.email ||
+      firstPass.email ||
+      firstPass.guest_email ||
+      firstPass.user?.email ||
       ''
     ).trim().toLowerCase();
 
     // If still missing, check user_id in profiles or auth.users
-    if (!recipientEmail && pass.user_id) {
+    if (!recipientEmail && firstPass.user_id) {
       const { data: profile } = await supabaseAdmin
         .from('profiles')
         .select('email')
-        .eq('id', pass.user_id)
+        .eq('id', firstPass.user_id)
         .maybeSingle();
       if (profile?.email) {
         recipientEmail = profile.email.trim().toLowerCase();
@@ -237,13 +292,12 @@ export async function dispatchPaidPassEmail(passOrId: any): Promise<{ success: b
     }
 
     if (!recipientEmail) {
-      console.warn(`[dispatchPaidPassEmail] Aucun email disponible pour le pass #${pass.id}`);
+      console.warn(`[dispatchPaidPassEmail] Aucun email disponible pour la réservation #${pass.reservation_code || pass.id}`);
       return { success: false, error: 'Adresse email manquante' };
     }
 
-    const event = pass.events || pass.event || {};
-    const guestName = [pass.guest_first_name, pass.guest_last_name].filter(Boolean).join(' ') || 'Cher participant';
-    const reservationCode = pass.reservation_code || `PASS-${pass.id.slice(0, 8).toUpperCase()}`;
+    const event = firstPass.events || firstPass.event || {};
+    const reservationCode = firstPass.reservation_code || `PASS-${firstPass.id.slice(0, 8).toUpperCase()}`;
     const eventTitle = event.title || 'Événement Passi';
     const eventLocation = event.location || "L'Agora Djerba";
     const eventDate = event.date
@@ -255,49 +309,124 @@ export async function dispatchPaidPassEmail(passOrId: any): Promise<{ success: b
         })
       : 'Date à confirmer';
 
-    // 1. Generate the PDF ticket Buffer
-    console.log(`[dispatchPaidPassEmail] Génération du PDF pour le pass #${pass.id}...`);
-    const pdfBuffer = await generatePassTicketPDF({
-      passId: pass.id,
-      reservationCode,
-      guestName,
-      eventTitle,
-      eventDate: event.date,
-      eventLocation,
-      drinkName: pass.selected_drink || pass.drink_name || null,
-      selectedAromas: pass.selected_aromas || null,
-      finalPrice: Number(pass.final_price ?? event.base_price ?? 0),
-      entryQrUuid: pass.entry_qr_uuid || pass.id,
-      approvedAt: pass.payment_approved_at || new Date().toISOString(),
+    const totalPasses = passesToDeliver.length;
+    const buyerName = [firstPass.guest_first_name, firstPass.guest_last_name].filter(Boolean).join(' ') || 'Cher participant';
+
+    // 1. Prepare ticket data for each pass and compute total price
+    let totalSettled = 0;
+    const ticketsData: PassTicketData[] = passesToDeliver.map((p, idx) => {
+      const pEvent = p.events || event;
+      const price = Number(p.final_price ?? pEvent.base_price ?? 0);
+      totalSettled += price;
+
+      const pGuestName = [p.guest_first_name, p.guest_last_name].filter(Boolean).join(' ')
+        || (totalPasses > 1 ? `${buyerName} (Billet #${idx + 1})` : buyerName);
+
+      return {
+        passId: p.id,
+        reservationCode,
+        guestName: pGuestName,
+        eventTitle,
+        eventDate: pEvent.date,
+        eventLocation,
+        drinkName: p.selected_drink || p.drink_name || null,
+        selectedAromas: p.selected_aromas || null,
+        finalPrice: price,
+        entryQrUuid: p.entry_qr_uuid || p.id,
+        approvedAt: p.payment_approved_at || new Date().toISOString(),
+        ticketIndex: idx + 1,
+        ticketTotal: totalPasses,
+      };
     });
 
-    // 2. Build luxury transactional email template
-    const drinkHtml = pass.selected_drink || pass.drink_name
-      ? `
-        <div style="margin: 16px 0; padding: 14px; background-color: #172033; border-radius: 12px; border: 1px solid #28354D;">
-          <p style="margin: 0; font-size: 13px; color: #4ECDC4;">
-            🍹 <strong>Boisson incluse :</strong> ${pass.selected_drink || pass.drink_name}
-            ${pass.selected_aromas && pass.selected_aromas.length > 0 ? ` (${pass.selected_aromas.join(', ')})` : ''}
+    // 2. Generate the PDF tickets Buffer (multi-page if totalPasses > 1)
+    console.log(`[dispatchPaidPassEmail] Génération du PDF pour ${totalPasses} pass(es) [${reservationCode}]...`);
+    const pdfBuffer = await generatePassTicketsPDF(ticketsData);
+
+    // 3. Build email layout
+    const isMultiPass = totalPasses > 1;
+
+    let ticketsHtmlList = '';
+    if (isMultiPass) {
+      ticketsHtmlList = `
+        <div style="margin: 20px 0;">
+          <p style="margin: 0 0 10px 0; font-size: 13px; font-weight: 700; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.5px;">
+            Détail de vos ${totalPasses} billets :
           </p>
+          ${passesToDeliver.map((p, idx) => {
+            const gName = [p.guest_first_name, p.guest_last_name].filter(Boolean).join(' ') || `Billet ${idx + 1}`;
+            const drink = p.selected_drink || p.drink_name;
+            const aromas = p.selected_aromas && p.selected_aromas.length > 0 ? ` (${p.selected_aromas.join(', ')})` : '';
+            const price = Number(p.final_price ?? event.base_price ?? 0);
+            return `
+              <div style="margin: 8px 0; padding: 12px 14px; background-color: #172033; border-radius: 12px; border: 1px solid #28354D;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                  <tr>
+                    <td style="color: #FFFFFF; font-size: 14px; font-weight: 700;">
+                      🎟️ Billet #${idx + 1} — <strong>${gName}</strong>
+                    </td>
+                    <td align="right" style="color: #4ECDC4; font-size: 13px; font-weight: 800;">
+                      ${price.toFixed(2)} TND
+                    </td>
+                  </tr>
+                  ${drink ? `
+                    <tr>
+                      <td colspan="2" style="padding-top: 6px; color: #FF6B5E; font-size: 12px; font-weight: 600;">
+                        🍹 Boisson : ${drink}${aromas}
+                      </td>
+                    </tr>
+                  ` : ''}
+                </table>
+              </div>
+            `;
+          }).join('')}
         </div>
-      `
-      : '';
+      `;
+    } else {
+      const singleDrink = firstPass.selected_drink || firstPass.drink_name;
+      if (singleDrink) {
+        ticketsHtmlList = `
+          <div style="margin: 16px 0; padding: 14px; background-color: #172033; border-radius: 12px; border: 1px solid #28354D;">
+            <p style="margin: 0; font-size: 13px; color: #4ECDC4;">
+              🍹 <strong>Boisson incluse :</strong> ${singleDrink}
+              ${firstPass.selected_aromas && firstPass.selected_aromas.length > 0 ? ` (${firstPass.selected_aromas.join(', ')})` : ''}
+            </p>
+          </div>
+        `;
+      }
+    }
+
+    const emailTitle = isMultiPass
+      ? `Vos ${totalPasses} Pass officiels sont prêts ! 🎉`
+      : 'Votre Pass officiel est prêt ! 🎉';
+
+    const emailHeadline = isMultiPass
+      ? `${totalPasses} Pass Confirmés & Payés`
+      : 'Pass Confirmé & Payé';
+
+    const emailSubject = isMultiPass
+      ? `Vos ${totalPasses} Pass officiels pour ${eventTitle} 🎟️ (${reservationCode})`
+      : `Votre Pass officiel pour ${eventTitle} 🎟️ (${reservationCode})`;
+
+    const pdfFileName = isMultiPass
+      ? `Passi_Billets_${reservationCode}.pdf`
+      : `Passi_Ticket_${reservationCode}.pdf`;
 
     const htmlBody = buildPassiEmailTemplate({
-      headline: 'Pass Confirmé & Payé',
-      title: 'Votre Pass officiel est prêt ! 🎉',
+      headline: emailHeadline,
+      title: emailTitle,
       badgeText: 'Payé & Activé',
       badgeColor: '#4ECDC4',
       contentHtml: `
-        <p style="margin: 0 0 16px 0;">Bonjour <strong>${guestName}</strong>,</p>
+        <p style="margin: 0 0 16px 0;">Bonjour <strong>${buyerName}</strong>,</p>
         <p style="margin: 0 0 16px 0;">
-          Votre règlement a bien été enregistré avec succès auprès de notre point de vente. Votre accès pour l'événement <strong>${eventTitle}</strong> est désormais <strong>validé et actif</strong> !
+          Votre règlement a bien été enregistré avec succès auprès de notre point de vente. ${isMultiPass ? `Vos <strong>${totalPasses} accès</strong>` : 'Votre accès'} pour l'événement <strong>${eventTitle}</strong> ${isMultiPass ? 'sont désormais <strong>validés et actifs</strong>' : 'est désormais <strong>validé et actif</strong>'} !
         </p>
         
         <div style="margin: 20px 0; padding: 20px; background-color: #121824; border-radius: 16px; border: 1px solid #28354D;">
           <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
             <tr>
-              <td style="padding: 6px 0; color: #94A3B8; font-size: 13px;">Référence réservation :</td>
+              <td style="padding: 6px 0; color: #94A3B8; font-size: 13px;">Référence commande :</td>
               <td align="right" style="padding: 6px 0; color: #4ECDC4; font-size: 14px; font-weight: 800;">${reservationCode}</td>
             </tr>
             <tr>
@@ -312,29 +441,37 @@ export async function dispatchPaidPassEmail(passOrId: any): Promise<{ success: b
               <td style="padding: 6px 0; color: #94A3B8; font-size: 13px;">Lieu :</td>
               <td align="right" style="padding: 6px 0; color: #FFFFFF; font-size: 13px;">${eventLocation}</td>
             </tr>
+            <tr>
+              <td style="padding: 6px 0; color: #94A3B8; font-size: 13px;">Nombre de pass :</td>
+              <td align="right" style="padding: 6px 0; color: #FFFFFF; font-size: 13px; font-weight: 700;">${totalPasses} billet(s)</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color: #94A3B8; font-size: 13px;">Total réglé :</td>
+              <td align="right" style="padding: 6px 0; color: #22C55E; font-size: 15px; font-weight: 800;">${totalSettled.toFixed(2)} TND</td>
+            </tr>
           </table>
-          ${drinkHtml}
+          ${ticketsHtmlList}
         </div>
 
         <p style="margin: 0 0 16px 0;">
-          📎 <strong>Votre billet officiel en format PDF est joint à cet e-mail.</strong> Vous pouvez également retrouver vos pass directement sur votre espace Passi à tout moment en vous connectant avec cet e-mail.
+          📎 <strong>${isMultiPass ? `Vos ${totalPasses} billets officiels avec QR Codes distincts sont réunis dans le fichier PDF joint (${pdfFileName}).` : 'Votre billet officiel en format PDF est joint à cet e-mail.'}</strong> Vous pouvez également retrouver vos pass directement sur votre espace Passi à tout moment en vous connectant avec cet e-mail.
         </p>
 
         <p style="margin: 0; font-size: 13px; color: #94A3B8;">
-          Présentez le QR Code de votre billet lors de votre arrivée sur le lieu de l'événement pour un scan instantané à l'entrée.
+          Chaque participant doit présenter le QR Code de son billet lors de son arrivée à l'entrée de l'événement pour un scan instantané.
         </p>
       `,
     });
 
-    // 3. Dispatch transactional email with PDF attachment
-    console.log(`[dispatchPaidPassEmail] Envoi de l'e-mail avec billet PDF à ${recipientEmail}...`);
+    // 4. Dispatch transactional email with consolidated PDF attachment
+    console.log(`[dispatchPaidPassEmail] Envoi de l'e-mail avec ${totalPasses} billet(s) PDF à ${recipientEmail}...`);
     const emailResult = await sendTransactionalEmail({
       to: recipientEmail,
-      subject: `Votre Pass officiel pour ${eventTitle} 🎟️`,
+      subject: emailSubject,
       htmlBody,
       attachments: [
         {
-          filename: `Passi_Ticket_${reservationCode}.pdf`,
+          filename: pdfFileName,
           content: pdfBuffer,
           contentType: 'application/pdf',
         },

@@ -32,26 +32,28 @@ import {
   Ticket, 
   User as UserIcon, 
   AlertCircle, 
-  RefreshCw,
-  Clock,
-  Sparkles,
-  Lock,
-  EyeOff,
-  FileText,
-  Download,
-  AlertTriangle,
-  ArrowUpRight,
-  ShieldCheck,
-  History,
-  Check,
-  X,
-  FileCheck2,
-  DollarSign,
-  Wallet,
-  TrendingUp,
-  BarChart3,
-  Activity,
-  ChevronRight
+  RefreshCw, 
+  Clock, 
+  Sparkles, 
+  Lock, 
+  EyeOff, 
+  FileText, 
+  Download, 
+  AlertTriangle, 
+  ArrowUpRight, 
+  ShieldCheck, 
+  History, 
+  Check, 
+  X, 
+  FileCheck2, 
+  DollarSign, 
+  Wallet, 
+  TrendingUp, 
+  BarChart3, 
+  Activity, 
+  ChevronRight,
+  Users,
+  CheckCheck
 } from "lucide-react";
 
 type CashierTab = 'guichet' | 'analytics' | 'operations';
@@ -215,25 +217,46 @@ export default function PaymentPointDashboard() {
     }
   };
 
-  const handleApprovePayment = async (pass: Pass) => {
+  const handleApprovePayment = async (pass: Pass, orderPasses: Pass[] = [pass]) => {
     if (approvingPassId) return;
     setApprovingPassId(pass.id);
     setErrorToast(null);
     setSuccessToast(null);
 
     try {
+      const isMulti = orderPasses.length > 1;
+      const totalAmount = orderPasses.reduce(
+        (acc, p: any) => acc + Number(p.final_price ?? selectedEvent?.base_price ?? 0),
+        0
+      );
+      const resCode = pass.reservation_code;
+
       await api.approvePaymentPointPass(pass.id);
-      setSuccessToast(`Paiement de ${pass.final_price ?? 0} DT validé pour le pass #${pass.id.slice(0, 8)} !`);
+
+      if (isMulti && resCode) {
+        setSuccessToast(
+          `Paiement groupé de ${totalAmount} DT validé pour les ${orderPasses.length} passes (${resCode}) ! Tous les billets ont été expédiés par e-mail.`
+        );
+      } else {
+        setSuccessToast(
+          `Paiement de ${pass.final_price ?? totalAmount} DT validé pour le pass #${pass.id.slice(0, 8)} ! Le billet a été expédié par e-mail.`
+        );
+      }
       
-      // Remove approved pass from the pending list
-      setPasses(prev => prev.filter(p => p.id !== pass.id));
+      // Remove all approved passes from the pending list
+      const idsToRemove = new Set(orderPasses.map(p => p.id));
+      if (resCode) {
+        setPasses(prev => prev.filter(p => p.reservation_code !== resCode && !idsToRemove.has(p.id)));
+      } else {
+        setPasses(prev => prev.filter(p => !idsToRemove.has(p.id)));
+      }
 
       // Instantly refresh POS drawer balance and stats
       loadCashierPosData();
 
       setTimeout(() => {
         setSuccessToast(null);
-      }, 4000);
+      }, 5000);
     } catch (err: any) {
       console.error("Approve error:", err);
       setErrorToast(err.message || "Erreur lors de l'approbation du paiement");
@@ -519,6 +542,56 @@ export default function PaymentPointDashboard() {
   const selectedEvent = useMemo(() => {
     return events.find(e => e.id === selectedEventId);
   }, [events, selectedEventId]);
+
+  // Group passes by reservation_code when applicable
+  const groupedOrders = useMemo(() => {
+    const groups: { [key: string]: any[] } = {};
+    const individualOrders: any[] = [];
+
+    filteredPasses.forEach((pass: any) => {
+      if (pass.reservation_code) {
+        if (!groups[pass.reservation_code]) {
+          groups[pass.reservation_code] = [];
+        }
+        groups[pass.reservation_code].push(pass);
+      } else {
+        individualOrders.push({
+          orderId: pass.id,
+          reservationCode: null,
+          isMultiPass: false,
+          passes: [pass],
+          totalPrice: Number(pass.final_price ?? selectedEvent?.base_price ?? 0),
+          buyerName: [pass.guest_first_name, pass.guest_last_name].filter(Boolean).join(' ') || pass.user?.full_name || pass.user_name || pass.instagram_handle || 'Client Inconnu',
+          email: pass.email || pass.user_email || null,
+          phone: pass.phone || null,
+          primaryPass: pass,
+        });
+      }
+    });
+
+    const reservationGroups = Object.entries(groups).map(([resCode, passList]) => {
+      const primaryPass = passList[0];
+      const totalPrice = passList.reduce(
+        (sum, p) => sum + Number(p.final_price ?? selectedEvent?.base_price ?? 0),
+        0
+      );
+      const buyerName = [primaryPass.guest_first_name, primaryPass.guest_last_name].filter(Boolean).join(' ') || primaryPass.user?.full_name || primaryPass.user_name || primaryPass.instagram_handle || 'Client Inconnu';
+
+      return {
+        orderId: resCode,
+        reservationCode: resCode,
+        isMultiPass: passList.length > 1,
+        passes: passList,
+        totalPrice,
+        buyerName,
+        email: primaryPass.email || primaryPass.user_email || null,
+        phone: primaryPass.phone || null,
+        primaryPass,
+      };
+    });
+
+    return [...reservationGroups, ...individualOrders];
+  }, [filteredPasses, selectedEvent]);
 
   // Check if today's register is closed
   const isTodayRegisterClosed = useMemo(() => {
@@ -872,6 +945,9 @@ export default function PaymentPointDashboard() {
             <div className="flex items-center justify-between text-xs text-neutral-500 dark:text-neutral-400 font-medium px-1">
               <span>
                 Passes en attente d'encaissement: <strong className="text-neutral-900 dark:text-white">{filteredPasses.length}</strong>
+                {groupedOrders.length !== filteredPasses.length && (
+                  <span className="text-neutral-500 dark:text-neutral-400 font-normal"> ({groupedOrders.length} commande{groupedOrders.length > 1 ? 's' : ''})</span>
+                )}
                 {searchQuery && ` (sur ${passes.length} au total)`}
               </span>
               {selectedEvent && (
@@ -885,7 +961,7 @@ export default function PaymentPointDashboard() {
                 <RefreshCw className="w-8 h-8 text-amber-500 dark:text-amber-400 animate-spin mb-3" />
                 <p className="text-sm text-neutral-600 dark:text-neutral-400 font-medium">Chargement des passes en attente...</p>
               </div>
-            ) : filteredPasses.length === 0 ? (
+            ) : groupedOrders.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 rounded-2xl border border-gray-200 dark:border-neutral-800/80 bg-white dark:bg-neutral-900/20 text-center px-4 shadow-xs">
                 <div className="w-12 h-12 rounded-full bg-gray-100 dark:bg-neutral-900 flex items-center justify-center text-neutral-400 dark:text-neutral-500 mb-3 border border-gray-200 dark:border-neutral-800">
                   <Ticket className="w-6 h-6" />
@@ -899,8 +975,135 @@ export default function PaymentPointDashboard() {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredPasses.map((pass: any) => {
-                  const finalPrice = pass.final_price ?? selectedEvent?.base_price ?? 0;
+                {groupedOrders.map((order: any) => {
+                  // MULTI-PASS ORDER CARD
+                  if (order.isMultiPass) {
+                    const isApproving = order.passes.some((p: any) => p.id === approvingPassId);
+                    const firstPass = order.primaryPass;
+
+                    return (
+                      <div
+                        key={order.orderId}
+                        className="relative rounded-2xl border-2 border-purple-500/30 dark:border-purple-500/30 bg-gradient-to-b from-purple-500/[0.04] via-white dark:via-neutral-900/80 to-white dark:to-neutral-900/80 p-5 flex flex-col justify-between hover:border-purple-500/50 transition-all hover:shadow-lg dark:hover:shadow-purple-500/5 group shadow-xs"
+                      >
+                        <div>
+                          {/* Header Card */}
+                          <div className="flex items-start justify-between gap-3 mb-3">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-10 h-10 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-600 dark:text-purple-400 font-bold text-sm shrink-0">
+                                <Users className="w-5 h-5" />
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <h4 className="text-sm font-black text-neutral-900 dark:text-white truncate max-w-[150px]">
+                                    {order.buyerName}
+                                  </h4>
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-500/30">
+                                    ⚡ {order.passes.length} passes
+                                  </span>
+                                </div>
+                                <p className="text-xs text-neutral-500 dark:text-neutral-400 truncate max-w-[180px] mt-0.5">
+                                  <span className="font-bold text-purple-600 dark:text-purple-400 font-mono">{order.reservationCode}</span>
+                                  {order.phone ? ` • 📞 ${order.phone}` : ''}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Status Badge */}
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 shrink-0">
+                              <Clock className="w-3 h-3" />
+                              {order.passes.length} passes à encaisser
+                            </span>
+                          </div>
+
+                          {/* Details Box */}
+                          <div className="bg-gray-50/90 dark:bg-neutral-950/80 rounded-xl p-3 border border-gray-200/80 dark:border-neutral-800/80 space-y-2 mb-4">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-neutral-500 dark:text-neutral-400">Code Réservation</span>
+                              <span className="font-mono text-purple-600 dark:text-purple-400 font-black bg-purple-500/15 px-2 py-0.5 rounded border border-purple-500/25">
+                                {order.reservationCode}
+                              </span>
+                            </div>
+
+                            {order.email && (
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-neutral-500 dark:text-neutral-400">E-mail acheteur</span>
+                                <span className="text-neutral-800 dark:text-neutral-200 font-medium truncate max-w-[150px]" title={order.email}>
+                                  {order.email}
+                                </span>
+                              </div>
+                            )}
+
+                            {order.phone && (
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-neutral-500 dark:text-neutral-400">Téléphone</span>
+                                <span className="text-neutral-800 dark:text-neutral-200 font-medium">
+                                  {order.phone}
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Tickets Breakdown List */}
+                            <div className="pt-2 border-t border-gray-200/80 dark:border-neutral-800/80">
+                              <p className="text-[11px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-1.5 flex items-center justify-between">
+                                <span>Détail des {order.passes.length} billets</span>
+                                <span className="text-purple-600 dark:text-purple-400 font-semibold">{order.passes[0]?.final_price ?? selectedEvent?.base_price ?? 0} DT/pass</span>
+                              </p>
+                              <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                                {order.passes.map((p: any, idx: number) => {
+                                  const guestName = [p.guest_first_name, p.guest_last_name].filter(Boolean).join(' ') || `Billet #${idx + 1}`;
+                                  const drink = p.selected_drink || p.drink_name || p.drink_menus?.name || 'Standard';
+                                  const aroma = p.selected_aroma ? ` (${p.selected_aroma})` : '';
+                                  return (
+                                    <div key={p.id} className="flex items-center justify-between text-xs bg-white dark:bg-neutral-900/90 px-2.5 py-1.5 rounded-lg border border-gray-200/60 dark:border-neutral-800/60">
+                                      <span className="font-semibold text-neutral-800 dark:text-neutral-200 truncate max-w-[130px]">
+                                        #{idx + 1} {guestName}
+                                      </span>
+                                      <span className="text-neutral-500 dark:text-neutral-400 text-[11px] truncate max-w-[130px]">
+                                        🍹 {drink}{aroma}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            <div className="pt-2 border-t border-gray-200 dark:border-neutral-800/80 flex items-center justify-between">
+                              <span className="text-xs font-bold text-neutral-700 dark:text-neutral-300">Total Commande ({order.passes.length} passes) :</span>
+                              <span className="text-xl font-black text-emerald-600 dark:text-emerald-400 tracking-tight">
+                                {order.totalPrice} DT
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Primary Action Button: Approve All Passes in Order */}
+                        <div>
+                          <button
+                            onClick={() => handleApprovePayment(firstPass, order.passes)}
+                            disabled={isApproving}
+                            className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-black text-sm bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-teal-400 text-white shadow-lg shadow-emerald-500/25 transition-all active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
+                          >
+                            {isApproving ? (
+                              <>
+                                <RefreshCw className="w-4 h-4 animate-spin" />
+                                <span>Validation des {order.passes.length} passes...</span>
+                              </>
+                            ) : (
+                              <>
+                                <CheckCheck className="w-4 h-4" />
+                                <span>Encaisser la commande ({order.passes.length} passes · {order.totalPrice} DT)</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // SINGLE PASS CARD
+                  const pass = order.primaryPass;
+                  const finalPrice = order.totalPrice;
                   const isApproving = approvingPassId === pass.id;
                   const hasPromo = Boolean(pass.promo_used);
                   const isQuick = pass.source === 'QUICK_RESERVATION' || Boolean(pass.reservation_code);
@@ -920,7 +1123,7 @@ export default function PaymentPointDashboard() {
                             <div>
                               <div className="flex items-center gap-1.5 flex-wrap">
                                 <h4 className="text-sm font-bold text-neutral-900 dark:text-white truncate max-w-[150px]">
-                                  {[pass.guest_first_name, pass.guest_last_name].filter(Boolean).join(' ') || pass.user?.full_name || pass.user_name || pass.instagram_handle || 'Client Inconnu'}
+                                  {order.buyerName}
                                 </h4>
                                 {isQuick && (
                                   <span className="px-1.5 py-0.5 rounded-md text-[10px] font-black bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
@@ -997,6 +1200,7 @@ export default function PaymentPointDashboard() {
                               <span className="text-neutral-500 dark:text-neutral-400">Consommation</span>
                               <span className="text-neutral-800 dark:text-neutral-200 font-medium truncate max-w-[140px]">
                                 {pass.selected_drink || pass.drink_name || pass.drink_menus?.name}
+                                {pass.selected_aroma ? ` (${pass.selected_aroma})` : ''}
                               </span>
                             </div>
                           )}
@@ -1013,7 +1217,7 @@ export default function PaymentPointDashboard() {
                       {/* Primary Action Button: Approve Payment */}
                       <div>
                         <button
-                          onClick={() => handleApprovePayment(pass)}
+                          onClick={() => handleApprovePayment(pass, order.passes)}
                           disabled={isApproving}
                           className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold text-sm bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white shadow-md shadow-emerald-500/20 transition-all active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
                         >

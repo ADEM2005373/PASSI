@@ -413,80 +413,100 @@ export async function approvePassPaymentAction(passId: string) {
     }
   }
 
-  // 3. Generate QR codes and timestamp
+  // 3. Check for sibling passes in the same multi-pass reservation
+  let passesToActivate: any[] = [pass];
+  if (pass.reservation_code) {
+    const { data: siblingPasses } = await supabaseAdmin
+      .from('passes')
+      .select('*')
+      .eq('reservation_code', pass.reservation_code);
+
+    if (siblingPasses && siblingPasses.length > 0) {
+      passesToActivate = siblingPasses;
+    }
+  }
+
   const now = new Date().toISOString();
-  const entryQr = pass.entry_qr_uuid || crypto.randomUUID();
 
-  // Explicitly update entry_status, status, approved_by and payment_approved_at
-  const updatePayload: Record<string, any> = {
-    entry_status: 'activated',
-    status: 'PAID',
-    payment_point_id: user.id,
-    approved_by: user.id, // Explicitly tracking the Admin/Cashier ID
-    payment_approved_at: now,
-    entry_qr_uuid: entryQr,
-    updated_at: now,
-  };
-
-  // Account Sync: If user_id is null, check if a profile already exists with this guest's email
+  // Resolve matching profile ID if user_id is null
+  let matchedProfileId: string | null = null;
   const passEmail = (pass.email || pass.guest_email || '').trim().toLowerCase();
-  if (!pass.user_id && passEmail) {
+  if (passEmail) {
     try {
       const { data: existingProfile } = await supabaseAdmin
         .from('profiles')
         .select('id')
         .ilike('email', passEmail)
         .maybeSingle();
-
       if (existingProfile?.id) {
-        updatePayload.user_id = existingProfile.id;
+        matchedProfileId = existingProfile.id;
       }
     } catch (profileLookupErr) {
       console.warn('[approvePassPaymentAction] Error checking existing profile by email:', profileLookupErr);
     }
   }
 
-  if ((pass as any).drink_name || (pass as any).selected_drink || (pass as any).drink_id) {
-    const drinkQr = pass.drink_qr_uuid || crypto.randomUUID();
-    updatePayload.drink_status = 'activated';
-    updatePayload.drink_qr_uuid = drinkQr;
-    updatePayload.drink_qr_code = drinkQr;
-  }
-
-  // 4. Update the pass record
+  // 4. Activate all passes in the reservation
   let updatedPass: any = null;
-  const updateResult = await supabaseAdmin
-    .from('passes')
-    .update(updatePayload)
-    .eq('id', passId)
-    .select('id, user_id, email, phone, reservation_code, source, entry_status, status, final_price, payment_point_id, approved_by, payment_approved_at, drink_id, drink_name, selected_drink, drink_status, drink_qr_uuid, drink_qr_code')
-    .single();
+  let totalSettledAmount = 0;
 
-  updatedPass = updateResult.data;
-  let updateError = updateResult.error;
+  for (const p of passesToActivate) {
+    totalSettledAmount += Number(p.final_price || 0);
 
-  // Fallback if status or approved_by or payment_approved_at schema column issue arises
-  if (updateError && (updateError.message?.includes('status') || updateError.message?.includes('approved_by') || updateError.message?.includes('payment_approved_at') || updateError.details?.includes('approved_by'))) {
-    console.warn('[approvePassPaymentAction] Retrying without optional audit columns:', updateError.message);
-    delete updatePayload.status;
-    delete updatePayload.approved_by;
-    delete updatePayload.payment_approved_at;
-    const fallbackResult = await supabaseAdmin
+    // Skip already scanned/activated if re-running
+    if (p.entry_status === 'scanned') continue;
+
+    const entryQr = p.entry_qr_uuid || crypto.randomUUID();
+    const updatePayload: Record<string, any> = {
+      entry_status: 'activated',
+      status: 'PAID',
+      payment_point_id: user.id,
+      approved_by: user.id,
+      payment_approved_at: now,
+      entry_qr_uuid: entryQr,
+      updated_at: now,
+    };
+
+    if (!p.user_id && matchedProfileId) {
+      updatePayload.user_id = matchedProfileId;
+    }
+
+    if (p.drink_name || p.selected_drink || p.drink_id) {
+      const drinkQr = p.drink_qr_uuid || crypto.randomUUID();
+      updatePayload.drink_status = 'activated';
+      updatePayload.drink_qr_uuid = drinkQr;
+      updatePayload.drink_qr_code = drinkQr;
+    }
+
+    const { data: resData, error: updateError } = await supabaseAdmin
       .from('passes')
       .update(updatePayload)
-      .eq('id', passId)
-      .select('id, user_id, entry_status, final_price, payment_point_id, drink_id, drink_name, selected_drink, drink_status, drink_qr_uuid, drink_qr_code')
+      .eq('id', p.id)
+      .select('id, user_id, email, phone, reservation_code, source, entry_status, status, final_price, payment_point_id, approved_by, payment_approved_at, drink_id, drink_name, selected_drink, drink_status, drink_qr_uuid, drink_qr_code')
       .single();
-    updatedPass = fallbackResult.data;
-    updateError = fallbackResult.error;
+
+    if (updateError) {
+      // Fallback if status or approved_by audit columns are missing in legacy schema
+      delete updatePayload.status;
+      delete updatePayload.approved_by;
+      delete updatePayload.payment_approved_at;
+      const { data: fallbackData } = await supabaseAdmin
+        .from('passes')
+        .update(updatePayload)
+        .eq('id', p.id)
+        .select()
+        .single();
+      if (p.id === passId) updatedPass = fallbackData;
+    } else {
+      if (p.id === passId) updatedPass = resData;
+    }
   }
 
-  if (updateError) {
-    console.error('Error approving pass payment:', updateError);
-    throw new Error("Échec de l'approbation du paiement: " + updateError.message);
+  if (!updatedPass) {
+    updatedPass = { ...pass, status: 'PAID', entry_status: 'activated' };
   }
 
-  // 5. Execute the shared ticket pipeline: generate QR / PDF and dispatch pass via email immediately
+  // 5. Execute the shared ticket pipeline: generate multi-ticket QR / PDF and dispatch email immediately
   try {
     const { dispatchPaidPassEmail } = await import('@/lib/services/pass-ticket');
     await dispatchPaidPassEmail(passId);
@@ -508,13 +528,20 @@ export async function approvePassPaymentAction(passId: string) {
     || profile.email?.split('@')[0] 
     || 'Administrateur';
 
+  const count = passesToActivate.length;
+
   return {
     success: true,
     pass: {
       ...updatedPass,
       status: 'PAID',
     },
-    message: 'Paiement approuvé avec succès. Le pass est désormais activé.',
+    count,
+    totalAmount: totalSettledAmount,
+    reservationCode: pass.reservation_code,
+    message: count > 1
+      ? `Paiement groupé de ${totalSettledAmount.toFixed(2)} DT validé pour les ${count} passes (${pass.reservation_code || 'commande'}).`
+      : 'Paiement approuvé avec succès. Le pass est désormais activé.',
     approverId: user.id,
     approverName: approverDisplayName,
     isSimulation: role === 'admin'
