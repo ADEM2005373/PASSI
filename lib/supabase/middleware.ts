@@ -35,8 +35,13 @@ export async function updateSession(request: NextRequest) {
   const url = request.nextUrl.clone()
   const path = request.nextUrl.pathname
 
-  // Allow auth callbacks, public auth APIs, and public guest APIs without interference
-  if (path.startsWith('/auth/callback') || path.startsWith('/api/auth') || path.startsWith('/api/public')) {
+  // Allow auth callbacks, public auth APIs, public guest APIs, and public Web Pass links (/p/:secretToken) without interference
+  if (
+    path.startsWith('/auth/callback') || 
+    path.startsWith('/api/auth') || 
+    path.startsWith('/api/public') ||
+    path.startsWith('/p/')
+  ) {
     return supabaseResponse
   }
 

@@ -91,7 +91,7 @@ export async function createPOSPass(formData: POSPassFormData) {
   }
 
   const cleanPhone = (formData.phone || '').trim() || null;
-  const cleanDrink = (formData.selectedDrink || formData.drinkName || '').trim() || null;
+  const cleanDrink = (formData.drinkName || formData.selectedDrink || '').trim() || null;
 
   const rawAromas = formData.selectedAromas || formData.aromas || [];
   const cleanAromas: string[] = Array.isArray(rawAromas)
@@ -99,6 +99,10 @@ export async function createPOSPass(formData: POSPassFormData) {
     : typeof rawAromas === 'string' && (rawAromas as string).trim().length > 0
       ? [(rawAromas as string).trim()]
       : [];
+
+  const formattedSelectedDrink = cleanDrink
+    ? (cleanAromas.length > 0 && !cleanDrink.includes('(') ? `${cleanDrink} (${cleanAromas.join(', ')})` : cleanDrink)
+    : null;
 
   const rawQuantity = parseInt(String(formData.quantity || 1), 10);
   const quantity = Math.max(1, Math.min(10, isNaN(rawQuantity) ? 1 : rawQuantity));
@@ -168,7 +172,7 @@ export async function createPOSPass(formData: POSPassFormData) {
       guest_email: rawEmail,
       phone: cleanPhone,
       drink_name: cleanDrink,
-      selected_drink: cleanDrink,
+      selected_drink: formattedSelectedDrink,
       aromas: cleanAromas,
       selected_aromas: cleanAromas,
       total_price: totalPrice,

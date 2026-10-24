@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Event } from '@/lib/services/api';
+import { useState, useEffect, useMemo } from 'react';
+import { Event, DrinkItem } from '@/lib/services/api';
 import { 
   Sparkles, 
   CheckCircle2, 
@@ -18,8 +18,7 @@ import {
   Minus, 
   Banknote, 
   AlertCircle,
-  Calendar,
-  ArrowRight
+  Calendar
 } from 'lucide-react';
 
 interface POSPassCreationTabProps {
@@ -49,16 +48,88 @@ export function POSPassCreationTab({
   const currentEvent = events.find((e) => e.id === selectedEvId) || events[0];
   const defaultEventPrice = Number(currentEvent?.base_price ?? 35);
 
+  // ─── EVENT DRINKS STATE & DYNAMIC LOADING ───
+  const [fetchedDrinks, setFetchedDrinks] = useState<DrinkItem[]>([]);
+  const [loadingDrinks, setLoadingDrinks] = useState(false);
+
+  useEffect(() => {
+    if (!selectedEvId) {
+      setFetchedDrinks([]);
+      return;
+    }
+
+    const evt = events.find((e) => e.id === selectedEvId);
+    const existing = (evt?.drink_menus && evt.drink_menus.length > 0)
+      ? evt.drink_menus
+      : (Array.isArray(evt?.drinks) && evt.drinks.length > 0 ? evt.drinks : null);
+
+    if (existing) {
+      setFetchedDrinks(existing);
+      return;
+    }
+
+    // Dynamic fallback fetch from Supabase
+    let active = true;
+    setLoadingDrinks(true);
+    import('@/lib/supabase/client').then(({ createClient }) => {
+      const supabase = createClient();
+      supabase
+        .from('drink_menus')
+        .select('*')
+        .eq('event_id', selectedEvId)
+        .then((res: any) => {
+          if (!active) return;
+          setLoadingDrinks(false);
+          if (!res.error && res.data && res.data.length > 0) {
+            setFetchedDrinks(res.data);
+          } else {
+            setFetchedDrinks([]);
+          }
+        })
+        .catch(() => {
+          if (active) setLoadingDrinks(false);
+        });
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [selectedEvId, events]);
+
+  const availableDrinks: DrinkItem[] = useMemo(() => {
+    if (fetchedDrinks.length > 0) return fetchedDrinks;
+    const evt = events.find((e) => e.id === selectedEvId);
+    if (evt?.drink_menus && evt.drink_menus.length > 0) return evt.drink_menus;
+    if (Array.isArray(evt?.drinks) && evt.drinks.length > 0) return evt.drinks;
+    return [];
+  }, [fetchedDrinks, events, selectedEvId]);
+
+  // Selected Drink & Aromas
+  const [selectedDrinkName, setSelectedDrinkName] = useState<string>('');
+  const [selectedAromas, setSelectedAromas] = useState<string[]>([]);
+  const [customDrinkFallback, setCustomDrinkFallback] = useState<string>('');
+
+  // Automatically update selected drink when event changes
+  useEffect(() => {
+    if (availableDrinks.length > 0) {
+      const first = availableDrinks[0].name;
+      setSelectedDrinkName(first);
+      setSelectedAromas([]);
+    } else {
+      setSelectedDrinkName('');
+      setSelectedAromas([]);
+    }
+  }, [selectedEvId, availableDrinks]);
+
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
     phone: '',
-    drinkName: '',
     quantity: 1,
     totalPrice: defaultEventPrice,
   });
 
-  // Automatically update price when event or quantity changes (unless manually overridden)
+  // Automatically update price when event or quantity changes
   useEffect(() => {
     const base = Number(currentEvent?.base_price ?? 35);
     setFormData((prev) => ({
@@ -90,6 +161,18 @@ export function POSPassCreationTab({
     }));
   };
 
+  const handleSelectDrink = (drinkName: string) => {
+    setSelectedDrinkName(drinkName);
+    setSelectedAromas([]);
+  };
+
+  const handleToggleAroma = (aroma: string) => {
+    setSelectedAromas((prev) => {
+      const exists = prev.includes(aroma);
+      return exists ? prev.filter((a) => a !== aroma) : [...prev, aroma];
+    });
+  };
+
   const handleCopy = (text: string, type: 'link' | 'code') => {
     navigator.clipboard.writeText(text);
     if (type === 'link') {
@@ -110,10 +193,16 @@ export function POSPassCreationTab({
       fullName: '',
       email: '',
       phone: '',
-      drinkName: '',
       quantity: 1,
       totalPrice: base,
     });
+    if (availableDrinks.length > 0) {
+      setSelectedDrinkName(availableDrinks[0].name);
+    } else {
+      setSelectedDrinkName('');
+    }
+    setSelectedAromas([]);
+    setCustomDrinkFallback('');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -135,6 +224,15 @@ export function POSPassCreationTab({
         throw new Error('Une adresse email valide est obligatoire pour envoyer le pass.');
       }
 
+      const effectiveDrink = selectedDrinkName || customDrinkFallback.trim();
+      if (availableDrinks.length > 0 && !effectiveDrink) {
+        throw new Error('Veuillez sélectionner une boisson parmi la carte de l\'événement.');
+      }
+
+      const formattedSelectedDrink = effectiveDrink
+        ? (selectedAromas.length > 0 ? `${effectiveDrink} (${selectedAromas.join(', ')})` : effectiveDrink)
+        : undefined;
+
       const res = await fetch('/api/pos/passes/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -145,7 +243,10 @@ export function POSPassCreationTab({
           userEmail: formData.email.trim(),
           email: formData.email.trim(),
           phone: formData.phone.trim() || undefined,
-          drinkName: formData.drinkName.trim() || undefined,
+          drinkName: effectiveDrink || undefined,
+          selectedDrink: formattedSelectedDrink,
+          aromas: selectedAromas,
+          selectedAromas: selectedAromas,
           totalPrice: Number(formData.totalPrice),
           quantity: Number(formData.quantity),
           posLocation: posName,
@@ -383,19 +484,116 @@ export function POSPassCreationTab({
               </div>
             </div>
 
-            {/* Drink / Option */}
-            <div>
-              <label className="block text-xs font-bold text-neutral-700 dark:text-neutral-300 mb-1.5 flex items-center gap-1.5">
-                <Wine className="w-3.5 h-3.5 text-purple-500" />
-                Boisson / Option choisie (incluse avec le pass)
-              </label>
-              <input
-                type="text"
-                value={formData.drinkName}
-                onChange={(e) => setFormData({ ...formData, drinkName: e.target.value })}
-                className="w-full bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-xl px-4 py-2.5 text-neutral-900 dark:text-white text-sm placeholder-neutral-400 dark:placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 transition"
-                placeholder="Ex: Cocktail Signature, Red Vibe, Soft..."
-              />
+            {/* ─── EVENT DRINKS SELECTOR (STRICTLY FROM EVENT DRINK MENU) ─── */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-neutral-700 dark:text-neutral-300 flex items-center gap-1.5">
+                  <Wine className="w-3.5 h-3.5 text-purple-500" />
+                  <span>Boisson incluse avec le Pass *</span>
+                </label>
+                {availableDrinks.length > 0 && (
+                  <span className="text-[11px] text-purple-600 dark:text-purple-400 font-semibold">
+                    {availableDrinks.length} boisson(s) sur la carte de l'événement
+                  </span>
+                )}
+              </div>
+
+              {loadingDrinks ? (
+                <div className="p-4 rounded-xl bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 flex items-center gap-2 text-xs text-neutral-400">
+                  <div className="w-3.5 h-3.5 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+                  <span>Chargement des boissons de l'événement...</span>
+                </div>
+              ) : availableDrinks.length > 0 ? (
+                <div className="space-y-3">
+                  
+                  {/* Selectable Drink Cards Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                    {availableDrinks.map((drink, idx) => {
+                      const isSelected = selectedDrinkName === drink.name;
+                      const hasAromas = drink.aromas && Array.isArray(drink.aromas) && drink.aromas.length > 0;
+
+                      return (
+                        <button
+                          key={drink.id || `drink-${idx}`}
+                          type="button"
+                          onClick={() => handleSelectDrink(drink.name)}
+                          className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-1.5 ${
+                            isSelected
+                              ? "bg-purple-500/15 border-purple-500 text-purple-900 dark:text-white shadow-sm ring-1 ring-purple-500/30"
+                              : "bg-gray-50 dark:bg-neutral-800/60 border-gray-200 dark:border-neutral-700/80 text-neutral-700 dark:text-neutral-300 hover:border-purple-400/50"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="font-bold text-xs sm:text-sm flex items-center gap-1.5 truncate">
+                              🍹 {drink.name}
+                            </span>
+                            {isSelected ? (
+                              <CheckCircle2 className="w-4 h-4 text-purple-500 shrink-0" />
+                            ) : (
+                              <div className="w-4 h-4 rounded-full border border-gray-300 dark:border-neutral-600 shrink-0" />
+                            )}
+                          </div>
+
+                          {hasAromas && (
+                            <span className="text-[10px] text-neutral-500 dark:text-neutral-400">
+                              {drink.aromas!.length} parfum{drink.aromas!.length > 1 ? 's' : ''} au choix
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Aromas Selection (if selected drink has aroma options) */}
+                  {(() => {
+                    const activeDrinkObj = availableDrinks.find((d) => d.name === selectedDrinkName);
+                    if (!activeDrinkObj?.aromas || !Array.isArray(activeDrinkObj.aromas) || activeDrinkObj.aromas.length === 0) return null;
+
+                    return (
+                      <div className="p-3.5 rounded-xl bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800/40 space-y-2 animate-in fade-in">
+                        <span className="text-[11px] font-bold text-purple-800 dark:text-purple-300 block">
+                          🍃 Parfums / Arômes disponibles pour <strong>{selectedDrinkName}</strong> (sélectionnez au choix) :
+                        </span>
+                        <div className="flex flex-wrap gap-2">
+                          {activeDrinkObj.aromas.map((aroma: string) => {
+                            const isAromaSelected = selectedAromas.includes(aroma);
+                            return (
+                              <button
+                                key={aroma}
+                                type="button"
+                                onClick={() => handleToggleAroma(aroma)}
+                                className={`px-3 py-1 rounded-lg text-xs font-semibold border transition cursor-pointer flex items-center gap-1 ${
+                                  isAromaSelected
+                                    ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
+                                    : 'bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 border-gray-200 dark:border-neutral-700 hover:border-purple-400'
+                                }`}
+                              >
+                                <span>{aroma}</span>
+                                <span className="text-[10px]">{isAromaSelected ? '✓' : '+'}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                </div>
+              ) : (
+                /* Fallback if event has no drinks configured in database */
+                <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs space-y-2">
+                  <p className="font-semibold">
+                    ℹ️ Aucune carte de boisson n'est spécifiquement configurée pour cet événement.
+                  </p>
+                  <input
+                    type="text"
+                    value={customDrinkFallback}
+                    onChange={(e) => setCustomDrinkFallback(e.target.value)}
+                    placeholder="Optionnel : Boisson libre ou sans boisson..."
+                    className="w-full bg-white dark:bg-neutral-800 border border-amber-500/30 rounded-lg px-3 py-1.5 text-xs text-neutral-900 dark:text-white placeholder-neutral-500 focus:outline-none focus:border-amber-400"
+                  />
+                </div>
+              )}
             </div>
 
             {/* Quantity Stepper & Price Calculation */}
