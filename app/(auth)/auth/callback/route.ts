@@ -105,6 +105,16 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // 1b. Automatically link all guest reservations matching this email to this account
+  try {
+    const { linkGuestPassesToUser } = await import('@/lib/services/account-sync')
+    if (authUser.email) {
+      await linkGuestPassesToUser(authUser.id, authUser.email)
+    }
+  } catch (syncErr) {
+    console.warn('[auth/callback] Error linking guest passes:', syncErr)
+  }
+
   // 2. Détermination de la destination finale
   let redirectPath = next
 

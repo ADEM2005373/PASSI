@@ -105,12 +105,14 @@ export async function GET(req: NextRequest) {
       const creatorProf = pass.creator || profilesMap[pass.created_by] || null;
       const evt = pass.event || pass.events || {};
 
-      const isManualAdmin = Boolean(
+      const isQuick = pass.source === 'QUICK_RESERVATION' || pass.pass_origin === 'QUICK_RESERVATION';
+      const isManualAdmin = !isQuick && Boolean(
         pass.created_by ||
         pass.pass_origin === 'ADMIN' ||
         ['VIP', 'GIFT', 'INVITATION'].includes(pass.pass_type?.toUpperCase())
       );
-      const passOrigin = pass.pass_origin || (isManualAdmin ? 'ADMIN' : 'USER');
+      const passOrigin = isQuick ? 'QUICK_RESERVATION' : (pass.pass_origin || (isManualAdmin ? 'ADMIN' : 'STANDARD'));
+      const source = pass.source || (isQuick ? 'QUICK_RESERVATION' : 'STANDARD');
 
       // Format creator with full_name, first_name, last_name, email, role
       const formattedCreator = creatorProf ? {
@@ -124,13 +126,15 @@ export async function GET(req: NextRequest) {
         ...prof,
         first_name: prof.first_name || (prof.full_name ? prof.full_name.split(' ')[0] : (pass.guest_first_name || '')),
         last_name: prof.last_name || (prof.full_name && prof.full_name.split(' ').length > 1 ? prof.full_name.split(' ').slice(1).join(' ') : (pass.guest_last_name || '')),
-        instagram: prof.instagram_handle || '',
+        instagram: prof.instagram_handle || pass.instagram || '',
       } : null;
 
       // Resolve instagram_handle: avoid '@unknown' fallback
       let resolvedInstagram = '';
       if (prof.instagram_handle && prof.instagram_handle.trim() !== '') {
         resolvedInstagram = prof.instagram_handle.trim();
+      } else if (pass.instagram && pass.instagram.trim() !== '') {
+        resolvedInstagram = pass.instagram.trim();
       } else if (pass.instagram_handle && pass.instagram_handle.trim() !== '' && pass.instagram_handle !== '@unknown') {
         resolvedInstagram = pass.instagram_handle.trim();
       } else if (prof.email) {
@@ -139,11 +143,25 @@ export async function GET(req: NextRequest) {
         resolvedInstagram = `@${prof.full_name.toLowerCase().replace(/\s+/g, '.')}`;
       }
 
+      const normalizedStatus = pass.status || (
+        ['activated', 'scanned'].includes(pass.entry_status)
+          ? 'PAID'
+          : pass.entry_status === 'rejected'
+          ? 'EXPIRED'
+          : 'PENDING_PAYMENT'
+      );
+
       return {
         ...pass,
-        status: pass.entry_status || pass.status,
+        status: normalizedStatus,
         entry_status: pass.entry_status || pass.status,
+        source,
         pass_origin: passOrigin,
+        reservation_code: pass.reservation_code || null,
+        phone: pass.phone || null,
+        email: pass.email || prof.email || null,
+        selected_drink: pass.selected_drink || pass.drink_name || null,
+        expires_at: pass.expires_at || null,
         events: evt,
         event: evt,
         profiles: prof,
@@ -152,7 +170,7 @@ export async function GET(req: NextRequest) {
         approver: approverProf,
         creator: formattedCreator,
         instagram_handle: resolvedInstagram,
-        drink_menus: pass.drink_name ? { name: pass.drink_name } : (pass.drink_menus || null),
+        drink_menus: (pass.selected_drink || pass.drink_name) ? { name: pass.selected_drink || pass.drink_name } : (pass.drink_menus || null),
       };
     });
 
@@ -175,7 +193,7 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Pass ID and valid action are required' }, { status: 400 });
     }
 
-    if (!['approve', 'mark_paid', 'reject'].includes(action)) {
+    if (!['approve', 'mark_paid', 'reject', 'expire'].includes(action)) {
       return NextResponse.json({ error: 'Action non autorisée' }, { status: 400 });
     }
 
@@ -190,7 +208,7 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Pass not found' }, { status: 404 });
     }
 
-    if (['activated', 'scanned'].includes(existingPass.entry_status)) {
+    if (['activated', 'scanned'].includes(existingPass.entry_status) || existingPass.status === 'PAID') {
       return NextResponse.json(
         { error: 'Finalized and paid passes are immutable and cannot be rejected, modified, or deleted.' },
         { status: 403 }
@@ -209,6 +227,30 @@ export async function PATCH(req: NextRequest) {
     } else if (action === 'reject') {
       const result = await rejectPassAction(passId, rejectionReason);
       return NextResponse.json(result);
+
+    } else if (action === 'expire') {
+      const nowIso = new Date().toISOString();
+      const { error: updateError } = await supabaseAdmin
+        .from('passes')
+        .update({
+          status: 'EXPIRED',
+          entry_status: 'rejected',
+          rejection_reason: 'Délai de paiement dépassé (Expiré manuellement par administrateur)',
+          updated_at: nowIso,
+        })
+        .eq('id', passId);
+
+      if (updateError) {
+        return NextResponse.json({ error: updateError.message }, { status: 500 });
+      }
+
+      try {
+        revalidatePath('/admin');
+        revalidatePath('/admin/approbations');
+        revalidatePath('/admin/passes');
+      } catch (e) {}
+
+      return NextResponse.json({ success: true, status: 'EXPIRED' });
     }
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });

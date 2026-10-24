@@ -66,6 +66,9 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
   const [approbationMsg, setApprobationMsg] = useState("");
   const [approbEventFilter, setApprobEventFilter] = useState("");
   const [approbStatusFilter, setApprobStatusFilter] = useState("all");
+  const [approbOriginFilter, setApprobOriginFilter] = useState("all");
+  const [approbOverdueFilter, setApprobOverdueFilter] = useState(false);
+  const [approbSearch, setApprobSearch] = useState("");
   const [isRefreshingApprob, setIsRefreshingApprob] = useState(false);
 
   // Delete pass confirmation state
@@ -170,6 +173,17 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
     await api.markPassPaid(passId); 
     showApprobationMsg("Paiement confirmé !");
     await fetchData(); 
+  };
+
+  const handleExpirePass = async (passId: string) => { 
+    if (!confirm("Voulez-vous expirer manuellement cette réservation et libérer la place dans les stocks ?")) return;
+    try {
+      await api.expireReservation(passId); 
+      showApprobationMsg("Réservation expirée et stock rétabli !");
+      await fetchData(); 
+    } catch (err: any) {
+      alert("Erreur lors de l'expiration : " + (err.message || err));
+    }
   };
 
   const handleReject = async (e: React.FormEvent) => {
@@ -1104,15 +1118,58 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
             />
           )}
 
-          {/* ── PASSES TAB ── */}
+          {/* ── PASSES & RESERVATIONS TAB ── */}
           {activeTab === 'approbations' && (() => {
+            const isPassOverdue = (pass: Pass) => {
+              const isUnpaid = pass.status === 'PENDING_PAYMENT' || pass.entry_status === 'awaiting_payment' || pass.entry_status === 'pending';
+              if (!isUnpaid || !pass.expires_at) return false;
+              return new Date() > new Date(pass.expires_at);
+            };
+
+            const totalOverdueCount = passes.filter(isPassOverdue).length;
+
             const displayedPasses = passes.filter(pass => {
               if (approbEventFilter && pass.event_id !== approbEventFilter) {
                 return false;
               }
               if (approbStatusFilter !== 'all') {
-                const s = (pass.entry_status || pass.status || '').toLowerCase();
-                if (s !== approbStatusFilter.toLowerCase()) return false;
+                const s = (pass.status || pass.entry_status || '').toLowerCase();
+                if (approbStatusFilter === 'pending_payment') {
+                  if (s !== 'pending_payment' && pass.entry_status !== 'awaiting_payment') return false;
+                } else if (approbStatusFilter === 'paid') {
+                  if (s !== 'paid' && !['activated', 'scanned'].includes(pass.entry_status)) return false;
+                } else if (approbStatusFilter === 'expired') {
+                  if (s !== 'expired' && pass.entry_status !== 'rejected') return false;
+                } else if (approbStatusFilter === 'pending') {
+                  if (pass.entry_status !== 'pending') return false;
+                } else if (s !== approbStatusFilter.toLowerCase()) {
+                  return false;
+                }
+              }
+              if (approbOriginFilter !== 'all') {
+                const isQuick = pass.source === 'QUICK_RESERVATION' || Boolean(pass.reservation_code);
+                if (approbOriginFilter === 'QUICK_RESERVATION' && !isQuick) return false;
+                if (approbOriginFilter === 'STANDARD' && isQuick) return false;
+              }
+              if (approbOverdueFilter && !isPassOverdue(pass)) {
+                return false;
+              }
+              if (approbSearch.trim()) {
+                const q = approbSearch.trim().toLowerCase();
+                const code = (pass.reservation_code || '').toLowerCase();
+                const phone = (pass.phone || '').toLowerCase();
+                const email = (pass.email || (pass as any).profiles?.email || (pass as any).user?.email || '').toLowerCase();
+                const names = [
+                  pass.guest_first_name,
+                  pass.guest_last_name,
+                  (pass as any).owner?.full_name,
+                  (pass as any).user?.full_name,
+                  (pass as any).profiles?.full_name
+                ].filter(Boolean).join(' ').toLowerCase();
+                const drink = (pass.selected_drink || pass.drink_name || pass.drink_menus?.name || '').toLowerCase();
+                if (!code.includes(q) && !phone.includes(q) && !email.includes(q) && !names.includes(q) && !drink.includes(q)) {
+                  return false;
+                }
               }
               return true;
             });
@@ -1121,9 +1178,11 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
               <div className="card p-7 shadow-sm">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                   <div>
-                    <h3 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>Approbation des passes</h3>
+                    <h3 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>
+                      Gestion Unifiée des Réservations & Passes
+                    </h3>
                     <p className="text-xs text-neutral-400 mt-1">
-                      {displayedPasses.length} demande(s) affichée(s) sur {passes.length} au total
+                      {displayedPasses.length} réservation(s) affichée(s) sur {passes.length} au total
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
@@ -1151,210 +1210,303 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
                   </div>
                 </div>
 
-                {/* Filters: Defaults to ALL events */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 mb-6 rounded-2xl" style={{ backgroundColor: 'var(--bg-input)', border: '1.5px solid var(--border)' }}>
+                {/* Filters */}
+                <div className="space-y-3 p-4 mb-6 rounded-2xl" style={{ backgroundColor: 'var(--bg-input)', border: '1.5px solid var(--border)' }}>
+                  {/* Search Bar */}
                   <div>
-                    <label className="label text-xs">Filtrer par Événement</label>
-                    <select
-                      value={approbEventFilter}
-                      onChange={(e) => setApprobEventFilter(e.target.value)}
-                      className="input text-sm"
-                    >
-                      <option value="">Tous les événements (Défaut)</option>
-                      {events.map(ev => (
-                        <option key={ev.id} value={ev.id}>{ev.title}</option>
-                      ))}
-                    </select>
+                    <input
+                      type="text"
+                      value={approbSearch}
+                      onChange={(e) => setApprobSearch(e.target.value)}
+                      placeholder="🔍 Rechercher par code (ex: QCK-...), téléphone, email, nom, boisson..."
+                      className="input text-sm w-full font-medium"
+                    />
                   </div>
-                  <div>
-                    <label className="label text-xs">Filtrer par Statut</label>
-                    <select
-                      value={approbStatusFilter}
-                      onChange={(e) => setApprobStatusFilter(e.target.value)}
-                      className="input text-sm"
-                    >
-                      <option value="all">Tous les statuts</option>
-                      <option value="pending">En attente (Pending)</option>
-                      <option value="awaiting_payment">En attente de paiement</option>
-                      <option value="activated">Activé / Payé</option>
-                      <option value="rejected">Rejeté</option>
-                    </select>
+
+                  {/* Filter Dropdowns & Overdue Toggle */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
+                    <div>
+                      <label className="label text-xs">Événement</label>
+                      <select
+                        value={approbEventFilter}
+                        onChange={(e) => setApprobEventFilter(e.target.value)}
+                        className="input text-xs"
+                      >
+                        <option value="">Tous les événements</option>
+                        {events.map(ev => (
+                          <option key={ev.id} value={ev.id}>{ev.title}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="label text-xs">Origine / Flux</label>
+                      <select
+                        value={approbOriginFilter}
+                        onChange={(e) => setApprobOriginFilter(e.target.value)}
+                        className="input text-xs"
+                      >
+                        <option value="all">Tous les flux</option>
+                        <option value="QUICK_RESERVATION">⚡ Réservation Express (Guest)</option>
+                        <option value="STANDARD">👤 Réservation Standard</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="label text-xs">Statut</label>
+                      <select
+                        value={approbStatusFilter}
+                        onChange={(e) => setApprobStatusFilter(e.target.value)}
+                        className="input text-xs"
+                      >
+                        <option value="all">Tous les statuts</option>
+                        <option value="pending_payment">Attente Paiement (PENDING_PAYMENT)</option>
+                        <option value="paid">Payé / Activé (PAID)</option>
+                        <option value="expired">Expiré (EXPIRED)</option>
+                        <option value="pending">En attente approbation (Legacy)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="label text-xs">Alerte Échéance</label>
+                      <button
+                        type="button"
+                        onClick={() => setApprobOverdueFilter(!approbOverdueFilter)}
+                        className={`w-full py-2 px-3 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                          approbOverdueFilter
+                            ? 'bg-red-500/20 text-red-300 border-red-500 shadow-sm shadow-red-500/20'
+                            : 'bg-neutral-800/80 text-neutral-300 border-neutral-700 hover:border-neutral-500'
+                        }`}
+                      >
+                        <span>⚠️ En retard (&gt; 48h)</span>
+                        <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                          totalOverdueCount > 0 ? 'bg-red-500 text-white font-extrabold' : 'bg-neutral-700 text-neutral-400'
+                        }`}>
+                          {totalOverdueCount}
+                        </span>
+                      </button>
+                    </div>
                   </div>
                 </div>
 
                 {displayedPasses.length === 0 ? (
                   <div className="text-center py-20 rounded-2xl" style={{ backgroundColor: 'var(--bg-input)', border: '1.5px dashed var(--border)' }}>
                     <Check size={40} className="mx-auto mb-3 text-passi-turquoise" />
-                    <p className="font-semibold" style={{ color: 'var(--text-muted)' }}>Aucune demande en attente</p>
+                    <p className="font-semibold" style={{ color: 'var(--text-muted)' }}>Aucune réservation trouvée</p>
                   </div>
                 ) : (
                   <div className="space-y-4">
                     {displayedPasses.map(pass => {
+                      const isQuick = pass.source === 'QUICK_RESERVATION' || Boolean(pass.reservation_code);
+                      const overdue = isPassOverdue(pass);
+                      const isPaid = pass.status === 'PAID' || ['activated', 'scanned'].includes(pass.entry_status);
+                      const isExpired = pass.status === 'EXPIRED' || pass.entry_status === 'rejected';
+                      const isUnpaid = !isPaid && !isExpired;
+
                       const statusConfig: Record<string, { color: string; bg: string; label: string }> = {
                         pending: { color: 'text-amber-500', bg: 'bg-amber-500/10', label: 'En attente' },
-                        awaiting_payment: { color: 'text-blue-500', bg: 'bg-blue-500/10', label: 'Att. paiement' },
-                        activated: { color: 'text-passi-turquoise', bg: 'bg-passi-turquoise/10', label: 'Activé' },
-                        rejected: { color: 'text-passi-corail', bg: 'bg-passi-corail/10', label: 'Rejeté' },
+                        awaiting_payment: { color: 'text-blue-400', bg: 'bg-blue-500/10', label: 'Att. paiement' },
+                        PENDING_PAYMENT: { color: 'text-blue-400', bg: 'bg-blue-500/10', label: 'Att. paiement' },
+                        activated: { color: 'text-passi-turquoise', bg: 'bg-passi-turquoise/10', label: 'Payé / Activé' },
+                        PAID: { color: 'text-passi-turquoise', bg: 'bg-passi-turquoise/10', label: 'Payé / Activé' },
+                        rejected: { color: 'text-passi-corail', bg: 'bg-passi-corail/10', label: 'Expiré / Rejeté' },
+                        EXPIRED: { color: 'text-passi-corail', bg: 'bg-passi-corail/10', label: 'Expiré' },
+                        CANCELLED: { color: 'text-passi-corail', bg: 'bg-passi-corail/10', label: 'Annulé' },
                       };
-                      const sc = statusConfig[pass.entry_status] || { color: 'text-gray-500', bg: 'bg-gray-500/10', label: pass.entry_status };
+                      const statusKey = pass.status || pass.entry_status;
+                      const sc = statusConfig[statusKey] || { color: 'text-gray-400', bg: 'bg-gray-500/10', label: statusKey };
+
+                      const guestName = [pass.guest_first_name, pass.guest_last_name].filter(Boolean).join(' ') || (pass as any).owner?.full_name || (pass as any).user?.full_name || 'Invité Express';
+                      const contactPhone = pass.phone;
+                      const contactEmail = pass.email || (pass as any).profiles?.email || (pass as any).user?.email;
+                      const selectedDrink = pass.selected_drink || pass.drink_name || pass.drink_menus?.name;
+
                       return (
-                        <div key={pass.id} className={`p-5 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-colors ${sc.bg === 'bg-passi-corail/10' ? 'opacity-70' : ''}`} style={{ backgroundColor: 'var(--bg-input)', border: '1.5px solid var(--border)' }}>
-                          <div className="flex items-center gap-4">
-                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl font-bold ${sc.bg} ${sc.color}`}>
-                              {pass.entry_status === 'pending' ? '!' : pass.entry_status === 'awaiting_payment' ? '$' : pass.entry_status === 'rejected' ? 'X' : '✓'}
+                        <div
+                          key={pass.id}
+                          className={`p-5 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-all ${
+                            overdue ? 'border-red-500/60 bg-red-950/10 shadow-sm shadow-red-900/10' : ''
+                          }`}
+                          style={{
+                            backgroundColor: overdue ? undefined : 'var(--bg-input)',
+                            border: overdue ? '1.5px solid rgba(239, 68, 68, 0.4)' : '1.5px solid var(--border)'
+                          }}
+                        >
+                          <div className="flex items-start sm:items-center gap-4 min-w-0 flex-1">
+                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl font-bold flex-shrink-0 ${sc.bg} ${sc.color}`}>
+                              {isQuick ? '⚡' : (pass.entry_status === 'pending' ? '!' : isUnpaid ? '$' : isExpired ? 'X' : '✓')}
                             </div>
-                            <div>
+
+                            <div className="min-w-0 flex-1">
+                              {/* Badges Bar: Origin, Code, Overdue, Status */}
+                              <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                                {isQuick ? (
+                                  <span className="px-2.5 py-0.5 rounded-lg text-[11px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                                    ⚡ Réservation Express
+                                  </span>
+                                ) : (
+                                  <span className="px-2.5 py-0.5 rounded-lg text-[11px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30 flex items-center gap-1">
+                                    👤 Standard
+                                  </span>
+                                )}
+
+                                {pass.reservation_code && (
+                                  <span className="px-2.5 py-0.5 rounded-lg text-[11px] font-mono font-bold bg-neutral-900 text-passi-corail border border-neutral-700">
+                                    Code : {pass.reservation_code}
+                                  </span>
+                                )}
+
+                                {overdue && (
+                                  <span className="px-2.5 py-0.5 rounded-lg text-[11px] font-bold bg-red-600/30 text-red-300 border border-red-500/50 flex items-center gap-1 animate-pulse">
+                                    ⚠️ En retard (&gt; 48h)
+                                  </span>
+                                )}
+
+                                <span className={`badge inline-block ${sc.bg} ${sc.color} text-[10px]`}>
+                                  {sc.label}
+                                </span>
+                              </div>
+
+                              {/* Guest Name & Event */}
                               <p className="font-bold text-base" style={{ color: 'var(--text-primary)' }}>
-                                {[pass.guest_first_name, pass.guest_last_name].filter(Boolean).join(' ') || (pass as any).owner?.full_name || (pass as any).user?.full_name || 'Invité'}
+                                {guestName}
                               </p>
-                              {(() => {
-                                const owner = (pass as any).owner || (pass as any).user || (pass as any).profiles;
-                                let displayHandle = pass.instagram_handle;
-                                if (!displayHandle || displayHandle === '@unknown') {
-                                  if (owner?.instagram_handle && owner.instagram_handle.trim() !== '') {
-                                    displayHandle = owner.instagram_handle.trim();
-                                  } else if (owner?.email) {
-                                    displayHandle = `(${owner.email})`;
-                                  } else if (owner?.full_name) {
-                                    displayHandle = `@${owner.full_name.toLowerCase().replace(/\s+/g, '.')}`;
-                                  } else {
-                                    displayHandle = '';
-                                  }
-                                }
-                                if (!displayHandle) return null;
-                                return (
-                                  <p className="text-sm truncate max-w-[200px]" title={displayHandle} style={{ color: 'var(--text-secondary)' }}>
-                                    {displayHandle}
-                                  </p>
-                                );
-                              })()}
+
+                              {/* Contact Details (Phone, Email, Instagram) */}
+                              <div className="flex flex-wrap items-center gap-3 mt-1 text-xs text-neutral-300">
+                                {contactPhone && (
+                                  <span className="flex items-center gap-1 font-medium">
+                                    📞 {contactPhone}
+                                  </span>
+                                )}
+                                {contactEmail && (
+                                  <span className="flex items-center gap-1 font-medium text-neutral-400">
+                                    ✉️ {contactEmail}
+                                  </span>
+                                )}
+                                {pass.instagram_handle && pass.instagram_handle !== '@unknown' && (
+                                  <span className="text-pink-400 font-medium">
+                                    📸 {pass.instagram_handle}
+                                  </span>
+                                )}
+                              </div>
+
                               <p className="text-xs font-semibold mt-1" style={{ color: 'var(--text-muted)' }}>
-                                Événement: {pass.events?.title || 'Inconnu'}
+                                Événement : <span className="text-neutral-200">{pass.events?.title || 'Inconnu'}</span>
                               </p>
-                              {pass.drink_menus && (
-                                <p className="text-xs font-semibold text-passi-corail">
-                                  Boisson: {pass.drink_menus.name}
+
+                              {/* Drink Selection */}
+                              {selectedDrink && (
+                                <p className="text-xs font-semibold text-passi-turquoise mt-0.5">
+                                  🍹 Boisson : {selectedDrink}
                                 </p>
                               )}
-                              {/* Audit Trail & Badges */}
-                              {(() => {
-                                const isUserCreated = !(
-                                  pass.pass_origin === 'ADMIN' ||
-                                  Boolean(pass.created_by) ||
-                                  Boolean(pass.creator) ||
-                                  ['VIP', 'GIFT', 'INVITATION'].includes((pass.pass_type || '').toUpperCase())
-                                );
 
-                                const creator = pass.creator;
-                                const approver = pass.approver;
-                                let approverName = "";
-                                if (approver?.first_name || approver?.last_name) {
-                                  approverName = [approver.first_name, approver.last_name].filter(Boolean).join(" ");
-                                } else if (approver?.full_name) {
-                                  approverName = approver.full_name;
-                                } else if (approver?.email) {
-                                  approverName = approver.email.split("@")[0];
-                                } else if (pass.approved_by) {
-                                  approverName = `ID: ${pass.approved_by.slice(0, 8)}`;
-                                }
+                              {/* Expiration Reference (48h notice) */}
+                              {pass.expires_at && (
+                                <p className={`text-[11px] mt-1 font-medium ${overdue ? 'text-red-400 font-bold' : 'text-neutral-400'}`}>
+                                  ⏳ Échéance indicative : {new Date(pass.expires_at).toLocaleString('fr-FR', {
+                                    day: 'numeric',
+                                    month: 'short',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}
+                                  {overdue ? ' (Délai dépassé - Expiration manuelle requise)' : ' (48h max)'}
+                                </p>
+                              )}
 
-                                const isInstantPass = ['VIP', 'GIFT', 'INVITATION'].includes((pass.pass_type || '').toUpperCase());
-                                const isActivatedOrPaid = ['activated', 'scanned'].includes(pass.entry_status);
-                                const resolvedApprover = approverName || (isInstantPass || isActivatedOrPaid ? 'Système / Instantané' : null);
-
-                                const role = (approver?.role || "").toLowerCase();
-                                const isSimulation = role === "admin";
-                                const badgeLabel = approver ? (isSimulation ? "Mode Simulation" : "Caissier") : null;
-
-                                return (
-                                  <>
-                                    <div className="flex flex-wrap items-center gap-2 mt-2">
-                                      <span className={`badge inline-block ${sc.bg} ${sc.color}`}>{sc.label}</span>
-                                      {creator ? (
-                                        <div className="flex items-center gap-1.5 text-purple-400 bg-purple-500/10 px-2.5 py-1 rounded-md text-xs font-medium border border-purple-500/20">
-                                          <span>👑 Créé par l'Admin :</span>
-                                          <span className="font-bold">
-                                            {creator.first_name || creator.last_name
-                                              ? [creator.first_name, creator.last_name].filter(Boolean).join(" ")
-                                              : (creator.full_name || creator.email?.split("@")[0] || "Admin")}
-                                          </span>
-                                          {creator.email && <span className="text-slate-400">({creator.email})</span>}
-                                        </div>
-                                      ) : (!isUserCreated || pass.pass_origin === 'ADMIN') ? (
-                                        <div className="flex items-center gap-1.5 text-purple-400 bg-purple-500/10 px-2.5 py-1 rounded-md text-xs font-medium border border-purple-500/20">
-                                          <span>👑 Créé par l'Admin</span>
-                                        </div>
-                                      ) : (
-                                        <div className="flex items-center gap-1.5 text-blue-400 bg-blue-500/10 px-2.5 py-1 rounded-md text-xs font-medium border border-blue-500/20">
-                                          <span>👤 Créé par l'utilisateur (Auto-réservation)</span>
-                                        </div>
-                                      )}
-                                    </div>
-
-                                    <div className="mt-2.5 pt-2 border-t border-neutral-800 flex flex-wrap items-center gap-1.5 text-xs">
-                                      {resolvedApprover ? (
-                                        <>
-                                          <span className="text-xs text-slate-400">
-                                            ✓ Approuvé par : <span className="font-bold text-white">{resolvedApprover}</span>
-                                          </span>
-                                          {badgeLabel && (
-                                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                              isSimulation
-                                                ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
-                                                : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                                            }`}>
-                                              {badgeLabel}
-                                            </span>
-                                          )}
-                                          {pass.payment_approved_at && (
-                                            <span className="text-neutral-400 text-[11px] ml-1">
-                                              le {new Date(pass.payment_approved_at).toLocaleString("fr-FR", {
-                                                day: "2-digit",
-                                                month: "2-digit",
-                                                year: "numeric",
-                                                hour: "2-digit",
-                                                minute: "2-digit",
-                                              })}
-                                            </span>
-                                          )}
-                                        </>
-                                      ) : (
-                                        <span className="text-xs text-slate-400">
-                                          ⏳ Validation : En attente
-                                        </span>
-                                      )}
-                                    </div>
-                                  </>
-                                );
-                              })()}
+                              {/* Approval Trail */}
+                              {pass.payment_approved_at && (
+                                <p className="text-[10px] text-neutral-500 mt-1">
+                                  ✓ Confirmé le {new Date(pass.payment_approved_at).toLocaleString('fr-FR', {
+                                    day: 'numeric',
+                                    month: 'short',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}
+                                </p>
+                              )}
                             </div>
                           </div>
-                          <div className="flex flex-wrap gap-2">
-                            <a
-                              href={pass.instagram_handle || '#'}
-                              target="_blank" rel="noreferrer"
-                              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-pink-500 to-rose-500 hover:shadow-lg transition-all"
-                            >
-                              <ExternalLink size={15}/> Profil IG
-                            </a>
+
+                          {/* Action Buttons */}
+                          <div className="flex flex-wrap items-center gap-2 flex-shrink-0 mt-3 md:mt-0">
+                            {pass.instagram_handle && pass.instagram_handle.startsWith('http') && (
+                              <a
+                                href={pass.instagram_handle}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-pink-500 to-rose-500 hover:shadow-lg transition-all"
+                              >
+                                <ExternalLink size={13}/> IG
+                              </a>
+                            )}
+
+                            {/* Pending Application (Legacy) */}
                             {pass.entry_status === 'pending' && (
                               <>
-                                <button onClick={() => handleApprove(pass.id)} className="btn-primary px-4 py-2 text-sm bg-green-500 hover:bg-green-600 border-none">Approuver Application</button>
-                                <button onClick={() => setRejectModalPass(pass)} className="btn-ghost px-4 py-2 text-sm border border-red-500 text-red-500">Rejeter</button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleApprove(pass.id)}
+                                  className="btn-primary px-3 py-1.5 text-xs bg-green-500 hover:bg-green-600 border-none cursor-pointer"
+                                >
+                                  Approuver Application
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setRejectModalPass(pass)}
+                                  className="btn-ghost px-3 py-1.5 text-xs border border-red-500 text-red-500 cursor-pointer"
+                                >
+                                  Rejeter
+                                </button>
                               </>
                             )}
-                            {pass.entry_status === 'awaiting_payment' && (
+
+                            {/* Unpaid Reservation (Quick or Standard awaiting payment) */}
+                            {isUnpaid && (
                               <>
-                                <button onClick={() => handleMarkPaid(pass.id)} className="px-4 py-2 rounded-xl text-sm font-bold text-white bg-green-500 hover:bg-green-600 transition-all">Confirmer Paiement</button>
-                                <button onClick={() => setRejectModalPass(pass)} className="btn-ghost px-4 py-2 text-sm border border-red-500 text-red-500">Annuler / Rejeter</button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleMarkPaid(pass.id)}
+                                  className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-sm transition-all cursor-pointer flex items-center gap-1"
+                                  title="Confirmer le paiement physique et envoyer le pass"
+                                >
+                                  <Check size={14}/> Confirmer Paiement
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleExpirePass(pass.id)}
+                                  className="px-3 py-1.5 rounded-xl text-xs font-bold text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition-all cursor-pointer"
+                                  title="Expirer manuellement cette réservation et libérer le stock"
+                                >
+                                  Expirer & Restocker
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setRejectModalPass(pass)}
+                                  className="btn-ghost px-2.5 py-1.5 text-xs border border-red-500/40 text-red-400 hover:bg-red-500/10 cursor-pointer"
+                                  title="Annuler cette réservation"
+                                >
+                                  Annuler
+                                </button>
                               </>
                             )}
-                            {['activated', 'scanned'].includes(pass.entry_status) && (
-                              <div className="flex items-center gap-2 px-4 py-2 bg-green-500/10 text-green-600 rounded-xl font-bold text-sm" title="Paid passes cannot be modified or revoked.">
-                                <Check size={16} /> Payé & Confirmé
+
+                            {/* Paid & Confirmed */}
+                            {isPaid && (
+                              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 rounded-xl font-bold text-xs">
+                                <Check size={14} /> Payé & Confirmé
                               </div>
                             )}
 
+                            {/* Expired status indicator */}
+                            {isExpired && (
+                              <div className="px-3 py-1.5 bg-red-500/10 text-red-400 border border-red-500/20 rounded-xl font-bold text-xs">
+                                Expiré & Restocké
+                              </div>
+                            )}
+
+                            {/* Permanent Deletion */}
                             <button
                               type="button"
                               onClick={() => {
@@ -1362,10 +1514,10 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
                                 setDeleteConfirmationInput("");
                                 setDeleteError(null);
                               }}
-                              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-bold text-red-500 hover:text-white bg-red-500/10 hover:bg-red-500 border border-red-500/20 hover:border-red-500 transition-all cursor-pointer"
+                              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold text-red-400 hover:text-white bg-red-500/10 hover:bg-red-500 border border-red-500/20 hover:border-red-500 transition-all cursor-pointer"
                               title="Supprimer définitivement ce pass"
                             >
-                              <Trash2 size={15} /> Supprimer
+                              <Trash2 size={13} />
                             </button>
                           </div>
                         </div>

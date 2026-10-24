@@ -20,8 +20,8 @@ export async function GET(req: NextRequest) {
   try {
     let query = supabaseAdmin
       .from('passes')
-      .select('*, events(title, base_price), drink_menus(name)')
-      .eq('entry_status', 'awaiting_payment')
+      .select('*, events(title, base_price)')
+      .or('entry_status.eq.awaiting_payment,status.eq.PENDING_PAYMENT')
       .order('created_at', { ascending: true });
 
     if (eventId) {
@@ -33,10 +33,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Defensive check: explicitly exclude 'pending', 'rejected', and 'activated'/'scanned'
+    // Defensive check: explicitly exclude 'rejected', 'expired', and 'activated'/'scanned'
     const preApprovedPasses = (passesData || []).filter((pass: any) => {
-      const s = pass.entry_status || pass.status;
-      return s === 'awaiting_payment' || s === 'PENDING_PAYMENT';
+      const s = pass.status || pass.entry_status;
+      const es = pass.entry_status;
+      if (['activated', 'scanned', 'rejected', 'expired'].includes(es)) return false;
+      if (['PAID', 'EXPIRED', 'CANCELLED'].includes(s)) return false;
+      return s === 'PENDING_PAYMENT' || es === 'awaiting_payment' || es === 'pending';
     });
 
     // Fetch user profiles to attach full_name and identity
@@ -63,16 +66,26 @@ export async function GET(req: NextRequest) {
         const guestLast = p.guest_last_name || '';
         const profileName = userProf?.full_name || '';
         const parts = profileName.trim().split(' ');
+        const effectiveEmail = p.email || userProf?.email || '';
+        const effectivePhone = p.phone || '';
+        const drink = p.selected_drink || p.drink_name || null;
+
         return {
           ...p,
           status: 'PENDING_PAYMENT',
-          instagram_handle: userProf?.instagram_handle || '@inconnu',
-          user_email: userProf?.email || '',
-          user_name: profileName || [guestFirst, guestLast].filter(Boolean).join(' '),
+          source: p.source || 'STANDARD',
+          reservation_code: p.reservation_code || null,
+          phone: effectivePhone,
+          email: effectiveEmail,
+          user_email: effectiveEmail,
+          selected_drink: drink,
+          drink_menus: drink ? { name: drink } : (p.drink_menus || null),
+          instagram_handle: userProf?.instagram_handle || p.instagram || '',
+          user_name: [guestFirst, guestLast].filter(Boolean).join(' ') || profileName || 'Invité',
           user: {
             first_name: guestFirst || parts[0] || '',
             last_name: guestLast || parts.slice(1).join(' ') || '',
-            full_name: profileName || [guestFirst, guestLast].filter(Boolean).join(' ') || ''
+            full_name: [guestFirst, guestLast].filter(Boolean).join(' ') || profileName || ''
           }
         };
       }),

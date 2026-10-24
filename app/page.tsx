@@ -39,6 +39,9 @@ export default function LandingPage() {
                 {resolvedTheme === 'dark' ? <Sun size={18} className="md:w-5 md:h-5" /> : <Moon size={18} className="md:w-5 md:h-5" />}
               </button>
             )}
+            <Link href="/quick-reservation" className="text-xs md:text-sm font-bold text-amber-500 hover:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 px-3 py-1.5 rounded-full border border-amber-500/30 transition-all flex items-center gap-1">
+              <span>⚡ Express</span>
+            </Link>
             <Link href="#actualites" className="text-sm md:text-base font-bold text-passi-bleu dark:text-passi-creme hover:text-passi-corail transition-colors hidden md:block">
               Actualités
             </Link>
@@ -74,11 +77,11 @@ export default function LandingPage() {
           </p>
 
           <div className="flex flex-col sm:flex-row items-center gap-4 justify-center lg:justify-start pt-2">
-            <Link href="/login" className="bg-passi-corail text-white px-8 py-4 rounded-full font-extrabold text-lg flex items-center gap-2 hover:scale-105 transition-transform shadow-xl shadow-passi-corail/30 w-full sm:w-auto justify-center">
-              Rejoindre l&apos;expérience <ArrowRight size={20} />
+            <Link href="/quick-reservation" className="bg-gradient-to-r from-amber-500 to-passi-corail text-white px-8 py-4 rounded-full font-extrabold text-lg flex items-center gap-2 hover:scale-105 transition-transform shadow-xl shadow-passi-corail/30 w-full sm:w-auto justify-center">
+              <span>⚡ Réservation Express</span> <ArrowRight size={20} />
             </Link>
-            <Link href="#features" className="bg-white dark:bg-gray-800 text-passi-bleu dark:text-white border border-gray-200 dark:border-gray-700 px-8 py-4 rounded-full font-bold text-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors w-full sm:w-auto justify-center flex">
-              Découvrir
+            <Link href="/login" className="bg-white dark:bg-gray-800 text-passi-bleu dark:text-white border border-gray-200 dark:border-gray-700 px-7 py-4 rounded-full font-bold text-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors w-full sm:w-auto justify-center flex">
+              Espace Membre
             </Link>
           </div>
         </div>

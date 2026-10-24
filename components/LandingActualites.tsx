@@ -342,13 +342,19 @@ export function LandingActualites() {
                     </div>
                   </div>
 
-                  {/* CTA Conversion Button */}
-                  <div className="mt-6 pt-4 border-t border-slate-800">
+                  {/* CTA Conversion Buttons: Express Guest Flow & Legacy Member Flow */}
+                  <div className="mt-6 pt-4 border-t border-slate-800 space-y-2">
+                    <a
+                      href={`/quick-reservation?eventId=${event.id}`}
+                      className="w-full flex items-center justify-center gap-1.5 bg-gradient-to-r from-amber-500 to-[#FF6B5E] hover:from-amber-400 hover:to-[#ff594a] text-white font-bold py-2.5 rounded-xl transition shadow-lg shadow-amber-950/20 hover:shadow-amber-500/30 text-xs"
+                    >
+                      <span>⚡ Réservation Express (Sans compte)</span>
+                    </a>
                     <a
                       href={destinationHref}
-                      className="w-full block text-center bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-semibold py-2.5 rounded-xl transition shadow-lg shadow-purple-900/20 hover:shadow-purple-600/30 text-sm"
+                      className="w-full block text-center bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white font-medium py-2 rounded-xl transition text-xs border border-slate-700/80"
                     >
-                      Réserver ma place 🎟️
+                      Réserver ma place avec compte 🎟️
                     </a>
                   </div>
                 </div>

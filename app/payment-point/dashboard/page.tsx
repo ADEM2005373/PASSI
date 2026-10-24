@@ -493,17 +493,26 @@ export default function PaymentPointDashboard() {
     doc.save(`Rapport_Caisse_${new Date().toISOString().split('T')[0]}_${currentUser?.email?.split('@')[0]}.pdf`);
   };
 
-  // Search filter
+  // Search filter supporting reservation code, phone, email, guest name, and pass ID
   const filteredPasses = useMemo(() => {
     if (!searchQuery.trim()) return passes;
     const searchTerm = searchQuery.toLowerCase().trim();
-    return passes.filter((pass) => {
-      const passId = pass.id.toLowerCase();
+    return passes.filter((pass: any) => {
+      const passId = (pass.id || '').toLowerCase();
+      const reservationCode = (pass.reservation_code || '').toLowerCase();
       const guestFullName = `${pass.guest_first_name || ''} ${pass.guest_last_name || ''}`.trim().toLowerCase();
-      const userProfileName = ((pass as any).user?.full_name || (pass as any).user_name || `${(pass as any).user?.first_name || ''} ${(pass as any).user?.last_name || ''}`).trim().toLowerCase();
+      const userProfileName = (pass.user?.full_name || pass.user_name || `${pass.user?.first_name || ''} ${pass.user?.last_name || ''}`).trim().toLowerCase();
       const fullName = `${guestFullName} ${userProfileName}`.trim().toLowerCase();
+      const phone = (pass.phone || '').toLowerCase();
+      const email = (pass.email || pass.user_email || '').toLowerCase();
       
-      return fullName.includes(searchTerm) || passId.includes(searchTerm);
+      return (
+        reservationCode.includes(searchTerm) ||
+        phone.includes(searchTerm) ||
+        email.includes(searchTerm) ||
+        fullName.includes(searchTerm) ||
+        passId.includes(searchTerm)
+      );
     });
   }, [passes, searchQuery]);
 
@@ -821,13 +830,13 @@ export default function PaymentPointDashboard() {
               <div className="md:col-span-6 relative">
                 <label className="text-xs font-semibold text-neutral-600 dark:text-neutral-400 mb-1.5 flex items-center gap-1.5">
                   <Search className="w-3.5 h-3.5 text-neutral-500 dark:text-neutral-400" />
-                  Recherche par nom ou ID pass
+                  Recherche par code réservation, tél, e-mail ou nom
                 </label>
                 <div className="relative">
                   <Search className="w-4 h-4 text-neutral-400 dark:text-neutral-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
-                    placeholder="Rechercher par nom d'invité ou ID pass..."
+                    placeholder="Rechercher par code (ex: QCK-...), tél, e-mail ou nom..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl pl-10 pr-16 py-2.5 text-sm text-neutral-900 dark:text-white placeholder-neutral-400 dark:placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500/40 transition-colors shadow-xs"
@@ -884,16 +893,17 @@ export default function PaymentPointDashboard() {
                 <h3 className="text-base font-semibold text-neutral-900 dark:text-white">Aucun pass en attente d'encaissement</h3>
                 <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1 max-w-sm">
                   {searchQuery
-                    ? "Aucun pass ne correspond à votre recherche. Essayez un autre mot-clé."
+                    ? "Aucun pass ne correspond à votre recherche. Essayez un autre mot-clé (code, email, téléphone ou nom)."
                     : "Tous les pass pour cet événement ont été réglés ou aucune demande n'est en attente."}
                 </p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredPasses.map((pass) => {
+                {filteredPasses.map((pass: any) => {
                   const finalPrice = pass.final_price ?? selectedEvent?.base_price ?? 0;
                   const isApproving = approvingPassId === pass.id;
                   const hasPromo = Boolean(pass.promo_used);
+                  const isQuick = pass.source === 'QUICK_RESERVATION' || Boolean(pass.reservation_code);
 
                   return (
                     <div
@@ -908,11 +918,23 @@ export default function PaymentPointDashboard() {
                               <UserIcon className="w-4 h-4" />
                             </div>
                             <div>
-                              <h4 className="text-sm font-bold text-neutral-900 dark:text-white truncate max-w-[170px]">
-                                {[pass.guest_first_name, pass.guest_last_name].filter(Boolean).join(' ') || (pass as any).user?.full_name || (pass as any).user_name || pass.instagram_handle || 'Client Inconnu'}
-                              </h4>
-                              <p className="text-xs text-neutral-500 dark:text-neutral-400 truncate max-w-[170px]">
-                                {pass.instagram_handle ? `${pass.instagram_handle} • ` : ''}ID: #{pass.id.slice(0, 8)}
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <h4 className="text-sm font-bold text-neutral-900 dark:text-white truncate max-w-[150px]">
+                                  {[pass.guest_first_name, pass.guest_last_name].filter(Boolean).join(' ') || pass.user?.full_name || pass.user_name || pass.instagram_handle || 'Client Inconnu'}
+                                </h4>
+                                {isQuick && (
+                                  <span className="px-1.5 py-0.5 rounded-md text-[10px] font-black bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                                    ⚡ Express
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-neutral-500 dark:text-neutral-400 truncate max-w-[180px]">
+                                {pass.reservation_code ? (
+                                  <span className="font-bold text-amber-600 dark:text-amber-400 font-mono">{pass.reservation_code}</span>
+                                ) : (
+                                  `#${pass.id.slice(0, 8)}`
+                                )}
+                                {pass.phone ? ` • 📞 ${pass.phone}` : pass.instagram_handle ? ` • ${pass.instagram_handle}` : ''}
                               </p>
                             </div>
                           </div>
@@ -926,10 +948,37 @@ export default function PaymentPointDashboard() {
 
                         {/* Details Box */}
                         <div className="bg-gray-50 dark:bg-neutral-950/70 rounded-xl p-3 border border-gray-200/80 dark:border-neutral-800/80 space-y-2 mb-4">
+                          {pass.reservation_code && (
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-neutral-500 dark:text-neutral-400">Code Réservation</span>
+                              <span className="font-mono text-purple-600 dark:text-purple-400 font-bold bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">
+                                {pass.reservation_code}
+                              </span>
+                            </div>
+                          )}
+
                           <div className="flex items-center justify-between text-xs">
                             <span className="text-neutral-500 dark:text-neutral-400">Pass ID</span>
                             <span className="font-mono text-neutral-700 dark:text-neutral-300 font-medium">#{pass.id.slice(0, 8)}</span>
                           </div>
+
+                          {pass.email && (
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-neutral-500 dark:text-neutral-400">E-mail</span>
+                              <span className="text-neutral-800 dark:text-neutral-200 font-medium truncate max-w-[150px]" title={pass.email}>
+                                {pass.email}
+                              </span>
+                            </div>
+                          )}
+
+                          {pass.phone && (
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-neutral-500 dark:text-neutral-400">Téléphone</span>
+                              <span className="text-neutral-800 dark:text-neutral-200 font-medium">
+                                {pass.phone}
+                              </span>
+                            </div>
+                          )}
 
                           {hasPromo && (
                             <div className="flex items-center justify-between text-xs">
@@ -943,11 +992,11 @@ export default function PaymentPointDashboard() {
                             </div>
                           )}
 
-                          {pass.drink_menus && (
+                          {(pass.selected_drink || pass.drink_name || pass.drink_menus) && (
                             <div className="flex items-center justify-between text-xs">
                               <span className="text-neutral-500 dark:text-neutral-400">Consommation</span>
                               <span className="text-neutral-800 dark:text-neutral-200 font-medium truncate max-w-[140px]">
-                                {pass.drink_menus.name}
+                                {pass.selected_drink || pass.drink_name || pass.drink_menus?.name}
                               </span>
                             </div>
                           )}

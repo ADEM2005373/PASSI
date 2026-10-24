@@ -417,9 +417,10 @@ export async function approvePassPaymentAction(passId: string) {
   const now = new Date().toISOString();
   const entryQr = pass.entry_qr_uuid || crypto.randomUUID();
 
-  // Explicitly update entry_status, approved_by and payment_approved_at (no non-existent status column)
+  // Explicitly update entry_status, status, approved_by and payment_approved_at
   const updatePayload: Record<string, any> = {
     entry_status: 'activated',
+    status: 'PAID',
     payment_point_id: user.id,
     approved_by: user.id, // Explicitly tracking the Admin/Cashier ID
     payment_approved_at: now,
@@ -427,7 +428,25 @@ export async function approvePassPaymentAction(passId: string) {
     updated_at: now,
   };
 
-  if ((pass as any).drink_name || (pass as any).drink_id) {
+  // Account Sync: If user_id is null, check if a profile already exists with this guest's email
+  const passEmail = (pass.email || pass.guest_email || '').trim().toLowerCase();
+  if (!pass.user_id && passEmail) {
+    try {
+      const { data: existingProfile } = await supabaseAdmin
+        .from('profiles')
+        .select('id')
+        .ilike('email', passEmail)
+        .maybeSingle();
+
+      if (existingProfile?.id) {
+        updatePayload.user_id = existingProfile.id;
+      }
+    } catch (profileLookupErr) {
+      console.warn('[approvePassPaymentAction] Error checking existing profile by email:', profileLookupErr);
+    }
+  }
+
+  if ((pass as any).drink_name || (pass as any).selected_drink || (pass as any).drink_id) {
     const drinkQr = pass.drink_qr_uuid || crypto.randomUUID();
     updatePayload.drink_status = 'activated';
     updatePayload.drink_qr_uuid = drinkQr;
@@ -440,22 +459,23 @@ export async function approvePassPaymentAction(passId: string) {
     .from('passes')
     .update(updatePayload)
     .eq('id', passId)
-    .select('id, entry_status, final_price, payment_point_id, approved_by, payment_approved_at, drink_id, drink_name, drink_status, drink_qr_uuid, drink_qr_code')
+    .select('id, user_id, email, phone, reservation_code, source, entry_status, status, final_price, payment_point_id, approved_by, payment_approved_at, drink_id, drink_name, selected_drink, drink_status, drink_qr_uuid, drink_qr_code')
     .single();
 
   updatedPass = updateResult.data;
   let updateError = updateResult.error;
 
-  // Fallback if approved_by or payment_approved_at schema column issue arises
-  if (updateError && (updateError.message?.includes('approved_by') || updateError.message?.includes('payment_approved_at') || updateError.details?.includes('approved_by'))) {
-    console.warn('[approvePassPaymentAction] Retrying without approved_by and payment_approved_at:', updateError.message);
+  // Fallback if status or approved_by or payment_approved_at schema column issue arises
+  if (updateError && (updateError.message?.includes('status') || updateError.message?.includes('approved_by') || updateError.message?.includes('payment_approved_at') || updateError.details?.includes('approved_by'))) {
+    console.warn('[approvePassPaymentAction] Retrying without optional audit columns:', updateError.message);
+    delete updatePayload.status;
     delete updatePayload.approved_by;
     delete updatePayload.payment_approved_at;
     const fallbackResult = await supabaseAdmin
       .from('passes')
       .update(updatePayload)
       .eq('id', passId)
-      .select('id, entry_status, final_price, payment_point_id, drink_id, drink_name, drink_status, drink_qr_uuid, drink_qr_code')
+      .select('id, user_id, entry_status, final_price, payment_point_id, drink_id, drink_name, selected_drink, drink_status, drink_qr_uuid, drink_qr_code')
       .single();
     updatedPass = fallbackResult.data;
     updateError = fallbackResult.error;
@@ -464,6 +484,14 @@ export async function approvePassPaymentAction(passId: string) {
   if (updateError) {
     console.error('Error approving pass payment:', updateError);
     throw new Error("Échec de l'approbation du paiement: " + updateError.message);
+  }
+
+  // 5. Execute the shared ticket pipeline: generate QR / PDF and dispatch pass via email immediately
+  try {
+    const { dispatchPaidPassEmail } = await import('@/lib/services/pass-ticket');
+    await dispatchPaidPassEmail(passId);
+  } catch (emailDispatchErr) {
+    console.error('[approvePassPaymentAction] Erreur lors de l’envoi immédiat du pass par email:', emailDispatchErr);
   }
 
   try {

@@ -1,10 +1,17 @@
 import nodemailer from 'nodemailer';
 
+export interface EmailAttachment {
+  filename: string;
+  content: Buffer | string;
+  contentType?: string;
+}
+
 export interface SendEmailOptions {
   to: string;
   subject: string;
   htmlBody: string;
   textBody?: string;
+  attachments?: EmailAttachment[];
 }
 
 /**
@@ -44,6 +51,7 @@ export async function sendTransactionalEmail({
   subject,
   htmlBody,
   textBody,
+  attachments,
 }: SendEmailOptions): Promise<{ success: boolean; messageId?: string; error?: string }> {
   try {
     const user = process.env.SMTP_EMAIL?.trim();
@@ -64,13 +72,17 @@ export async function sendTransactionalEmail({
       return { success: false, error: 'Impossible d\'initialiser le transporteur SMTP' };
     }
 
-    const mailOptions = {
+    const mailOptions: any = {
       from: `"Passi Events" <${user}>`,
       to,
       subject,
       html: htmlBody,
       text: textBody || htmlBody.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim(),
     };
+
+    if (attachments && attachments.length > 0) {
+      mailOptions.attachments = attachments;
+    }
 
     const info = await transporter.sendMail(mailOptions);
     console.log(`[Mailer] ✓ E-mail transactionnel envoyé avec succès à ${to} (MessageId: ${info.messageId})`);

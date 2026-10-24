@@ -148,6 +148,15 @@ export default function UserDashboard() {
       setLastName(sbUser.user_metadata?.last_name || '');
     }
 
+    // Defensive check: automatically link any guest passes previously purchased with this user's email
+    if (user.email) {
+      try {
+        await fetch('/api/auth/sync-guest-passes', { method: 'POST' });
+      } catch (syncErr) {
+        // Non-blocking
+      }
+    }
+
     const [passesData, eventsData] = await Promise.all([
       api.getUserPasses(user.id),
       api.getEvents()

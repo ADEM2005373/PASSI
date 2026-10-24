@@ -35,8 +35,8 @@ export async function updateSession(request: NextRequest) {
   const url = request.nextUrl.clone()
   const path = request.nextUrl.pathname
 
-  // Allow auth callbacks and public auth API endpoints (e.g. rate limiting) to process without interference
-  if (path.startsWith('/auth/callback') || path.startsWith('/api/auth')) {
+  // Allow auth callbacks, public auth APIs, and public guest APIs without interference
+  if (path.startsWith('/auth/callback') || path.startsWith('/api/auth') || path.startsWith('/api/public')) {
     return supabaseResponse
   }
 
@@ -60,6 +60,8 @@ export async function updateSession(request: NextRequest) {
     !path.startsWith('/update-password') &&
     !path.startsWith('/verify-email') &&
     !path.startsWith('/events') &&
+    !path.startsWith('/quick-reservation') &&
+    !path.startsWith('/express') &&
     path !== '/'
   ) {
     if (path.startsWith('/api')) {

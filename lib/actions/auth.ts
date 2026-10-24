@@ -60,6 +60,14 @@ export async function verifyEmailOtpAction(email: string, code: string): Promise
       };
     }
 
+    // Automatically link all previously created guest passes matching this email
+    try {
+      const { linkGuestPassesToUser } = await import('@/lib/services/account-sync');
+      await linkGuestPassesToUser(data.user.id, cleanEmail);
+    } catch (syncErr) {
+      console.warn('[verifyEmailOtpAction] Error linking guest passes:', syncErr);
+    }
+
     return {
       success: true,
       redirectTo: '/onboarding',

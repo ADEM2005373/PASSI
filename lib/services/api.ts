@@ -46,9 +46,42 @@ export type Event = {
   pos_location?: string;
 };
 
+export type QuickReservationPayload = {
+  eventId: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  email: string;
+  selectedDrink?: string | null;
+  selectedAromas?: string[];
+  instagram?: string | null;
+  promoCode?: string | null;
+};
+
+export type QuickReservationResponse = {
+  success: boolean;
+  message: string;
+  reservation: {
+    id: string;
+    reservationCode: string;
+    eventId: string;
+    eventTitle?: string;
+    guestFirstName: string;
+    guestLastName: string;
+    email: string;
+    phone: string;
+    selectedDrink?: string | null;
+    finalPrice: number;
+    status: string;
+    expiresAt: string;
+    createdAt: string;
+    isAccountLinked?: boolean;
+  };
+};
+
 export type Pass = {
   id: string;
-  user_id: string;
+  user_id?: string | null;
   event_id: string;
   guest_first_name: string;
   guest_last_name: string;
@@ -63,7 +96,14 @@ export type Pass = {
   approved_by?: string | null;
   payment_approved_at?: string | null;
   created_by?: string | null;
-  pass_origin?: 'USER' | 'ADMIN' | string | null;
+  pass_origin?: 'USER' | 'ADMIN' | 'QUICK_RESERVATION' | string | null;
+  source?: 'QUICK_RESERVATION' | 'STANDARD' | string;
+  reservation_code?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  selected_drink?: string | null;
+  instagram?: string | null;
+  expires_at?: string | null;
   creator?: {
     id?: string;
     first_name?: string | null;
@@ -716,6 +756,43 @@ export const api = {
       const errorData = await res.json().catch(() => ({}));
       throw new Error(errorData.error || "Impossible de supprimer le pass");
     }
+  },
+
+  async createQuickReservation(payload: QuickReservationPayload): Promise<QuickReservationResponse> {
+    const res = await fetch('/api/public/reservations/quick', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Erreur lors de la réservation express');
+    }
+    return data;
+  },
+
+  async expireReservation(passId: string): Promise<{ success: boolean; message: string }> {
+    const res = await fetch(`/api/admin/reservations/${passId}/expire`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || "Impossible d'expirer la réservation");
+    }
+    return data;
+  },
+
+  async syncGuestPasses(): Promise<{ success: boolean; linkedCount: number }> {
+    const res = await fetch('/api/auth/sync-guest-passes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Erreur de synchronisation des réservations');
+    }
+    return data;
   },
 
   // --- SCANNER (Phase 5) ---
