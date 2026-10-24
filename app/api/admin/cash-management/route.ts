@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
     // 1. Fetch all approved/paid passes to compute per-cashier/admin live drawer balances and today stats
     const { data: allPasses, error: passesErr } = await supabaseAdmin
       .from('passes')
-      .select('id, final_price, payment_approved_at, approved_by, payment_point_id, created_at, entry_status')
+      .select('id, final_price, total_price, payment_approved_at, approved_by, payment_point_id, cashier_id, issued_by_pos, source, created_at, entry_status')
       .in('entry_status', ['activated', 'scanned', 'PAID', 'paid']);
 
     if (passesErr) {
@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
     const approvedPasses = allPasses || [];
     const activeStaffIds = [
       ...new Set([
-        ...approvedPasses.map((p: any) => p.approved_by || p.payment_point_id),
+        ...approvedPasses.map((p: any) => p.approved_by || p.payment_point_id || p.cashier_id),
       ].filter(Boolean))
     ];
 
@@ -183,16 +183,40 @@ export async function GET(req: NextRequest) {
       let liveDrawerBalance = 0;
       let todayRevenue = 0;
       let todayPassesCount = 0;
+      let posPassesCreated = 0;
+      let posRevenue = 0;
+      let webPassesValidated = 0;
+      let webRevenue = 0;
+      let totalPassesCreated = 0;
+      let totalPassesValidated = 0;
+
+      const sellPointName = cashier.sell_point_name || (cashier.full_name && !cashier.full_name.includes('@') ? cashier.full_name : null);
+      const cleanName = sellPointName || cashier.full_name || (cashier.email ? cashier.email.split('@')[0] : 'Guichetier');
+      const isSimulation = (cashier.role || '').toLowerCase() === 'admin';
 
       approvedPasses.forEach((p: any) => {
-        const approvedBy = p.approved_by || p.payment_point_id;
-        if (approvedBy === cashier.id) {
+        const staffId = p.cashier_id || p.approved_by || p.payment_point_id;
+        const matchesCashierId = staffId === cashier.id;
+        const matchesPosName = Boolean(
+          sellPointName &&
+          p.issued_by_pos &&
+          p.issued_by_pos.trim().toLowerCase() === sellPointName.trim().toLowerCase()
+        );
+
+        if (matchesCashierId || matchesPosName) {
           const passDateStr = p.payment_approved_at || p.created_at;
           const passTime = passDateStr ? new Date(passDateStr).getTime() : 0;
-          const price = Number(p.final_price || 0);
+          const price = Number(p.final_price ?? p.total_price ?? 0);
+          const isDirectPosCreation = p.source === 'POS' || Boolean(p.issued_by_pos);
+
+          // All-time counts for this cashier
+          if (isDirectPosCreation) {
+            totalPassesCreated += 1;
+          } else {
+            totalPassesValidated += 1;
+          }
 
           // Live drawer balance counts passes approved since the last collection
-          // If no collections yet (lastColTime === 0), it sums all approved passes
           if (passTime > lastColTime) {
             liveDrawerBalance += price;
           }
@@ -201,6 +225,13 @@ export async function GET(req: NextRequest) {
           if (passTime >= startOfTodayMs) {
             todayRevenue += price;
             todayPassesCount += 1;
+            if (isDirectPosCreation) {
+              posPassesCreated += 1;
+              posRevenue += price;
+            } else {
+              webPassesValidated += 1;
+              webRevenue += price;
+            }
           }
         }
       });
@@ -212,20 +243,23 @@ export async function GET(req: NextRequest) {
       totalTodayRevenueAll += roundedToday;
       totalTodayPassesAll += todayPassesCount;
 
-      const sellPointName = cashier.sell_point_name || (cashier.full_name && !cashier.full_name.includes('@') ? cashier.full_name : null);
-      const cleanName = sellPointName || cashier.full_name || (cashier.email ? cashier.email.split('@')[0] : 'Guichetier');
-      const isSimulation = (cashier.role || '').toLowerCase() === 'admin';
-
       return {
         id: cashier.id,
         email: isSimulation ? `${cleanName} (Mode Simulation)` : cashier.email,
         full_name: isSimulation ? `${cleanName} (Mode Simulation)` : cleanName,
         sell_point_name: sellPointName,
+        cleanName,
         is_simulation: isSimulation,
         is_suspended: Boolean(cashier.is_suspended),
         liveDrawerBalance: roundedLive,
         todayRevenue: roundedToday,
         todayPassesCount,
+        posPassesCreated,
+        posRevenue: Math.round(posRevenue * 100) / 100,
+        webPassesValidated,
+        webRevenue: Math.round(webRevenue * 100) / 100,
+        totalPassesCreated,
+        totalPassesValidated,
         lastCollection: lastCol ? {
           amount: Number(lastCol.collected_amount),
           supervisor_name: lastCol.supervisor_name,

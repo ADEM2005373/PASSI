@@ -41,7 +41,8 @@ import {
   BarChart3,
   Layers,
   ChevronRight,
-  Pencil
+  Pencil,
+  CheckSquare
 } from "lucide-react";
 import { EditPaymentPointModal } from "./EditPaymentPointModal";
 
@@ -51,6 +52,7 @@ interface PaymentPointSupervisionSectionProps {
   onRefreshProfiles: () => Promise<void>;
   onToggleSuspend: (user: User) => Promise<void>;
   onDeleteUser: (userId: string) => Promise<void>;
+  onInspectCashierPasses?: (cashierId: string) => void;
 }
 
 type AdminSupervisionTab = 'live' | 'closures' | 'collections';
@@ -61,6 +63,7 @@ export function PaymentPointSupervisionSection({
   onRefreshProfiles,
   onToggleSuspend,
   onDeleteUser,
+  onInspectCashierPasses,
 }: PaymentPointSupervisionSectionProps) {
   // Navigation Sub-Tabs
   const [activeTab, setActiveTab] = useState<AdminSupervisionTab>('live');
@@ -860,11 +863,60 @@ export function PaymentPointSupervisionSection({
                           </div>
 
                           <div className="flex items-center justify-between text-xs pt-2 border-t border-gray-200/60 dark:border-neutral-800/80">
-                            <span className="text-neutral-500">Recette aujourd'hui :</span>
-                            <span className="font-bold text-neutral-900 dark:text-white">
-                              {cashier.todayRevenue.toFixed(2)} TND ({cashier.todayPassesCount} pass)
+                            <span className="text-neutral-500 font-medium">Recette aujourd'hui :</span>
+                            <span className="font-extrabold text-neutral-900 dark:text-white">
+                              {cashier.todayRevenue.toFixed(2)} TND ({cashier.todayPassesCount} pass au total)
                             </span>
                           </div>
+
+                          {/* Breakdown: Direct POS Pass Issuance vs Online Reservations Collected */}
+                          <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-200/60 dark:border-neutral-800/80">
+                            <div className="p-2 rounded-xl bg-purple-500/10 border border-purple-500/20">
+                              <span className="text-[10px] uppercase font-bold text-purple-400 block tracking-wider">
+                                📍 Émis en Caisse (POS)
+                              </span>
+                              <div className="text-sm font-black text-purple-300 mt-0.5">
+                                {cashier.posPassesCreated || 0} <span className="text-[11px] font-normal text-purple-400">pass</span>
+                              </div>
+                              <div className="text-[10px] font-mono font-semibold text-purple-400">
+                                {(cashier.posRevenue || 0).toFixed(2)} TND
+                              </div>
+                            </div>
+
+                            <div className="p-2 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                              <span className="text-[10px] uppercase font-bold text-blue-400 block tracking-wider">
+                                🌐 Réservations Web
+                              </span>
+                              <div className="text-sm font-black text-blue-300 mt-0.5">
+                                {cashier.webPassesValidated || 0} <span className="text-[11px] font-normal text-blue-400">pass</span>
+                              </div>
+                              <div className="text-[10px] font-mono font-semibold text-blue-400">
+                                {(cashier.webRevenue || 0).toFixed(2)} TND
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Historical Total Overview */}
+                          {(cashier.totalPassesCreated > 0 || cashier.totalPassesValidated > 0) && (
+                            <div className="text-[10px] text-neutral-400 bg-neutral-900/50 p-1.5 rounded-lg border border-neutral-800/60 flex items-center justify-between">
+                              <span>Total historique :</span>
+                              <span className="font-semibold text-neutral-300">
+                                {cashier.totalPassesCreated || 0} créés POS · {cashier.totalPassesValidated || 0} encaissés
+                              </span>
+                            </div>
+                          )}
+
+                          {onInspectCashierPasses && (
+                            <button
+                              type="button"
+                              onClick={() => onInspectCashierPasses(cashier.id)}
+                              className="w-full py-1.5 px-3 rounded-xl text-xs font-bold bg-neutral-800 hover:bg-neutral-700 text-passi-turquoise border border-neutral-700 hover:border-passi-turquoise transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                              title="Voir et superviser la liste des passes créés et validés par ce guichet"
+                            >
+                              <CheckSquare size={13} />
+                              <span>Superviser les passes de ce guichet</span>
+                            </button>
+                          )}
 
                           <div className="pt-2 border-t border-gray-200/60 dark:border-neutral-800/80">
                             <span className="text-[10px] text-neutral-400 uppercase font-semibold block">Dernier Ramassage :</span>

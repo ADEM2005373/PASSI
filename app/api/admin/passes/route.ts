@@ -84,7 +84,7 @@ export async function GET(req: NextRequest) {
 
     // Ensure profiles data is mapped for pass owners, approvers, and creators
     const userIds = [...new Set(data.map((p: any) => p.user_id).filter(Boolean))];
-    const approverIds = [...new Set(data.map((p: any) => p.approved_by || p.payment_point_id).filter(Boolean))];
+    const approverIds = [...new Set(data.map((p: any) => p.approved_by || p.payment_point_id || p.cashier_id).filter(Boolean))];
     const creatorIds = [...new Set(data.map((p: any) => p.created_by).filter(Boolean))];
     const allProfileIds = [...new Set([...userIds, ...approverIds, ...creatorIds])];
 
@@ -92,7 +92,7 @@ export async function GET(req: NextRequest) {
     if (allProfileIds.length > 0) {
       const { data: profs } = await supabaseAdmin
         .from('profiles')
-        .select('id, email, full_name, instagram_handle, role')
+        .select('id, email, full_name, instagram_handle, role, sell_point_name')
         .in('id', allProfileIds);
       if (profs) {
         profs.forEach((pr: any) => { profilesMap[pr.id] = pr; });
@@ -101,7 +101,7 @@ export async function GET(req: NextRequest) {
 
     const formattedPasses = data.map((pass: any) => {
       const prof = profilesMap[pass.user_id] || pass.user || pass.profiles || {};
-      const approverProf = pass.approver || profilesMap[pass.approved_by] || profilesMap[pass.payment_point_id] || null;
+      const approverProf = pass.approver || profilesMap[pass.approved_by] || profilesMap[pass.payment_point_id] || profilesMap[pass.cashier_id] || null;
       const creatorProf = pass.creator || profilesMap[pass.created_by] || null;
       const evt = pass.event || pass.events || {};
 

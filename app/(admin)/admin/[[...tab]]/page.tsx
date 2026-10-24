@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
@@ -68,6 +68,7 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
   const [approbStatusFilter, setApprobStatusFilter] = useState("all");
   const [approbOriginFilter, setApprobOriginFilter] = useState("all");
   const [approbOverdueFilter, setApprobOverdueFilter] = useState(false);
+  const [approbCashierFilter, setApprobCashierFilter] = useState("all");
   const [approbSearch, setApprobSearch] = useState("");
   const [isRefreshingApprob, setIsRefreshingApprob] = useState(false);
 
@@ -1115,6 +1116,10 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
               onRefreshProfiles={fetchData}
               onToggleSuspend={handleToggleSuspend}
               onDeleteUser={handleDeleteUser}
+              onInspectCashierPasses={(cashierId) => {
+                setApprobCashierFilter(cashierId);
+                setActiveTab('approbations');
+              }}
             />
           )}
 
@@ -1134,6 +1139,73 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
             };
 
             const totalOverdueCount = passes.filter(isPassOverdue).length;
+
+            // List of unique Cashiers / Points of Sale
+            const availableCashiers = useMemo(() => {
+              const list: { id: string; label: string }[] = [];
+              const seen = new Set<string>();
+
+              profiles.forEach(p => {
+                const role = (p.role || '').toLowerCase();
+                if (role === 'payment_point' || role === 'cashier' || p.sell_point_name) {
+                  const id = p.id;
+                  if (!seen.has(id)) {
+                    seen.add(id);
+                    const label = p.sell_point_name ? `${p.sell_point_name} (${p.email})` : (p.full_name || p.email || id.slice(0, 8));
+                    list.push({ id, label });
+                  }
+                }
+              });
+
+              // Include distinct sell point names stored directly on passes
+              passes.forEach(pass => {
+                if (pass.issued_by_pos && !seen.has(pass.issued_by_pos)) {
+                  seen.add(pass.issued_by_pos);
+                  list.push({ id: pass.issued_by_pos, label: `📍 ${pass.issued_by_pos}` });
+                }
+              });
+
+              return list;
+            }, [profiles, passes]);
+
+            // Supervision KPI stats across all passes
+            const approbKpis = useMemo(() => {
+              let posCount = 0;
+              let posRevenue = 0;
+              let webPaidCount = 0;
+              let webPaidRevenue = 0;
+              let awaitingCount = 0;
+              let expiredCount = 0;
+
+              passes.forEach(p => {
+                const isPos = p.source === 'POS' || p.pass_origin === 'POS' || Boolean(p.issued_by_pos) || Boolean(p.reservation_code && p.reservation_code.startsWith('POS-'));
+                const isPaid = p.status === 'PAID' || ['activated', 'scanned'].includes(p.entry_status);
+                const isExpired = p.status === 'EXPIRED' || p.entry_status === 'rejected';
+                const price = Number(p.final_price ?? p.total_price ?? 0);
+
+                if (isPos) {
+                  posCount += 1;
+                  posRevenue += price;
+                } else if (isPaid) {
+                  webPaidCount += 1;
+                  webPaidRevenue += price;
+                } else if (isExpired) {
+                  expiredCount += 1;
+                } else {
+                  awaitingCount += 1;
+                }
+              });
+
+              return {
+                posCount,
+                posRevenue,
+                webPaidCount,
+                webPaidRevenue,
+                awaitingCount,
+                expiredCount,
+                totalCount: passes.length,
+              };
+            }, [passes]);
 
             const displayedPasses = passes.filter(pass => {
               if (approbEventFilter && pass.event_id !== approbEventFilter) {
@@ -1159,6 +1231,17 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
                 if (approbOriginFilter === 'POS' && !isPos) return false;
                 if (approbOriginFilter === 'QUICK_RESERVATION' && !isQuick) return false;
                 if (approbOriginFilter === 'STANDARD' && (isPos || isQuick)) return false;
+              }
+              if (approbCashierFilter !== 'all') {
+                const staffId = pass.cashier_id || pass.approved_by || pass.payment_point_id;
+                const matchesId = staffId === approbCashierFilter;
+                const matchesPosName = Boolean(pass.issued_by_pos && pass.issued_by_pos === approbCashierFilter);
+                const approverProf = profiles.find(p => p.id === staffId);
+                const matchesProfileSellPoint = Boolean(approverProf?.sell_point_name && approverProf.sell_point_name === approbCashierFilter);
+
+                if (!matchesId && !matchesPosName && !matchesProfileSellPoint) {
+                  return false;
+                }
               }
               if (approbOverdueFilter && !isPassOverdue(pass)) {
                 return false;
@@ -1219,6 +1302,57 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
                   </div>
                 </div>
 
+                {/* Supervision KPI Summary Cards */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+                  <div className="p-4 rounded-2xl bg-purple-500/10 border border-purple-500/20">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-purple-400 block">
+                      📍 Émis au Guichet (POS)
+                    </span>
+                    <div className="text-xl font-black text-purple-200 mt-1">
+                      {approbKpis.posCount} <span className="text-xs font-normal text-purple-400">pass</span>
+                    </div>
+                    <div className="text-xs font-mono font-bold text-purple-300 mt-0.5">
+                      {approbKpis.posRevenue.toFixed(2)} TND encaissés
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400 block">
+                      🌐 Web Encaissés (Guichet)
+                    </span>
+                    <div className="text-xl font-black text-emerald-200 mt-1">
+                      {approbKpis.webPaidCount} <span className="text-xs font-normal text-emerald-400">pass</span>
+                    </div>
+                    <div className="text-xs font-mono font-bold text-emerald-300 mt-0.5">
+                      {approbKpis.webPaidRevenue.toFixed(2)} TND encaissés
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-blue-400 block">
+                      ⏳ Attente Paiement
+                    </span>
+                    <div className="text-xl font-black text-blue-200 mt-1">
+                      {approbKpis.awaitingCount} <span className="text-xs font-normal text-blue-400">réservations</span>
+                    </div>
+                    <div className="text-xs text-blue-300 mt-0.5">
+                      À régler au point de vente
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-neutral-800/60 border border-neutral-700/60">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-400 block">
+                      🎫 Total Passes Événements
+                    </span>
+                    <div className="text-xl font-black text-neutral-200 mt-1">
+                      {approbKpis.totalCount} <span className="text-xs font-normal text-neutral-400">passes</span>
+                    </div>
+                    <div className="text-xs text-neutral-400 mt-0.5">
+                      {approbKpis.expiredCount} expirés / annulés
+                    </div>
+                  </div>
+                </div>
+
                 {/* Filters */}
                 <div className="space-y-3 p-4 mb-6 rounded-2xl" style={{ backgroundColor: 'var(--bg-input)', border: '1.5px solid var(--border)' }}>
                   {/* Search Bar */}
@@ -1233,7 +1367,7 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
                   </div>
 
                   {/* Filter Dropdowns & Overdue Toggle */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
                     <div>
                       <label className="label text-xs">Événement</label>
                       <select
@@ -1259,6 +1393,20 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
                         <option value="POS">📍 Émis au Point de Vente (POS / Guichet)</option>
                         <option value="QUICK_RESERVATION">⚡ Réservation Express (Guest)</option>
                         <option value="STANDARD">👤 Réservation Standard</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="label text-xs">Point de Vente / Caissier</label>
+                      <select
+                        value={approbCashierFilter}
+                        onChange={(e) => setApprobCashierFilter(e.target.value)}
+                        className="input text-xs"
+                      >
+                        <option value="all">Tous les points de vente</option>
+                        {availableCashiers.map(c => (
+                          <option key={c.id} value={c.id}>{c.label}</option>
+                        ))}
                       </select>
                     </div>
 
@@ -1430,17 +1578,104 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
                                 </p>
                               )}
 
-                              {/* Approval Trail */}
-                              {pass.payment_approved_at && (
-                                <p className="text-[10px] text-neutral-500 mt-1">
-                                  ✓ Confirmé le {new Date(pass.payment_approved_at).toLocaleString('fr-FR', {
-                                    day: 'numeric',
-                                    month: 'short',
-                                    hour: '2-digit',
-                                    minute: '2-digit',
-                                  })}
-                                </p>
-                              )}
+                              {/* Audit & Approver Trail: Who approved or issued this pass */}
+                              {(() => {
+                                const staffId = pass.cashier_id || pass.approved_by || pass.payment_point_id;
+                                const approverProfile = profiles.find(p => p.id === staffId);
+                                const approverDisplayName = pass.issued_by_pos
+                                  || approverProfile?.sell_point_name
+                                  || approverProfile?.full_name
+                                  || (pass as any).approver?.full_name
+                                  || approverProfile?.email
+                                  || (staffId ? `Guichet (#${staffId.slice(0, 6)})` : null);
+
+                                const isApproverAdmin = (approverProfile?.role || (pass as any).approver?.role || '').toLowerCase() === 'admin';
+                                const creatorProfile = profiles.find(p => p.id === pass.created_by);
+                                const creatorName = creatorProfile?.full_name || (pass as any).creator?.full_name || creatorProfile?.email || 'Admin';
+                                const isManualAdmin = pass.pass_origin === 'ADMIN' || Boolean(pass.created_by);
+
+                                return (
+                                  <div className="mt-3 pt-2.5 border-t border-neutral-800/80 flex flex-wrap items-center gap-2 text-xs">
+                                    {isPos ? (
+                                      <div className="flex flex-wrap items-center gap-1.5">
+                                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30 flex items-center gap-1">
+                                          📍 Émis en Caisse (POS)
+                                        </span>
+                                        <span className="text-neutral-300">
+                                          Point de vente : <strong className="text-white font-bold">{pass.issued_by_pos || approverDisplayName || 'Guichet'}</strong>
+                                        </span>
+                                        {pass.payment_approved_at && (
+                                          <span className="text-neutral-500 text-[11px]">
+                                            · le {new Date(pass.payment_approved_at).toLocaleString('fr-FR', {
+                                              day: 'numeric',
+                                              month: 'short',
+                                              hour: '2-digit',
+                                              minute: '2-digit',
+                                            })}
+                                          </span>
+                                        )}
+                                      </div>
+                                    ) : isPaid ? (
+                                      <div className="flex flex-wrap items-center gap-1.5">
+                                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                                          isApproverAdmin
+                                            ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                                            : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                        }`}>
+                                          ✓ {isApproverAdmin ? 'Encaissé par Admin' : 'Encaissé au Guichet'}
+                                        </span>
+                                        {approverDisplayName ? (
+                                          <span className="text-neutral-300">
+                                            Validé par : <strong className="text-white font-bold">{approverDisplayName}</strong>
+                                          </span>
+                                        ) : (
+                                          <span className="text-neutral-400">Paiement validé</span>
+                                        )}
+                                        {pass.payment_approved_at && (
+                                          <span className="text-neutral-500 text-[11px]">
+                                            · le {new Date(pass.payment_approved_at).toLocaleString('fr-FR', {
+                                              day: 'numeric',
+                                              month: 'short',
+                                              hour: '2-digit',
+                                              minute: '2-digit',
+                                            })}
+                                          </span>
+                                        )}
+                                      </div>
+                                    ) : isExpired ? (
+                                      <div className="flex items-center gap-1.5 text-neutral-400 text-xs">
+                                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                                          ✕ Expiré / Annulé
+                                        </span>
+                                        {pass.rejection_reason && (
+                                          <span className="text-rose-300 text-[11px] italic">({pass.rejection_reason})</span>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center gap-1.5 text-neutral-400 text-xs">
+                                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                          ⏳ Attente de règlement
+                                        </span>
+                                        <span className="text-neutral-400 text-[11px]">
+                                          À régler et valider sur place au point de vente
+                                        </span>
+                                      </div>
+                                    )}
+
+                                    {isManualAdmin && (
+                                      <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-neutral-800 text-neutral-300 border border-neutral-700 ml-auto">
+                                        👑 Créé manuellement ({creatorName})
+                                      </span>
+                                    )}
+
+                                    {pass.final_price !== undefined && pass.final_price !== null && (
+                                      <span className="font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md text-[11px] ml-auto">
+                                        {Number(pass.final_price).toFixed(2)} TND
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </div>
 

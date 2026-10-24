@@ -687,13 +687,13 @@ export const api = {
     // Map profiles and relations for users, creators, and approvers
     const { data: profilesData } = await supabase
       .from('profiles')
-      .select('id, instagram_handle, full_name, email, role');
+      .select('id, instagram_handle, full_name, email, role, sell_point_name');
     const profilesMap = new Map((profilesData || []).map((p: any) => [p.id, p]));
 
     return passesData.map((pass: any) => {
       const profile = profilesMap.get(pass.user_id) || pass.user || pass.profiles;
       const creatorProfile = pass.creator || profilesMap.get(pass.created_by) || null;
-      const approverProfile = pass.approver || profilesMap.get(pass.approved_by) || profilesMap.get(pass.payment_point_id) || null;
+      const approverProfile = pass.approver || profilesMap.get(pass.approved_by) || profilesMap.get(pass.payment_point_id) || profilesMap.get(pass.cashier_id) || null;
       const evt = pass.event || pass.events;
 
       // Infer origin: either stored in pass_origin, or inferred if created_by is present or pass_type is special
