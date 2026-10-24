@@ -14,11 +14,11 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET(
   req: NextRequest,
-  context: { params: Promise<{ secretToken: string }> | { secretToken: string } }
+  { params }: { params: Promise<{ secretToken: string }> }
 ) {
   try {
-    const resolvedParams = await Promise.resolve(context.params);
-    const secretToken = resolvedParams?.secretToken?.trim();
+    const { secretToken: rawToken } = await params;
+    const secretToken = rawToken?.trim();
 
     if (!secretToken) {
       return NextResponse.json(
