@@ -1141,71 +1141,65 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
             const totalOverdueCount = passes.filter(isPassOverdue).length;
 
             // List of unique Cashiers / Points of Sale
-            const availableCashiers = useMemo(() => {
-              const list: { id: string; label: string }[] = [];
-              const seen = new Set<string>();
+            const availableCashiers: { id: string; label: string }[] = [];
+            const seenCashiers = new Set<string>();
 
-              profiles.forEach(p => {
-                const role = (p.role || '').toLowerCase();
-                if (role === 'payment_point' || role === 'cashier' || p.sell_point_name) {
-                  const id = p.id;
-                  if (!seen.has(id)) {
-                    seen.add(id);
-                    const label = p.sell_point_name ? `${p.sell_point_name} (${p.email})` : (p.full_name || p.email || id.slice(0, 8));
-                    list.push({ id, label });
-                  }
+            profiles.forEach(p => {
+              const role = (p.role || '').toLowerCase();
+              if (role === 'payment_point' || role === 'cashier' || p.sell_point_name) {
+                const id = p.id;
+                if (!seenCashiers.has(id)) {
+                  seenCashiers.add(id);
+                  const label = p.sell_point_name ? `${p.sell_point_name} (${p.email})` : (p.full_name || p.email || id.slice(0, 8));
+                  availableCashiers.push({ id, label });
                 }
-              });
+              }
+            });
 
-              // Include distinct sell point names stored directly on passes
-              passes.forEach(pass => {
-                if (pass.issued_by_pos && !seen.has(pass.issued_by_pos)) {
-                  seen.add(pass.issued_by_pos);
-                  list.push({ id: pass.issued_by_pos, label: `📍 ${pass.issued_by_pos}` });
-                }
-              });
-
-              return list;
-            }, [profiles, passes]);
+            // Include distinct sell point names stored directly on passes
+            passes.forEach(pass => {
+              if (pass.issued_by_pos && !seenCashiers.has(pass.issued_by_pos)) {
+                seenCashiers.add(pass.issued_by_pos);
+                availableCashiers.push({ id: pass.issued_by_pos, label: `📍 ${pass.issued_by_pos}` });
+              }
+            });
 
             // Supervision KPI stats across all passes
-            const approbKpis = useMemo(() => {
-              let posCount = 0;
-              let posRevenue = 0;
-              let webPaidCount = 0;
-              let webPaidRevenue = 0;
-              let awaitingCount = 0;
-              let expiredCount = 0;
+            let posCount = 0;
+            let posRevenue = 0;
+            let webPaidCount = 0;
+            let webPaidRevenue = 0;
+            let awaitingCount = 0;
+            let expiredCount = 0;
 
-              passes.forEach(p => {
-                const isPos = p.source === 'POS' || p.pass_origin === 'POS' || Boolean(p.issued_by_pos) || Boolean(p.reservation_code && p.reservation_code.startsWith('POS-'));
-                const isPaid = p.status === 'PAID' || ['activated', 'scanned'].includes(p.entry_status);
-                const isExpired = p.status === 'EXPIRED' || p.entry_status === 'rejected';
-                const price = Number(p.final_price ?? p.total_price ?? 0);
+            passes.forEach(p => {
+              const isPos = p.source === 'POS' || p.pass_origin === 'POS' || Boolean(p.issued_by_pos) || Boolean(p.reservation_code && p.reservation_code.startsWith('POS-'));
+              const isPaid = p.status === 'PAID' || ['activated', 'scanned'].includes(p.entry_status);
+              const isExpired = p.status === 'EXPIRED' || p.entry_status === 'rejected';
+              const price = Number(p.final_price ?? p.total_price ?? 0);
 
-                if (isPos) {
-                  posCount += 1;
-                  posRevenue += price;
-                } else if (isPaid) {
-                  webPaidCount += 1;
-                  webPaidRevenue += price;
-                } else if (isExpired) {
-                  expiredCount += 1;
-                } else {
-                  awaitingCount += 1;
-                }
-              });
+              if (isPos) {
+                posCount += 1;
+                posRevenue += price;
+              } else if (isPaid) {
+                webPaidCount += 1;
+                webPaidRevenue += price;
+              } else if (isExpired) {
+                expiredCount += 1;
+              } else {
+                awaitingCount += 1;
+              }
+            });
 
-              return {
-                posCount,
-                posRevenue,
-                webPaidCount,
-                webPaidRevenue,
-                awaitingCount,
-                expiredCount,
-                totalCount: passes.length,
-              };
-            }, [passes]);
+            const approbKpis = {
+              posCount,
+              posRevenue,
+              webPaidCount,
+              webPaidRevenue,
+              awaitingCount,
+              expiredCount,
+              totalCount: passes.length,
+            };
 
             const displayedPasses = passes.filter(pass => {
               if (approbEventFilter && pass.event_id !== approbEventFilter) {
