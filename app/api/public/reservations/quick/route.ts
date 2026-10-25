@@ -177,8 +177,8 @@ export async function POST(req: NextRequest) {
 
       // Cryptographically secure tracking tokens for Quick Reservation Web Pass view
       const secretToken = crypto.randomBytes(18).toString('base64url');
-      const entryToken = crypto.randomBytes(24).toString('hex');
-      const drinkToken = crypto.randomBytes(24).toString('hex');
+      const entryToken = crypto.randomUUID();
+      const drinkToken = crypto.randomUUID();
 
       rowsToInsert.push({
         event_id: event.id,
@@ -202,12 +202,12 @@ export async function POST(req: NextRequest) {
         expires_at: expiresAt,
         secret_token: secretToken,
         entry_token: entryToken,
-        entry_qr_uuid: entryToken,
+        entry_qr_uuid: null,
         is_entry_used: false,
         entry_used_at: null,
         drink_token: drinkToken,
-        drink_qr_uuid: drinkToken,
-        drink_qr_code: drinkToken,
+        drink_qr_uuid: null,
+        drink_qr_code: null,
         is_drink_used: false,
         drink_used_at: null,
         created_at: createdAt.toISOString(),
@@ -215,63 +215,77 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    let { data: insertedPasses, error: insertError } = await supabaseAdmin
-      .from('passes')
-      .insert(rowsToInsert)
-      .select('id, event_id, user_id, source, reservation_code, guest_first_name, guest_last_name, phone, email, selected_drink, drink_name, status, entry_status, final_price, expires_at, secret_token, entry_token, is_entry_used, entry_used_at, drink_token, is_drink_used, drink_used_at, created_at');
+    // 7. Insert into passes using defensive dynamic column auto-pruning loop
+    let workingRows = rowsToInsert.map((r) => ({ ...r }));
+    let insertedPasses: any[] | null = null;
+    let lastInsertError: any = null;
 
-    // Fallback if newly added columns aren't yet in table
-    if (insertError) {
-      console.warn('[POST /api/public/reservations/quick] Insert retry without optional columns:', insertError.message);
-
-      const fallbackRows = rowsToInsert.map(r => {
-        const row: Record<string, any> = {
-          event_id: r.event_id,
-          user_id: r.user_id,
-          guest_first_name: r.guest_first_name,
-          guest_last_name: r.guest_last_name,
-          entry_status: 'awaiting_payment',
-          drink_name: r.drink_name,
-          selected_drink: r.selected_drink,
-          selected_aromas: r.selected_aromas,
-          final_price: r.final_price,
-          entry_qr_uuid: r.entry_qr_uuid,
-          drink_qr_uuid: r.drink_qr_uuid,
-        };
-        if (!insertError.message.includes('source')) row.source = 'QUICK_RESERVATION';
-        if (!insertError.message.includes('phone')) row.phone = r.phone;
-        if (!insertError.message.includes('email')) row.email = r.email;
-        if (!insertError.message.includes('reservation_code')) row.reservation_code = r.reservation_code;
-        if (!insertError.message.includes('status')) row.status = 'PENDING_PAYMENT';
-        if (!insertError.message.includes('expires_at')) row.expires_at = r.expires_at;
-        if (!insertError.message.includes('secret_token')) row.secret_token = r.secret_token;
-        if (!insertError.message.includes('entry_token')) row.entry_token = r.entry_token;
-        if (!insertError.message.includes('is_entry_used')) row.is_entry_used = r.is_entry_used;
-        if (!insertError.message.includes('drink_token')) row.drink_token = r.drink_token;
-        if (!insertError.message.includes('is_drink_used')) row.is_drink_used = r.is_drink_used;
-        return row;
-      });
-
-      const fallbackResult = await supabaseAdmin
+    for (let attempt = 0; attempt < 15; attempt++) {
+      const { data, error } = await supabaseAdmin
         .from('passes')
-        .insert(fallbackRows)
+        .insert(workingRows)
         .select();
 
-      if (fallbackResult.error || !fallbackResult.data) {
-        console.error('[POST /api/public/reservations/quick] Fallback insert failed:', fallbackResult.error);
-        return NextResponse.json(
-          { error: fallbackResult.error?.message || 'Erreur lors de la création de la réservation express.' },
-          { status: 500 }
-        );
+      if (!error && data) {
+        insertedPasses = data;
+        break;
       }
-      insertedPasses = fallbackResult.data;
+
+      lastInsertError = error;
+      const colMatch = (error?.message || '').match(/Could not find the '([^']+)' column/i);
+      if (colMatch && colMatch[1]) {
+        const missingCol = colMatch[1];
+        console.warn(`[POST /api/public/reservations/quick] Retrying insert without unmigrated column '${missingCol}'`);
+        workingRows = workingRows.map((r) => {
+          const copy = { ...r };
+          delete copy[missingCol];
+          return copy;
+        });
+      } else {
+        const notNullMatch = (error?.message || '').match(/null value in column "([^"]+)" of relation "passes" violates not-null constraint/i);
+        if (notNullMatch && notNullMatch[1]) {
+          const notNullCol = notNullMatch[1];
+          if (notNullCol === 'entry_qr_uuid' || notNullCol === 'drink_qr_uuid') {
+            console.warn(`[POST /api/public/reservations/quick] Column '${notNullCol}' requires non-null UUID, generating UUID fallback`);
+            workingRows = workingRows.map((r) => ({
+              ...r,
+              [notNullCol]: crypto.randomUUID(),
+            }));
+            continue;
+          }
+        }
+        console.error('[POST /api/public/reservations/quick] Supabase insert error:', error);
+        break;
+      }
     }
 
     if (!insertedPasses || insertedPasses.length === 0) {
-      return NextResponse.json(
-        { error: 'Erreur inattendue : la réservation n\'a pas pu être créée.' },
-        { status: 500 }
-      );
+      console.warn('[POST /api/public/reservations/quick] Attempting minimal baseline insert fallback');
+      const baselineRows = rowsToInsert.map((r) => ({
+        event_id: r.event_id,
+        user_id: r.user_id,
+        guest_first_name: r.guest_first_name,
+        guest_last_name: r.guest_last_name,
+        entry_status: 'awaiting_payment',
+        drink_name: r.drink_name,
+        selected_drink: r.selected_drink,
+        final_price: r.final_price,
+      }));
+
+      const { data: baseData, error: baseError } = await supabaseAdmin
+        .from('passes')
+        .insert(baselineRows)
+        .select();
+
+      if (!baseError && baseData) {
+        insertedPasses = baseData;
+      } else {
+        console.error('[POST /api/public/reservations/quick] All insert strategies failed:', baseError || lastInsertError);
+        return NextResponse.json(
+          { error: baseError?.message || lastInsertError?.message || 'Erreur lors de la création de la réservation express.' },
+          { status: 500 }
+        );
+      }
     }
 
     const firstPass = insertedPasses[0];
