@@ -718,38 +718,48 @@ function QuickReservationContent() {
                 <div className="p-5 rounded-2xl bg-white/[0.03] border border-white/10 space-y-4">
                   {/* Multi-pass Mode Toggle */}
                   {quantity > 1 && (
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-white/10">
-                      <div>
-                        <span className="text-xs font-bold text-white block">
-                          Configuration des boissons
-                        </span>
-                        <span className="text-[11px] text-neutral-400 block">
+                    <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 p-4 rounded-2xl bg-white/[0.03] border border-white/10 shadow-sm">
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <Wine size={16} className="text-[#4DEEEA]" />
+                          <span className="text-xs font-extrabold text-white tracking-wide uppercase">
+                            Choix des consommations incluses
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-neutral-400 leading-relaxed">
                           {sameDrinkForAll
-                            ? "Tous les passes bénéficieront de la même consommation sélectionnée ci-dessous."
-                            : "Personnalisez la boisson et l'invité pour chaque billet individuel."}
-                        </span>
+                            ? `Identique : les ${quantity} billets recevront la même consommation choisie ci-dessous.`
+                            : `Personnalisé : configurez la boisson et le prénom pour chacun de vos ${quantity} billets.`}
+                        </p>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => setSameDrinkForAll(!sameDrinkForAll)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border cursor-pointer shrink-0 ${
-                          sameDrinkForAll
-                            ? "bg-[#4DEEEA]/15 text-[#4DEEEA] border-[#4DEEEA]/30 hover:bg-[#4DEEEA]/25"
-                            : "bg-purple-500/20 text-purple-300 border-purple-500/40 hover:bg-purple-500/30"
-                        }`}
-                      >
-                        {sameDrinkForAll ? (
-                          <>
-                            <Check size={14} />
-                            <span>Même boisson pour tous ({quantity})</span>
-                          </>
-                        ) : (
-                          <>
-                            <span>✏️ Personnaliser par pass</span>
-                          </>
-                        )}
-                      </button>
+                      {/* Segmented Interactive Switch */}
+                      <div className="flex items-center p-1 rounded-2xl bg-neutral-950/90 border border-white/10 shadow-inner w-full md:w-auto shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setSameDrinkForAll(true)}
+                          className={`flex-1 md:flex-initial px-4 py-2.5 rounded-xl text-xs font-black transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer ${
+                            sameDrinkForAll
+                              ? "bg-gradient-to-r from-[#4DEEEA] to-cyan-400 text-slate-950 shadow-md shadow-[#4DEEEA]/25 scale-[1.02]"
+                              : "text-neutral-400 hover:text-white hover:bg-white/5"
+                          }`}
+                        >
+                          <Check size={14} className={sameDrinkForAll ? "stroke-[3]" : "opacity-0"} />
+                          <span>Même boisson pour tous ({quantity})</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setSameDrinkForAll(false)}
+                          className={`flex-1 md:flex-initial px-4 py-2.5 rounded-xl text-xs font-black transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer ${
+                            !sameDrinkForAll
+                              ? "bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-md shadow-purple-950/40 scale-[1.02]"
+                              : "text-neutral-400 hover:text-white hover:bg-white/5"
+                          }`}
+                        >
+                          <span>✏️ Personnaliser par pass</span>
+                        </button>
+                      </div>
                     </div>
                   )}
 
