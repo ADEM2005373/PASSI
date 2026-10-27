@@ -29,10 +29,10 @@ export async function approvePhase1PassAction(passId: string) {
     throw new Error('Action non autorisée : droits administrateur requis');
   }
 
-  // 1. Fetch pass with event and user info
+  // 1. Fetch pass with event, reservation and contact info
   const { data: pass, error: fetchError } = await supabaseAdmin
     .from('passes')
-    .select('id, entry_status, user_id, event_id, guest_first_name, guest_last_name, events(title, date, location, base_price)')
+    .select('id, entry_status, status, user_id, event_id, guest_first_name, guest_last_name, email, phone, reservation_code, events(title, date, location, base_price)')
     .eq('id', passId)
     .single();
 
@@ -44,22 +44,41 @@ export async function approvePhase1PassAction(passId: string) {
     throw new Error('Les passes déjà validés ou payés ne peuvent pas être modifiés.');
   }
 
-  // 2. Update pass status to awaiting_payment and track active admin approver
-  const { error: updateError } = await supabaseAdmin
-    .from('passes')
-    .update({ 
-      entry_status: 'awaiting_payment', 
-      approved_by: user.id,
-      updated_at: new Date().toISOString() 
-    })
-    .eq('id', passId);
+  // 2. Fetch all sibling passes in this reservation if applicable (multi-pass quick or standard reservation)
+  let passesToApprove: any[] = [pass];
+  if (pass.reservation_code) {
+    const { data: siblingPasses } = await supabaseAdmin
+      .from('passes')
+      .select('id, entry_status, status, user_id, event_id, guest_first_name, guest_last_name, email, phone, reservation_code, events(title, date, location, base_price)')
+      .eq('reservation_code', pass.reservation_code);
 
-  if (updateError) {
-    throw new Error('Erreur lors de la mise à jour du pass: ' + updateError.message);
+    if (siblingPasses && siblingPasses.length > 0) {
+      passesToApprove = siblingPasses;
+    }
   }
 
-  // 3. Fetch user profile for email delivery
-  let recipientEmail: string | undefined;
+  const idsToUpdate = passesToApprove
+    .filter((p: any) => !['activated', 'scanned'].includes(p.entry_status))
+    .map((p: any) => p.id);
+
+  if (idsToUpdate.length > 0) {
+    const { error: updateError } = await supabaseAdmin
+      .from('passes')
+      .update({ 
+        entry_status: 'awaiting_payment',
+        status: 'PENDING_PAYMENT',
+        approved_by: user.id,
+        updated_at: new Date().toISOString() 
+      })
+      .in('id', idsToUpdate);
+
+    if (updateError) {
+      throw new Error('Erreur lors de la mise à jour des passes: ' + updateError.message);
+    }
+  }
+
+  // 3. Fetch user profile for email delivery with fallback to pass.email
+  let recipientEmail: string | undefined = pass.email || (pass as any).guest_email;
   let recipientName = `${pass.guest_first_name || ''} ${pass.guest_last_name || ''}`.trim();
 
   if (pass.user_id) {
@@ -94,7 +113,7 @@ export async function approvePhase1PassAction(passId: string) {
   // 4. Query active Payment Points: WHERE role = 'PAYMENT_POINT' AND is_suspended = false
   const { data: paymentPoints } = await supabaseAdmin
     .from('profiles')
-    .select('id, full_name, email, role, is_suspended')
+    .select('id, full_name, email, role, is_suspended, sell_point_name')
     .or('role.eq.payment_point,role.eq.PAYMENT_POINT')
     .eq('is_suspended', false);
 
@@ -106,13 +125,13 @@ export async function approvePhase1PassAction(passId: string) {
     paymentPointsHtml = `
       <div style="margin: 24px 0; padding: 20px; background-color: #1A2333; border-radius: 16px; border: 1px solid #28354D;">
         <p style="margin: 0 0 12px 0; font-weight: 800; color: #4ECDC4; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">
-          📍 Points de Paiement actifs pour valider votre Pass :
+          📍 Points de Paiement officiels pour régler votre Pass :
         </p>
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
           ${paymentPoints.map((pp: any) => `
             <tr>
               <td style="padding: 8px 0; border-bottom: 1px solid #222E42; color: #FFFFFF; font-size: 14px;">
-                <strong>${pp.full_name || pp.email.split('@')[0]}</strong>
+                <strong>${pp.sell_point_name || pp.full_name || pp.email.split('@')[0]}</strong>
               </td>
               <td align="right" style="padding: 8px 0; border-bottom: 1px solid #222E42; color: #94A3B8; font-size: 13px;">
                 ${pp.email}
@@ -121,7 +140,7 @@ export async function approvePhase1PassAction(passId: string) {
           `).join('')}
         </table>
         <p style="margin: 12px 0 0 0; font-size: 12px; color: #94A3B8;">
-          Présentez-vous auprès de l'un de ces points de paiement pour régler votre place et obtenir votre QR Code d'entrée.
+          Présentez-vous auprès de l'un de ces points de paiement avec votre code de réservation pour régler votre place et débloquer instantanément votre QR Code d'entrée.
         </p>
       </div>
     `;
@@ -132,6 +151,22 @@ export async function approvePhase1PassAction(passId: string) {
       </div>
     `;
   }
+
+  const reservationNoticeHtml = pass.reservation_code
+    ? `
+      <div style="margin: 18px 0; padding: 16px; background-color: #172033; border-radius: 14px; border: 1px solid #FF6B5E; text-align: center;">
+        <p style="margin: 0 0 6px 0; font-size: 11px; font-weight: 800; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.5px;">
+          Votre Code de Réservation Unique (${passesToApprove.length} pass) :
+        </p>
+        <p style="margin: 0; font-family: monospace; font-size: 24px; font-weight: 900; color: #FF6B5E; letter-spacing: 2px;">
+          ${pass.reservation_code}
+        </p>
+        <p style="margin: 6px 0 0 0; font-size: 12px; color: #CBD5E1;">
+          Présentez ce code ou votre numéro (${pass.phone || ''}) au guichet pour régler l'ensemble de vos billets.
+        </p>
+      </div>
+    `
+    : '';
 
   // 6. Send "Payment Required" email (await ensures serverless execution doesn't terminate prematurely)
   if (recipientEmail) {
@@ -145,12 +180,13 @@ export async function approvePhase1PassAction(passId: string) {
         <p style="margin: 0 0 16px 0;">
           Votre demande de pass pour l'événement <strong>${eventTitle}</strong> a été validée avec succès par notre équipe !
         </p>
+        ${reservationNoticeHtml}
         <p style="margin: 0 0 16px 0;">
-          Pour finaliser votre réservation et débloquer votre <strong>QR Code d'accès</strong>, veuillez effectuer votre paiement en espèces auprès d'un de nos Points de Paiement officiels.
+          Pour finaliser votre réservation et débloquer vos <strong>QR Codes d'accès officiels</strong>, veuillez effectuer votre paiement en espèces auprès d'un de nos Points de Paiement officiels.
         </p>
         ${paymentPointsHtml}
         <p style="margin: 0; font-size: 13px; color: #94A3B8;">
-          Dès que le Point de Paiement aura confirmé la réception de votre règlement, votre QR Code d'entrée apparaîtra instantanément sur votre tableau de bord.
+          Dès que le Point de Paiement aura confirmé la réception de votre règlement, vos billets activés avec QR Codes vous seront automatiquement expédiés par e-mail.
         </p>
       `,
     });
@@ -159,7 +195,7 @@ export async function approvePhase1PassAction(passId: string) {
       console.log(`[approvePhase1PassAction] Envoi email de pré-approbation à ${recipientEmail}...`);
       const emailResult = await sendTransactionalEmail({
         to: recipientEmail,
-        subject: 'Félicitations ! Votre Pass est pré-approuvé',
+        subject: `Félicitations ! Votre Pass pour ${eventTitle} est pré-approuvé`,
         htmlBody,
       });
       console.log('[approvePhase1PassAction] Résultat envoi email:', emailResult);
@@ -167,7 +203,7 @@ export async function approvePhase1PassAction(passId: string) {
       console.error('[approvePhase1PassAction] Erreur envoi email:', err);
     }
   } else {
-    console.warn(`[approvePhase1PassAction] Aucun email trouvé pour l'utilisateur ${pass.user_id}`);
+    console.warn(`[approvePhase1PassAction] Aucun email trouvé pour le pass ${pass.id} (user_id: ${pass.user_id})`);
   }
 
   try {
@@ -199,10 +235,10 @@ export async function rejectPassAction(passId: string, rejectionReason?: string)
     throw new Error('Action non autorisée : droits administrateur requis');
   }
 
-  // 1. Fetch pass with event and user info
+  // 1. Fetch pass with event, reservation and contact info
   const { data: pass, error: fetchError } = await supabaseAdmin
     .from('passes')
-    .select('id, entry_status, user_id, event_id, guest_first_name, guest_last_name, events(title)')
+    .select('id, entry_status, user_id, event_id, guest_first_name, guest_last_name, email, phone, reservation_code, events(title)')
     .eq('id', passId)
     .single();
 
@@ -216,22 +252,41 @@ export async function rejectPassAction(passId: string, rejectionReason?: string)
 
   const cleanReason = rejectionReason ? String(rejectionReason).slice(0, 500) : null;
 
-  // 2. Update pass status to rejected
-  const { error: updateError } = await supabaseAdmin
-    .from('passes')
-    .update({ 
-      entry_status: 'rejected',
-      rejection_reason: cleanReason,
-      updated_at: new Date().toISOString() 
-    })
-    .eq('id', passId);
+  // 2. Reject sibling passes if part of a multi-pass reservation
+  let passesToReject: any[] = [pass];
+  if (pass.reservation_code) {
+    const { data: siblingPasses } = await supabaseAdmin
+      .from('passes')
+      .select('id, entry_status, user_id, event_id, guest_first_name, guest_last_name, email, phone, reservation_code, events(title)')
+      .eq('reservation_code', pass.reservation_code);
 
-  if (updateError) {
-    throw new Error('Erreur lors du rejet du pass: ' + updateError.message);
+    if (siblingPasses && siblingPasses.length > 0) {
+      passesToReject = siblingPasses;
+    }
   }
 
-  // 3. Fetch user profile for email delivery with auth.admin fallback
-  let recipientEmail: string | undefined;
+  const idsToReject = passesToReject
+    .filter((p: any) => !['activated', 'scanned'].includes(p.entry_status))
+    .map((p: any) => p.id);
+
+  if (idsToReject.length > 0) {
+    const { error: updateError } = await supabaseAdmin
+      .from('passes')
+      .update({ 
+        entry_status: 'rejected',
+        status: 'EXPIRED',
+        rejection_reason: cleanReason,
+        updated_at: new Date().toISOString() 
+      })
+      .in('id', idsToReject);
+
+    if (updateError) {
+      throw new Error('Erreur lors du rejet du pass: ' + updateError.message);
+    }
+  }
+
+  // 3. Fetch user profile for email delivery with fallback to pass.email
+  let recipientEmail: string | undefined = pass.email || (pass as any).guest_email;
   let recipientName = `${pass.guest_first_name || ''} ${pass.guest_last_name || ''}`.trim();
 
   if (pass.user_id) {
@@ -406,11 +461,16 @@ export async function approvePassPaymentAction(passId: string) {
     throw new Error('Pass introuvable');
   }
 
+  if (['activated', 'scanned'].includes(pass.entry_status) || pass.status === 'PAID') {
+    return { success: true, pass: { ...pass, status: 'PAID' }, message: 'Pass déjà activé et payé.' };
+  }
+
   const isPreApproved = pass.entry_status === 'awaiting_payment' || (pass as any).status === 'PENDING_PAYMENT';
-  if (!isPreApproved && pass.entry_status !== 'pending') {
-    if (['activated', 'scanned'].includes(pass.entry_status)) {
-      return { success: true, pass: { ...pass, status: 'PAID' }, message: 'Pass déjà activé et payé.' };
+  if (!isPreApproved) {
+    if (pass.entry_status === 'pending') {
+      throw new Error("Action non autorisée : Ce pass est en attente d'approbation préalable par un administrateur avant de pouvoir être encaissé.");
     }
+    throw new Error("Ce pass n'est pas en attente de paiement.");
   }
 
   // 3. Check for sibling passes in the same multi-pass reservation

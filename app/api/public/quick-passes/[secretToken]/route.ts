@@ -133,8 +133,8 @@ export async function GET(
         guestName,
         phone: pass.phone,
         email: pass.email,
-        status: pass.status || 'PAID',
-        entryStatus: pass.entry_status || 'activated',
+        status: pass.status || 'pending',
+        entryStatus: pass.entry_status || 'pending',
         finalPrice: pass.final_price,
         // Entry Gate QR Details
         entryToken,

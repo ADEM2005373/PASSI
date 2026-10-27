@@ -196,8 +196,15 @@ export default function QuickPassViewPage({
     );
   }
 
+  const isPendingApproval =
+    pass.entryStatus === "pending" || pass.status === "pending" || pass.status === "PENDING";
   const isAwaitingPayment =
-    pass.entryStatus === "awaiting_payment" || pass.status === "PENDING_PAYMENT";
+    !isPendingApproval &&
+    (pass.entryStatus === "awaiting_payment" || pass.status === "PENDING_PAYMENT");
+  const isActivated =
+    !isPendingApproval &&
+    !isAwaitingPayment &&
+    (pass.entryStatus === "activated" || pass.entryStatus === "scanned" || pass.status === "PAID");
 
   const shareText = `Salut ! Voici ton pass d'accès officiel pour ${pass.eventTitle} (${pass.guestName}) : ${typeof window !== "undefined" ? window.location.href : ""}`;
   const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
@@ -215,10 +222,22 @@ export default function QuickPassViewPage({
           <Logo className="w-[95px] h-[30px]" />
           
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              Pass Live
-            </span>
+            {isPendingApproval ? (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                Approbation requise
+              </span>
+            ) : isAwaitingPayment ? (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-500/15 text-blue-400 border border-blue-500/30">
+                <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+                Attente de paiement
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                Pass Live
+              </span>
+            )}
           </div>
         </div>
       </header>
@@ -226,14 +245,27 @@ export default function QuickPassViewPage({
       {/* ─── MAIN MOBILE PASS CONTAINER ─── */}
       <main className="flex-1 max-w-md w-full mx-auto px-4 py-6 flex flex-col gap-5">
         
-        {/* Awaiting payment banner (if guest hasn't settled at POS yet) */}
-        {isAwaitingPayment && (
+        {/* Pending admin approval banner */}
+        {isPendingApproval && (
           <div className="p-4 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-200 text-xs flex items-start gap-3 shadow-sm animate-in fade-in">
             <Clock className="w-5 h-5 shrink-0 text-amber-400 mt-0.5" />
             <div>
-              <p className="font-bold text-sm text-amber-300">Règlement en attente</p>
+              <p className="font-bold text-sm text-amber-300">Demande en cours d'approbation</p>
               <p className="mt-1 leading-relaxed text-amber-200/90">
-                Ce pass sera activé dès votre règlement auprès d'un de nos points de vente physiques en présentant la référence <strong className="font-mono text-white">{pass.reservationCode}</strong>.
+                Votre réservation express <strong className="font-mono text-white">{pass.reservationCode}</strong> a bien été enregistrée et est en attente d'approbation par un administrateur. Dès validation, vous recevrez un email de confirmation pour procéder au paiement au guichet.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Awaiting payment banner (if guest hasn't settled at POS yet) */}
+        {isAwaitingPayment && (
+          <div className="p-4 rounded-2xl bg-blue-500/15 border border-blue-500/30 text-blue-200 text-xs flex items-start gap-3 shadow-sm animate-in fade-in">
+            <Clock className="w-5 h-5 shrink-0 text-blue-400 mt-0.5" />
+            <div>
+              <p className="font-bold text-sm text-blue-300">Réservation validée • Règlement en attente</p>
+              <p className="mt-1 leading-relaxed text-blue-200/90">
+                Votre réservation a été approuvée par l'administrateur ! Vos QR codes d'accès seront activés dès votre règlement auprès d'un de nos points de vente physiques en présentant la référence <strong className="font-mono text-white">{pass.reservationCode}</strong>.
               </p>
             </div>
           </div>
@@ -344,7 +376,28 @@ export default function QuickPassViewPage({
           {activeTab === "entry" && (
             <div className="flex flex-col items-center text-center animate-in fade-in duration-200">
               
-              {!pass.isEntryUsed ? (
+              {!isActivated ? (
+                /* LOCKED ENTRY STATE: PENDING APPROVAL OR PAYMENT */
+                <div className="w-full py-10 px-6 rounded-2xl bg-neutral-950/80 border border-neutral-800 flex flex-col items-center text-center">
+                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-3 ${
+                    isPendingApproval
+                      ? "bg-amber-500/15 text-amber-400 border border-amber-500/30"
+                      : "bg-blue-500/15 text-blue-400 border border-blue-500/30"
+                  }`}>
+                    <Clock className="w-7 h-7" />
+                  </div>
+                  <span className="text-base font-bold text-white tracking-tight">
+                    {isPendingApproval
+                      ? "En attente d'approbation administrateur"
+                      : "En attente de règlement au guichet"}
+                  </span>
+                  <p className="text-xs text-neutral-400 mt-2 max-w-xs leading-relaxed">
+                    {isPendingApproval
+                      ? "Le QR Code officiel d'entrée sera débloqué après validation de votre réservation par l'administrateur et son règlement au guichet."
+                      : "Présentez votre référence à l'un de nos points de vente physiques pour régler votre pass et débloquer ce QR Code."}
+                  </p>
+                </div>
+              ) : !pass.isEntryUsed ? (
                 /* ACTIVE ENTRY QR CODE */
                 <div className="flex flex-col items-center">
                   <div className="p-4 sm:p-5 rounded-3xl bg-white shadow-2xl border-4 border-emerald-500/30 transition-all hover:scale-[1.01]">
@@ -417,7 +470,26 @@ export default function QuickPassViewPage({
                 </span>
               </div>
 
-              {!pass.isDrinkUsed ? (
+              {!isActivated ? (
+                /* LOCKED DRINK STATE: PENDING APPROVAL OR PAYMENT */
+                <div className="w-full py-10 px-6 rounded-2xl bg-neutral-950/80 border border-neutral-800 flex flex-col items-center text-center">
+                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-3 ${
+                    isPendingApproval
+                      ? "bg-amber-500/15 text-amber-400 border border-amber-500/30"
+                      : "bg-blue-500/15 text-blue-400 border border-blue-500/30"
+                  }`}>
+                    <Wine className="w-7 h-7" />
+                  </div>
+                  <span className="text-base font-bold text-white tracking-tight">
+                    Coupon boisson verrouillé
+                  </span>
+                  <p className="text-xs text-neutral-400 mt-2 max-w-xs leading-relaxed">
+                    {isPendingApproval
+                      ? "Ce coupon sera activé automatiquement une fois votre réservation approuvée par l'administrateur et réglée au guichet."
+                      : "Réglez votre réservation au guichet pour débloquer votre consommation offerte."}
+                  </p>
+                </div>
+              ) : !pass.isDrinkUsed ? (
                 /* ACTIVE DRINK QR CODE */
                 <div className="flex flex-col items-center">
                   <div className="p-4 sm:p-5 rounded-3xl bg-white shadow-2xl border-4 border-teal-400/30 transition-all hover:scale-[1.01]">

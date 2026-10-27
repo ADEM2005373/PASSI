@@ -195,8 +195,8 @@ export async function POST(req: NextRequest) {
         drink_name: pDrink,
         selected_aromas: pAromas,
         reservation_code: reservationCode,
-        status: 'PENDING_PAYMENT',
-        entry_status: 'awaiting_payment',
+        status: 'pending',
+        entry_status: 'pending',
         final_price: unitPrice,
         promo_used: promoUsed,
         expires_at: expiresAt,
@@ -294,7 +294,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         success: true,
-        message: 'Reservation complete. Please pay for your pass at our physical sell points within 72 hours.',
+        message: "Votre demande de réservation a été enregistrée avec succès. Elle est en attente d'approbation par un administrateur. Vous recevrez un email dès sa validation pour régler votre pass en point de vente.",
         reservation: {
           id: firstPass.id,
           reservationCode: firstPass.reservation_code || reservationCode,
@@ -309,7 +309,8 @@ export async function POST(req: NextRequest) {
           finalPrice: unitPrice,
           totalPrice: totalAmount,
           selectedDrink: resolvedDrink,
-          status: 'PENDING_PAYMENT',
+          status: 'pending',
+          entryStatus: 'pending',
           expiresAt: firstPass.expires_at || expiresAt,
           createdAt: firstPass.created_at || createdAt.toISOString(),
           passes: insertedPasses.map((p: any) => ({

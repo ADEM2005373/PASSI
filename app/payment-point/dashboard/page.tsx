@@ -207,8 +207,10 @@ export default function PaymentPointDashboard() {
     try {
       const data = await api.getPaymentPointPasses(eventId);
       const preApprovedOnly = (data || []).filter((p: any) => {
-        const s = p.entry_status || p.status;
-        return s === 'awaiting_payment' || s === 'PENDING_PAYMENT';
+        const es = p.entry_status;
+        const s = p.status;
+        if (es === 'pending' || s === 'pending' || s === 'PENDING') return false;
+        return es === 'awaiting_payment' || s === 'PENDING_PAYMENT';
       });
       setPasses(preApprovedOnly);
     } catch (err: any) {

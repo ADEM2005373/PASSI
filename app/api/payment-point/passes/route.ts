@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
     let query = supabaseAdmin
       .from('passes')
       .select('*, events(title, base_price)')
-      .or('entry_status.eq.awaiting_payment,status.eq.PENDING_PAYMENT')
+      .eq('entry_status', 'awaiting_payment')
       .order('created_at', { ascending: true });
 
     if (eventId) {
@@ -33,13 +33,14 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Defensive check: explicitly exclude 'rejected', 'expired', and 'activated'/'scanned'
+    // Defensive check: explicitly ensure pass is pre-approved by admin and strictly awaiting payment
     const preApprovedPasses = (passesData || []).filter((pass: any) => {
       const s = pass.status || pass.entry_status;
       const es = pass.entry_status;
       if (['activated', 'scanned', 'rejected', 'expired'].includes(es)) return false;
       if (['PAID', 'EXPIRED', 'CANCELLED'].includes(s)) return false;
-      return s === 'PENDING_PAYMENT' || es === 'awaiting_payment' || es === 'pending';
+      if (es === 'pending' || s === 'pending' || s === 'PENDING') return false;
+      return es === 'awaiting_payment' || s === 'PENDING_PAYMENT';
     });
 
     // Fetch user profiles to attach full_name and identity

@@ -1169,13 +1169,15 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
             let posRevenue = 0;
             let webPaidCount = 0;
             let webPaidRevenue = 0;
-            let awaitingCount = 0;
+            let pendingApprovalCount = 0;
+            let awaitingPaymentCount = 0;
             let expiredCount = 0;
 
             passes.forEach(p => {
               const isPos = p.source === 'POS' || p.pass_origin === 'POS' || Boolean(p.issued_by_pos) || Boolean(p.reservation_code && p.reservation_code.startsWith('POS-'));
               const isPaid = p.status === 'PAID' || ['activated', 'scanned'].includes(p.entry_status);
               const isExpired = p.status === 'EXPIRED' || p.entry_status === 'rejected';
+              const isPending = !isPaid && !isExpired && (p.entry_status === 'pending' || p.status === 'pending' || p.status === 'PENDING');
               const price = Number(p.final_price ?? p.total_price ?? 0);
 
               if (isPos) {
@@ -1186,8 +1188,10 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
                 webPaidRevenue += price;
               } else if (isExpired) {
                 expiredCount += 1;
+              } else if (isPending) {
+                pendingApprovalCount += 1;
               } else {
-                awaitingCount += 1;
+                awaitingPaymentCount += 1;
               }
             });
 
@@ -1196,7 +1200,8 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
               posRevenue,
               webPaidCount,
               webPaidRevenue,
-              awaitingCount,
+              pendingApprovalCount,
+              awaitingPaymentCount,
               expiredCount,
               totalCount: passes.length,
             };
@@ -1206,16 +1211,17 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
                 return false;
               }
               if (approbStatusFilter !== 'all') {
-                const s = (pass.status || pass.entry_status || '').toLowerCase();
-                if (approbStatusFilter === 'pending_payment') {
-                  if (s !== 'pending_payment' && pass.entry_status !== 'awaiting_payment') return false;
+                const es = (pass.entry_status || '').toLowerCase();
+                const s = (pass.status || '').toLowerCase();
+                if (approbStatusFilter === 'pending') {
+                  if (es !== 'pending' && s !== 'pending') return false;
+                } else if (approbStatusFilter === 'pending_payment') {
+                  if ((es !== 'awaiting_payment' && s !== 'pending_payment') || es === 'pending') return false;
                 } else if (approbStatusFilter === 'paid') {
                   if (s !== 'paid' && !['activated', 'scanned'].includes(pass.entry_status)) return false;
                 } else if (approbStatusFilter === 'expired') {
                   if (s !== 'expired' && pass.entry_status !== 'rejected') return false;
-                } else if (approbStatusFilter === 'pending') {
-                  if (pass.entry_status !== 'pending') return false;
-                } else if (s !== approbStatusFilter.toLowerCase()) {
+                } else if (s !== approbStatusFilter.toLowerCase() && es !== approbStatusFilter.toLowerCase()) {
                   return false;
                 }
               }
@@ -1297,7 +1303,31 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
                 </div>
 
                 {/* Supervision KPI Summary Cards */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
+                  <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-amber-400 block">
+                      ⏳ En Attente Approbation
+                    </span>
+                    <div className="text-xl font-black text-amber-200 mt-1">
+                      {approbKpis.pendingApprovalCount} <span className="text-xs font-normal text-amber-400">demande(s)</span>
+                    </div>
+                    <div className="text-xs text-amber-300 mt-0.5">
+                      Validation admin requise
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-blue-400 block">
+                      💵 Attente Paiement
+                    </span>
+                    <div className="text-xl font-black text-blue-200 mt-1">
+                      {approbKpis.awaitingPaymentCount} <span className="text-xs font-normal text-blue-400">réservation(s)</span>
+                    </div>
+                    <div className="text-xs text-blue-300 mt-0.5">
+                      À régler au point de vente
+                    </div>
+                  </div>
+
                   <div className="p-4 rounded-2xl bg-purple-500/10 border border-purple-500/20">
                     <span className="text-[11px] font-bold uppercase tracking-wider text-purple-400 block">
                       📍 Émis au Guichet (POS)
@@ -1322,19 +1352,7 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
                     </div>
                   </div>
 
-                  <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-blue-400 block">
-                      ⏳ Attente Paiement
-                    </span>
-                    <div className="text-xl font-black text-blue-200 mt-1">
-                      {approbKpis.awaitingCount} <span className="text-xs font-normal text-blue-400">réservations</span>
-                    </div>
-                    <div className="text-xs text-blue-300 mt-0.5">
-                      À régler au point de vente
-                    </div>
-                  </div>
-
-                  <div className="p-4 rounded-2xl bg-neutral-800/60 border border-neutral-700/60">
+                  <div className="p-4 rounded-2xl bg-neutral-800/60 border border-neutral-700/60 col-span-2 sm:col-span-1">
                     <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-400 block">
                       🎫 Total Passes Événements
                     </span>
@@ -1342,7 +1360,7 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
                       {approbKpis.totalCount} <span className="text-xs font-normal text-neutral-400">passes</span>
                     </div>
                     <div className="text-xs text-neutral-400 mt-0.5">
-                      {approbKpis.expiredCount} expirés / annulés
+                      {approbKpis.expiredCount} expirés / rejetés
                     </div>
                   </div>
                 </div>
@@ -1412,10 +1430,10 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
                         className="input text-xs"
                       >
                         <option value="all">Tous les statuts</option>
-                        <option value="pending_payment">Attente Paiement (PENDING_PAYMENT)</option>
-                        <option value="paid">Payé / Activé (PAID)</option>
-                        <option value="expired">Expiré (EXPIRED)</option>
-                        <option value="pending">En attente approbation (Legacy)</option>
+                        <option value="pending">⏳ En attente d'approbation (Admin)</option>
+                        <option value="pending_payment">💵 Attente Paiement au guichet (Validé)</option>
+                        <option value="paid">✅ Payé / Activé (PAID)</option>
+                        <option value="expired">✕ Expiré / Rejeté</option>
                       </select>
                     </div>
 
@@ -1454,15 +1472,17 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
                       const overdue = isPassOverdue(pass);
                       const isPaid = pass.status === 'PAID' || ['activated', 'scanned'].includes(pass.entry_status);
                       const isExpired = pass.status === 'EXPIRED' || pass.entry_status === 'rejected';
-                      const isUnpaid = !isPaid && !isExpired;
+                      const isPending = !isPaid && !isExpired && (pass.entry_status === 'pending' || pass.status === 'pending' || pass.status === 'PENDING');
+                      const isAwaitingPayment = !isPaid && !isExpired && !isPending;
 
                       const statusConfig: Record<string, { color: string; bg: string; label: string }> = {
-                        pending: { color: 'text-amber-500', bg: 'bg-amber-500/10', label: 'En attente' },
-                        awaiting_payment: { color: 'text-blue-400', bg: 'bg-blue-500/10', label: 'Att. paiement' },
-                        PENDING_PAYMENT: { color: 'text-blue-400', bg: 'bg-blue-500/10', label: 'Att. paiement' },
+                        pending: { color: 'text-amber-400', bg: 'bg-amber-500/10', label: 'En attente admin' },
+                        PENDING: { color: 'text-amber-400', bg: 'bg-amber-500/10', label: 'En attente admin' },
+                        awaiting_payment: { color: 'text-blue-400', bg: 'bg-blue-500/10', label: 'Att. paiement guichet' },
+                        PENDING_PAYMENT: { color: 'text-blue-400', bg: 'bg-blue-500/10', label: 'Att. paiement guichet' },
                         activated: { color: 'text-passi-turquoise', bg: 'bg-passi-turquoise/10', label: 'Payé / Activé' },
                         PAID: { color: 'text-passi-turquoise', bg: 'bg-passi-turquoise/10', label: 'Payé / Activé' },
-                        rejected: { color: 'text-passi-corail', bg: 'bg-passi-corail/10', label: 'Expiré / Rejeté' },
+                        rejected: { color: 'text-passi-corail', bg: 'bg-passi-corail/10', label: 'Rejeté / Annulé' },
                         EXPIRED: { color: 'text-passi-corail', bg: 'bg-passi-corail/10', label: 'Expiré' },
                         CANCELLED: { color: 'text-passi-corail', bg: 'bg-passi-corail/10', label: 'Annulé' },
                       };
@@ -1487,7 +1507,7 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
                         >
                           <div className="flex items-start sm:items-center gap-4 min-w-0 flex-1">
                             <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl font-bold flex-shrink-0 ${sc.bg} ${sc.color}`}>
-                              {isPos ? '📍' : isQuick ? '⚡' : (pass.entry_status === 'pending' ? '!' : isUnpaid ? '$' : isExpired ? 'X' : '✓')}
+                              {isPos ? '📍' : isPending ? '⏳' : isQuick ? '⚡' : isAwaitingPayment ? '💵' : isExpired ? '✕' : '✓'}
                             </div>
 
                             <div className="min-w-0 flex-1">
@@ -1645,13 +1665,22 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
                                           <span className="text-rose-300 text-[11px] italic">({pass.rejection_reason})</span>
                                         )}
                                       </div>
-                                    ) : (
+                                    ) : isPending ? (
                                       <div className="flex items-center gap-1.5 text-neutral-400 text-xs">
                                         <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                                          ⏳ Attente de règlement
+                                          ⏳ En attente approbation Admin
+                                        </span>
+                                        <span className="text-amber-200/80 text-[11px]">
+                                          Validation préalable requise avant encaissement au guichet
+                                        </span>
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center gap-1.5 text-neutral-400 text-xs">
+                                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                                          💵 Attente de règlement
                                         </span>
                                         <span className="text-neutral-400 text-[11px]">
-                                          À régler et valider sur place au point de vente
+                                          Approuvé : à régler et valider sur place au point de vente
                                         </span>
                                       </div>
                                     )}
@@ -1686,29 +1715,31 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
                               </a>
                             )}
 
-                            {/* Pending Application (Legacy) */}
-                            {pass.entry_status === 'pending' && (
-                              <>
+                            {/* Pending Application (Quick or Standard awaiting Admin approval) */}
+                            {isPending && (
+                              <div className="flex items-center gap-2">
                                 <button
                                   type="button"
                                   onClick={() => handleApprove(pass.id)}
-                                  className="btn-primary px-3 py-1.5 text-xs bg-green-500 hover:bg-green-600 border-none cursor-pointer"
+                                  className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-green-600 hover:bg-green-500 shadow-sm transition-all cursor-pointer flex items-center gap-1.5"
+                                  title="Approuver la réservation et autoriser le paiement au guichet"
                                 >
-                                  Approuver Application
+                                  <Check size={14}/> Approuver la réservation
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => setRejectModalPass(pass)}
-                                  className="btn-ghost px-3 py-1.5 text-xs border border-red-500 text-red-500 cursor-pointer"
+                                  className="px-3 py-1.5 rounded-xl text-xs font-bold text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 transition-all cursor-pointer flex items-center gap-1"
+                                  title="Rejeter cette demande de réservation"
                                 >
-                                  Rejeter
+                                  <X size={14}/> Rejeter
                                 </button>
-                              </>
+                              </div>
                             )}
 
-                            {/* Unpaid Reservation (Quick or Standard awaiting payment) */}
-                            {isUnpaid && (
-                              <>
+                            {/* Unpaid Reservation (Approved & Awaiting Payment at POS) */}
+                            {isAwaitingPayment && (
+                              <div className="flex items-center gap-2">
                                 <button
                                   type="button"
                                   onClick={() => handleMarkPaid(pass.id)}
@@ -1733,7 +1764,7 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
                                 >
                                   Annuler
                                 </button>
-                              </>
+                              </div>
                             )}
 
                             {/* Paid & Confirmed */}

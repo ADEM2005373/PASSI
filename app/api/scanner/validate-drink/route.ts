@@ -81,12 +81,32 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3. Check if pass is paid/activated
+    // 3. Check if pass is pending admin approval, unpaid or expired
+    if (pass.entry_status === 'pending' || pass.status === 'pending' || pass.status === 'PENDING') {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Boisson non disponible : pass en attente d'approbation préalable par un administrateur.",
+        },
+        { status: 403 }
+      );
+    }
+
     if (pass.entry_status === 'awaiting_payment' || pass.status === 'PENDING_PAYMENT') {
       return NextResponse.json(
         {
           success: false,
-          message: 'Pass non réglé : en attente de paiement au point de vente physique.',
+          message: 'Boisson non disponible : pass en attente de paiement au point de vente physique.',
+        },
+        { status: 403 }
+      );
+    }
+
+    if (pass.entry_status === 'rejected' || pass.status === 'EXPIRED' || pass.status === 'CANCELLED') {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Pass expiré, rejeté ou annulé.',
         },
         { status: 403 }
       );

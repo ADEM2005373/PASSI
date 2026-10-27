@@ -285,23 +285,23 @@ function QuickReservationContent() {
         <main className="flex-1 max-w-3xl mx-auto w-full px-4 py-8 md:py-12 animate-fade-in-up">
           {/* Success Banner */}
           <div className="text-center space-y-4 mb-8">
-            <div className="w-20 h-20 mx-auto rounded-3xl bg-gradient-to-tr from-emerald-500/20 to-teal-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-xl shadow-emerald-500/10">
-              <CheckCircle2 size={44} className="animate-pulse" />
+            <div className="w-20 h-20 mx-auto rounded-3xl bg-gradient-to-tr from-amber-500/20 to-orange-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shadow-xl shadow-amber-500/10">
+              <Clock size={44} className="animate-pulse" />
             </div>
 
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              <span>PENDING_PAYMENT</span>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+              <span>EN ATTENTE D'APPROBATION ADMIN</span>
               <span>•</span>
-              <span>{passCount} pass réservé{passCount > 1 ? "s" : ""}</span>
+              <span>{passCount} pass demandé{passCount > 1 ? "s" : ""}</span>
             </div>
 
             <h1 className="text-2xl md:text-4xl font-extrabold tracking-tight">
-              {passCount > 1 ? `Réservation de vos ${passCount} passes validée !` : "Réservation Validée !"}
+              {passCount > 1 ? `Demande pour vos ${passCount} passes enregistrée !` : "Demande de Réservation Enregistrée !"}
             </h1>
 
             {/* Core Required Confirmation Message */}
-            <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-rose-500/10 to-amber-500/15 border border-amber-500/30 text-amber-200 text-sm md:text-base font-semibold leading-relaxed max-w-xl mx-auto shadow-lg shadow-amber-950/20">
-              &ldquo;{confirmation.message || "Reservation complete. Please pay for your pass at our physical sell points within 72 hours."}&rdquo;
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/15 border border-amber-500/30 text-amber-200 text-sm md:text-base font-semibold leading-relaxed max-w-xl mx-auto shadow-lg shadow-amber-950/20">
+              &ldquo;{confirmation.message || "Votre demande de réservation a été enregistrée avec succès. Elle nécessite l'approbation d'un administrateur avant de pouvoir être réglée au guichet."}&rdquo;
             </div>
           </div>
 
@@ -317,7 +317,7 @@ function QuickReservationContent() {
                   {res.reservationCode}
                 </p>
                 <p className="text-xs text-neutral-400 mt-0.5">
-                  Présentez ce code unique ou votre numéro de téléphone ({res.phone}) au guichet pour régler l'ensemble de vos {passCount} passes.
+                  Conservez ce code de réservation ({res.reservationCode}). Il vous sera demandé au guichet après l'approbation de votre demande par l'administrateur.
                 </p>
               </div>
 
@@ -438,18 +438,32 @@ function QuickReservationContent() {
             <div className="p-5 rounded-2xl bg-white/[0.03] border border-white/10 space-y-3">
               <h4 className="font-bold text-sm flex items-center gap-2 text-white">
                 <Building size={16} className="text-[#FF6B5E]" />
-                Où et comment payer ?
+                Prochaines étapes pour valider vos billets :
               </h4>
-              <p className="text-xs text-neutral-300 leading-relaxed">
-                Rendez-vous à l'un de nos guichets ou points de vente partenaires officiels. Donnez votre{" "}
-                <strong className="text-white">code de réservation unique ({res.reservationCode})</strong> ou votre numéro de téléphone (
-                <strong className="text-white">{res.phone}</strong>) au caissier pour régler la totalité ({grandTotal} TND).
-              </p>
-              <div className="p-3.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-200 text-xs flex items-center gap-2.5">
-                <Sparkles size={18} className="text-purple-400 flex-shrink-0" />
-                <span className="leading-relaxed">
-                  Dès encaissement au point de vente, <strong>vos liens Web Pass officiels interactifs (avec QR Codes d'accès et vouchers boissons)</strong> vous seront instantanément expédiés à <strong>{res.email}</strong>, prêts à être transférés directement à vos amis par WhatsApp ou SMS !
-                </span>
+              <div className="space-y-2 text-xs text-neutral-300 leading-relaxed">
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-start gap-2.5">
+                  <span className="font-bold text-amber-400">1.</span>
+                  <div>
+                    <strong className="text-amber-300">Approbation de l'administrateur requise :</strong>
+                    <p className="text-neutral-300 mt-0.5">Votre réservation express est actuellement en cours d'examen par notre équipe d'organisation.</p>
+                  </div>
+                </div>
+                <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-start gap-2.5">
+                  <span className="font-bold text-blue-400">2.</span>
+                  <div>
+                    <strong className="text-blue-300">Notification par e-mail :</strong>
+                    <p className="text-neutral-300 mt-0.5">Dès validation par l'administrateur, vous recevrez un email vous invitant à vous présenter en point de paiement physique.</p>
+                  </div>
+                </div>
+                <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-start gap-2.5">
+                  <span className="font-bold text-purple-400">3.</span>
+                  <div>
+                    <strong className="text-purple-300">Règlement au guichet :</strong>
+                    <p className="text-neutral-300 mt-0.5">
+                      Rendez-vous à un point de vente officiel avec votre code <strong>{res.reservationCode}</strong> ou votre téléphone (<strong>{res.phone}</strong>) pour régler ({grandTotal} TND). Vos QR Codes d'accès officiels seront activés immédiatement après encaissement.
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -1072,15 +1086,15 @@ function QuickReservationContent() {
                   </div>
                 </div>
 
-                {/* 72-Hour Lifecycle Notice */}
+                {/* Admin Approval & 72-Hour Payment Lifecycle Notice */}
                 <div className="mt-4 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-start gap-3">
                   <Info size={18} className="text-amber-400 flex-shrink-0 mt-0.5" />
                   <div className="space-y-1">
                     <p className="font-bold">
-                      Règlement à nos points de vente physiques dans les 72 heures :
+                      Approbation administrateur requise & règlement au guichet :
                     </p>
                     <p className="text-amber-200/90 leading-relaxed">
-                      Votre réservation de <strong>{quantity} pass</strong> sera enregistrée en statut <code>PENDING_PAYMENT</code> sous une référence unique. Vous disposerez de 72 heures pour régler vos pass en espèces au guichet. <strong>Un seul e-mail contenant tous vos billets PDF officiels avec leurs QR codes respectifs</strong> vous sera envoyé dès encaissement.
+                      Votre réservation de <strong>{quantity} pass</strong> sera soumise à l'approbation préalable d'un administrateur. Dès validation, vous recevrez une confirmation par e-mail avec la liste des points de vente pour régler vos pass en espèces au guichet sous 72 heures. <strong>Vos billets d'accès officiels et coupons boissons s'activeront dès encaissement</strong>.
                     </p>
                   </div>
                 </div>
