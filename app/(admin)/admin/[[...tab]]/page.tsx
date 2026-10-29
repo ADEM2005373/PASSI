@@ -1132,7 +1132,7 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
                 return new Date() > new Date(pass.expires_at);
               }
               if (pass.created_at) {
-                const expiry = new Date(new Date(pass.created_at).getTime() + 72 * 60 * 60 * 1000);
+                const expiry = new Date(new Date(pass.created_at).getTime() + 24 * 60 * 60 * 1000);
                 return new Date() > expiry;
               }
               return false;
@@ -1448,7 +1448,7 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
                             : 'bg-neutral-800/80 text-neutral-300 border-neutral-700 hover:border-neutral-500'
                         }`}
                       >
-                        <span>⚠️ En retard (&gt; 72h)</span>
+                        <span>⚠️ En retard (&gt; 24h)</span>
                         <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
                           totalOverdueCount > 0 ? 'bg-red-500 text-white font-extrabold' : 'bg-neutral-700 text-neutral-400'
                         }`}>
@@ -1535,7 +1535,7 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
 
                                 {overdue && (
                                   <span className="px-2.5 py-0.5 rounded-lg text-[11px] font-bold bg-red-600/30 text-red-300 border border-red-500/50 flex items-center gap-1 animate-pulse">
-                                    ⚠️ En retard (&gt; 72h)
+                                    ⚠️ En retard (&gt; 24h)
                                   </span>
                                 )}
 
@@ -1579,7 +1579,7 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
                                 </p>
                               )}
 
-                              {/* Expiration Reference (72h notice) */}
+                              {/* Expiration Reference (24h notice) */}
                               {pass.expires_at && (
                                 <p className={`text-[11px] mt-1 font-medium ${overdue ? 'text-red-400 font-bold' : 'text-neutral-400'}`}>
                                   ⏳ Échéance indicative : {new Date(pass.expires_at).toLocaleString('fr-FR', {
@@ -1588,7 +1588,7 @@ export default function AdminDashboard({ initialTab }: { initialTab?: string } =
                                     hour: '2-digit',
                                     minute: '2-digit',
                                   })}
-                                  {overdue ? ' (Délai dépassé - Expiration manuelle requise)' : ' (72h max)'}
+                                  {overdue ? ' (Délai dépassé - Expiration manuelle requise)' : ' (24h max)'}
                                 </p>
                               )}
 

@@ -70,9 +70,9 @@ export function PaymentNotificationModal({
 
   if (!isOpen || !reservation) return null;
 
-  // Calculate remaining time from created_at (72 hours limit)
+  // Calculate remaining time from created_at (24 hours limit)
   const createdAt = reservation.created_at ? new Date(reservation.created_at) : new Date();
-  const expiryDate = new Date(createdAt.getTime() + 72 * 60 * 60 * 1000);
+  const expiryDate = new Date(createdAt.getTime() + 24 * 60 * 60 * 1000);
   const now = new Date();
   const hoursLeft = Math.max(0, Math.floor((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60)));
 
@@ -170,18 +170,18 @@ export function PaymentNotificationModal({
               </p>
             </div>
 
-            {/* 72-Hour Urgency Warning */}
+            {/* 24-Hour Urgency Warning */}
             <div className="bg-red-500/15 border border-red-500/30 rounded-xl p-4 flex items-start gap-3">
               <Clock size={20} className="text-red-400 shrink-0 mt-0.5" />
               <div className="text-xs space-y-1">
                 <p className="font-extrabold text-red-300 flex items-center justify-between">
-                  <span>Attention : Délai de paiement de 72h</span>
+                  <span>Attention : Délai de paiement de 24h</span>
                   <span className="bg-red-500/20 px-2 py-0.5 rounded text-[11px] font-black text-red-400">
                     {hoursLeft}h restantes
                   </span>
                 </p>
                 <p className="text-red-400/90 leading-relaxed">
-                  Vous avez <strong>{hoursLeft}h restantes</strong> pour régler votre pass au point de vente. Passé ce délai (72h), votre réservation sera automatiquement annulée.
+                  Vous avez <strong>{hoursLeft}h restantes</strong> pour régler votre pass au point de vente. Passé ce délai (24h), votre réservation sera automatiquement annulée.
                 </p>
               </div>
             </div>

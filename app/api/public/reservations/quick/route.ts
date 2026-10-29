@@ -136,9 +136,9 @@ export async function POST(req: NextRequest) {
     const randomHex = crypto.randomBytes(3).toString('hex').toUpperCase();
     const reservationCode = `QCK-${randomHex}`;
 
-    // 4. Set visual reference expires_at = createdAt + 72 hours
+    // 4. Set visual reference expires_at = createdAt + 24 hours
     const createdAt = new Date();
-    const expiresAt = new Date(createdAt.getTime() + 72 * 60 * 60 * 1000).toISOString();
+    const expiresAt = new Date(createdAt.getTime() + 24 * 60 * 60 * 1000).toISOString();
 
     // 5. Account sync check: If an account matching this email already exists, link userId immediately
     let matchedUserId: string | null = null;
