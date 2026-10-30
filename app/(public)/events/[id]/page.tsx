@@ -317,10 +317,13 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
                   <div key={pass.id} className="p-5 rounded-2xl" style={{ backgroundColor: 'var(--bg-input)', border: '1.5px solid var(--border)' }}>
                     <div className="flex flex-wrap justify-between items-start gap-4">
                       <div>
-                        <div className="flex items-center gap-2.5">
+                        <div className="flex items-center gap-2.5 flex-wrap">
                           <p className="text-lg font-extrabold" style={{ color: 'var(--text-primary)' }}>{pass.guest_first_name} {pass.guest_last_name}</p>
                           <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-amber-500/15 text-amber-400 border border-amber-500/25">
                             {passPrice} DT
+                          </span>
+                          <span className="px-2 py-0.5 rounded-md text-[11px] font-mono font-bold bg-neutral-900 text-purple-300 border border-neutral-700">
+                            N° {pass.reservation_code || `#${pass.id.slice(0, 8).toUpperCase()}`}
                           </span>
                         </div>
                         <div className="flex items-center gap-2 mt-2">
@@ -447,14 +450,24 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
                         )}
                       </div>
 
-                      {/* QR Codes */}
-                      <div className="flex gap-4 flex-wrap">
+                      {/* QR Codes / Validation Status */}
+                      <div className="flex gap-4 flex-wrap items-center">
                         {pass.entry_status === 'activated' && pass.entry_qr_uuid && (
                           <div className="text-center">
                             <div className="p-3 rounded-2xl bg-white shadow-md inline-block">
                               <QRCodeSVG value={pass.entry_qr_uuid} size={110} fgColor="#101828"/>
                             </div>
                             <p className="text-xs mt-2 font-bold text-passi-corail flex items-center gap-1 justify-center"><Ticket size={12}/> Entrée</p>
+                            <p className="text-[10px] font-mono text-neutral-400 font-bold mt-0.5">N° {pass.reservation_code || `#${pass.id.slice(0, 8).toUpperCase()}`}</p>
+                          </div>
+                        )}
+                        {pass.entry_status === 'scanned' && (
+                          <div className="text-center p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 min-w-[120px]">
+                            <CheckCircle size={26} className="text-emerald-400 mx-auto mb-1" />
+                            <p className="text-xs font-bold text-emerald-300">Entrée Validée</p>
+                            <p className="text-[11px] font-mono font-bold text-white mt-1 bg-emerald-500/20 px-2 py-0.5 rounded border border-emerald-500/30">
+                              N° {pass.reservation_code || `#${pass.id.slice(0, 8).toUpperCase()}`}
+                            </p>
                           </div>
                         )}
                         {pass.entry_status === 'activated' && (pass as any).pass_drinks &&
@@ -466,6 +479,7 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
                               <p className="text-xs mt-2 font-bold text-passi-turquoise flex items-center gap-1 justify-center">
                                 <Wine size={12}/> {drink.drink_menus?.name || 'Boisson'}
                               </p>
+                              <p className="text-[10px] font-mono text-neutral-400 font-bold mt-0.5">N° {pass.reservation_code || `#${pass.id.slice(0, 8).toUpperCase()}`}</p>
                             </div>
                           ))
                         }

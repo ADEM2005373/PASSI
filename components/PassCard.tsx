@@ -59,6 +59,10 @@ export function PassCard({ pass, onUpdate }: PassCardProps) {
   const isInvitation = passType === "INVITATION";
   const isSpecialPass = isVip || isGift || (isInvitation && localPass.invitation_status === "ACCEPTED");
 
+  // Pass Reference Number (e.g. QCK-9A2E5B, POS-..., or #A1B2C3D4)
+  const passNumber = localPass.reservation_code || (localPass.id ? `#${localPass.id.slice(0, 8).toUpperCase()}` : "");
+  const isDrinkScanned = localPass.drink_status === "scanned" || Boolean((localPass as any).is_drink_used);
+
   // Active status of pass
   const isPassActive =
     localPass.entry_status === "activated" ||
@@ -266,32 +270,38 @@ export function PassCard({ pass, onUpdate }: PassCardProps) {
           : "bg-[#121212] border border-[#2a2a2a]"
       }`}
     >
-      {/* Top Special Badge */}
-      <div className="flex items-center justify-between mb-4">
-        {isVip && (
-          <div className="w-full flex items-center justify-center">
-            <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-gradient-to-r from-amber-500/20 via-yellow-500/20 to-amber-500/20 border border-amber-500/40 text-amber-300 font-black text-xs uppercase tracking-widest shadow-sm">
-              <Crown size={14} className="text-amber-400" />
-              <span>VIP Pass Exclusif</span>
-              <Sparkles size={14} className="text-amber-400" />
+      {/* Top Pass Header: Type Badge & Permanent Pass Number */}
+      <div className="flex items-center justify-between gap-2 mb-4 w-full">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {isVip ? (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-amber-500/20 via-yellow-500/20 to-amber-500/20 border border-amber-500/40 text-amber-300 font-black text-xs uppercase tracking-widest shadow-sm">
+              <Crown size={13} className="text-amber-400" />
+              <span>VIP Pass</span>
             </span>
-          </div>
-        )}
-
-        {isGift && (
-          <div className="w-full flex items-center justify-center">
-            <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold text-xs uppercase tracking-wider">
-              <Gift size={14} className="text-emerald-400" />
-              <span>Pass Cadeau Offert</span>
+          ) : isGift ? (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold text-xs uppercase tracking-wider">
+              <Gift size={13} className="text-emerald-400" />
+              <span>Pass Cadeau</span>
             </span>
-          </div>
-        )}
+          ) : isInvitation ? (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-500/20 border border-purple-500/40 text-purple-300 font-bold text-xs uppercase tracking-wider">
+              <Mail size={13} className="text-purple-400" />
+              <span>Invitation</span>
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-neutral-800 border border-neutral-700 text-neutral-300 font-bold text-xs uppercase tracking-wider">
+              <Ticket size={13} className="text-[#DC143C]" />
+              <span>Pass Officiel</span>
+            </span>
+          )}
+        </div>
 
-        {isInvitation && (
-          <div className="w-full flex items-center justify-center">
-            <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-purple-500/20 border border-purple-500/40 text-purple-300 font-bold text-xs uppercase tracking-wider">
-              <Mail size={14} className="text-purple-400" />
-              <span>Invitation Officielle</span>
+        {/* Permanent Pass Number Badge (Always Visible Before & After Scan) */}
+        {passNumber && (
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-neutral-900/90 border border-neutral-700/80 shadow-inner">
+            <span className="text-[10px] uppercase font-bold text-neutral-400 tracking-wider">N° Pass</span>
+            <span className="font-mono font-black text-xs text-purple-300 tracking-wide">
+              {passNumber}
             </span>
           </div>
         )}
@@ -439,11 +449,21 @@ export function PassCard({ pass, onUpdate }: PassCardProps) {
               <div className="animate-in fade-in zoom-in duration-300 flex flex-col items-center w-full">
                 {localPass.entry_status === "scanned" ? (
                   <div className="flex flex-col items-center text-center my-6">
-                    <div className="w-20 h-20 bg-neutral-900 rounded-full flex items-center justify-center mb-6 border border-neutral-800">
+                    <div className="w-20 h-20 bg-neutral-900 rounded-full flex items-center justify-center mb-4 border border-neutral-800">
                       <CheckCircle2 className="text-emerald-400" size={40} />
                     </div>
                     <h3 className="text-2xl font-black text-white">Pass d'entrée validé</h3>
                     <p className="text-neutral-400 mt-1 font-medium text-sm">Entrée déjà scannée à la porte.</p>
+
+                    {/* Permanent Pass Number Display After Scan */}
+                    {passNumber && (
+                      <div className="mt-4 px-3.5 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center gap-2">
+                        <span className="text-[10px] uppercase font-bold text-emerald-400/80 tracking-wider">N° Pass</span>
+                        <span className="font-mono font-black text-sm text-white">
+                          {passNumber}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 ) : entryQrValue ? (
                   <>
@@ -465,6 +485,16 @@ export function PassCard({ pass, onUpdate }: PassCardProps) {
                       <Ticket size={14} className={isVip ? "text-amber-400" : "text-[#DC143C]"} />
                       <span>Présenter à l'entrée de l'événement</span>
                     </p>
+
+                    {/* Pass Number Display Before Scan */}
+                    {passNumber && (
+                      <div className="mt-2.5 px-3.5 py-1.5 rounded-xl bg-neutral-900/80 border border-neutral-800 flex items-center gap-2">
+                        <span className="text-[10px] uppercase font-bold text-neutral-400 tracking-wider">N° Pass</span>
+                        <span className="font-mono font-black text-xs text-purple-300">
+                          {passNumber}
+                        </span>
+                      </div>
+                    )}
 
                     {/* Unclaimed Drink Call-to-Action Banner */}
                     {!hasDrink && isPassActive && (
@@ -500,13 +530,25 @@ export function PassCard({ pass, onUpdate }: PassCardProps) {
             {/* 2. DRINK TAB */}
             {activeTab === "drink" && (
               <div className="animate-in fade-in zoom-in duration-300 flex flex-col items-center w-full">
-                {localPass.drink_status === "scanned" ? (
+                {isDrinkScanned ? (
                   <div className="flex flex-col items-center text-center my-6">
-                    <div className="w-20 h-20 bg-neutral-900 rounded-full flex items-center justify-center mb-6 border border-neutral-800">
-                      <CheckCircle2 className="text-emerald-400" size={40} />
+                    <div className="w-20 h-20 bg-neutral-900 rounded-full flex items-center justify-center mb-4 border border-neutral-800">
+                      <CheckCircle2 className="text-teal-400" size={40} />
                     </div>
-                    <h3 className="text-2xl font-black text-white">Boisson Récupérée</h3>
-                    <p className="text-neutral-400 mt-1 font-medium text-sm">Santé et bonne soirée !</p>
+                    <h3 className="text-2xl font-black text-white">Consommation servie</h3>
+                    <p className="text-neutral-400 mt-1 font-medium text-sm">
+                      {localPass.drink_name || localPass.drink_menus?.name || "Boisson"} déjà récupérée au bar.
+                    </p>
+
+                    {/* Permanent Pass Number Display After Drink Scan */}
+                    {passNumber && (
+                      <div className="mt-4 px-3.5 py-1.5 rounded-xl bg-teal-500/15 border border-teal-500/30 flex items-center gap-2">
+                        <span className="text-[10px] uppercase font-bold text-teal-400/80 tracking-wider">N° Pass</span>
+                        <span className="font-mono font-black text-sm text-white">
+                          {passNumber}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 ) : (hasDrink && drinkQrValue) ? (
                   /* DRINK QR CODE ALREADY GENERATED & ACTIVE */
@@ -539,6 +581,16 @@ export function PassCard({ pass, onUpdate }: PassCardProps) {
                     <p className="text-[11px] text-neutral-400 mt-1 font-medium">
                       Présentez ce QR Code directement au barman
                     </p>
+
+                    {/* Pass Number Display Before Drink Scan */}
+                    {passNumber && (
+                      <div className="mt-2.5 px-3.5 py-1.5 rounded-xl bg-neutral-900/80 border border-neutral-800 flex items-center gap-2">
+                        <span className="text-[10px] uppercase font-bold text-neutral-400 tracking-wider">N° Pass</span>
+                        <span className="font-mono font-black text-xs text-teal-300">
+                          {passNumber}
+                        </span>
+                      </div>
+                    )}
                   </>
                 ) : (!hasDrink && isPassActive) ? (
                   /* DRINK SELECTION FORM FOR ACTIVE PASSES MISSING DRINK */

@@ -418,6 +418,16 @@ export default function QuickPassViewPage({
                   <p className="text-xs text-neutral-400 mt-2 max-w-xs leading-relaxed">
                     Présentez ce QR Code aux agents de sécurité à l'entrée de l'événement.
                   </p>
+
+                  {/* Pass Number Visible Before Scan */}
+                  {pass.reservationCode && (
+                    <div className="mt-3 px-3.5 py-1.5 rounded-xl bg-neutral-950/80 border border-neutral-800 flex items-center gap-2">
+                      <span className="text-[10px] uppercase font-bold text-neutral-400 tracking-wider">N° Pass</span>
+                      <span className="font-mono font-black text-xs text-emerald-400">
+                        {pass.reservationCode}
+                      </span>
+                    </div>
+                  )}
                 </div>
               ) : (
                 /* FIXED BADGE: ONCE SCANNED, QR CODE DISAPPEARS PERMANENTLY */
@@ -433,6 +443,16 @@ export default function QuickPassViewPage({
                   <p className="text-xs font-bold text-neutral-300 mt-1">
                     Scanné à {formatScanTime(pass.entryUsedAt)}
                   </p>
+
+                  {/* Pass Number Visible After Scan */}
+                  {pass.reservationCode && (
+                    <div className="mt-3 px-4 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center gap-2 shadow-sm">
+                      <span className="text-[10px] uppercase font-bold text-emerald-300 tracking-wider">N° Pass</span>
+                      <span className="font-mono font-black text-sm text-white">
+                        {pass.reservationCode}
+                      </span>
+                    </div>
+                  )}
                   
                   <p className="text-xs text-neutral-400 mt-2 max-w-xs leading-relaxed">
                     Votre accès a été enregistré aux portes de l'événement. Bienvenue et passez une excellente soirée !
@@ -510,6 +530,16 @@ export default function QuickPassViewPage({
                   <p className="text-xs text-neutral-400 mt-2 max-w-xs leading-relaxed">
                     Présentez ce QR Code au barman pour obtenir votre <strong>{pass.selectedDrink}</strong>.
                   </p>
+
+                  {/* Pass Number Visible Before Drink Scan */}
+                  {pass.reservationCode && (
+                    <div className="mt-3 px-3.5 py-1.5 rounded-xl bg-neutral-950/80 border border-neutral-800 flex items-center gap-2">
+                      <span className="text-[10px] uppercase font-bold text-neutral-400 tracking-wider">N° Pass</span>
+                      <span className="font-mono font-black text-xs text-teal-300">
+                        {pass.reservationCode}
+                      </span>
+                    </div>
+                  )}
                 </div>
               ) : (
                 /* FIXED BADGE: ONCE CLAIMED, DRINK QR DISAPPEARS PERMANENTLY */
@@ -525,6 +555,16 @@ export default function QuickPassViewPage({
                   <p className="text-xs font-bold text-neutral-300 mt-1">
                     Scanné à {formatScanTime(pass.drinkUsedAt)}
                   </p>
+
+                  {/* Pass Number Visible After Drink Scan */}
+                  {pass.reservationCode && (
+                    <div className="mt-3 px-4 py-1.5 rounded-xl bg-teal-500/15 border border-teal-500/30 flex items-center gap-2 shadow-sm">
+                      <span className="text-[10px] uppercase font-bold text-teal-300 tracking-wider">N° Pass</span>
+                      <span className="font-mono font-black text-sm text-white">
+                        {pass.reservationCode}
+                      </span>
+                    </div>
+                  )}
                   
                   <p className="text-xs text-neutral-400 mt-2 max-w-xs leading-relaxed">
                     Votre consommation ({pass.selectedDrink}) a été servie avec succès au bar. Santé !
